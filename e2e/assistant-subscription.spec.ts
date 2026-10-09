@@ -59,11 +59,12 @@ test('switches both providers between API and native sign-in, then sends a subsc
         },
         manageUsage: async () => {},
         cancel: async () => {},
+        onToolCall: () => () => {},
         send: async (_id: string, request: any) => {
           if (request.thinkingEffort !== 'high') throw new Error('Thinking effort was not forwarded.');
           if ('apiKey' in request || 'baseUrl' in request)
             throw new Error('Credentials crossed the subscription bridge.');
-          return '{"kind":"explanation","message":"Subscription connection works."}';
+          return 'Subscription connection works.';
         },
       },
     };

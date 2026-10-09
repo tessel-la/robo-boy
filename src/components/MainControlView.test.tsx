@@ -36,7 +36,17 @@ const rosConnection: {
 const sendAssistantChatMock = vi.hoisted(() => vi.fn());
 vi.mock('../features/assistant/providers/index', async importOriginal => {
   const actual = await importOriginal<typeof import('../features/assistant/providers/index')>();
-  return { ...actual, sendAssistantChat: sendAssistantChatMock };
+  return { ...actual, sendAssistantChat: async (request: import('../features/assistant/providers/types').SendChatRequest) => {
+    const raw = await sendAssistantChatMock(request);
+    if (!raw) return 'Tool work completed.';
+    let response: Record<string, any>;
+    try { response = JSON.parse(raw); } catch { return raw; }
+    if (response.kind === 'explanation') return response.message;
+    const names: Record<string, string> = { workspaceEdit: 'edit_workspace', padProposal: 'propose_pad', tree: 'propose_tree', rosAction: 'propose_operation' };
+    const { kind, summary, followUp, ...input } = response;
+    await request.tools!.execute(names[kind], kind === 'tree' ? { tree: response } : input, crypto.randomUUID());
+    return summary || 'Tool work completed.';
+  } };
 });
 
 vi.mock('../hooks/useRos', () => ({
@@ -150,6 +160,7 @@ vi.mock('animejs', () => ({
 }));
 
 vi.mock('../features/customGamepad/gamepadStorage', () => ({
+  GAMEPAD_STORAGE_EVENT: 'robo-boy-gamepads-changed',
   loadGamepadLibrary: () => loadGamepadLibrary(),
   getGamepadLayout: (layoutId: string) => getGamepadLayout(layoutId),
   cloneGamepadTemplate: (layoutId: string) => cloneGamepadTemplate(layoutId),
@@ -1399,6 +1410,25 @@ describe('MainControlView desktop workspace', () => {
     expect(screen.queryByLabelText('Camera')).not.toBeInTheDocument();
     expect(screen.getByTestId('assistant-workspace-edit-card')).toHaveTextContent('Replacing the Camera panel.');
     expect(screen.getByTestId('assistant-workspace-edit-card')).toHaveTextContent('Showing Behavior tree in the mobile workspace.');
+  });
+
+  it('refreshes Pad pickers after an authoring save and resolves newly saved document ids', async () => {
+    localStorage.setItem(workspacePanelsKey, JSON.stringify([makePanel('panel-pad', 'pad', 'Pad controls')]));
+    localStorage.setItem(workspaceTileOrderKey, JSON.stringify(['panel-pad']));
+    renderMainControlView();
+    await screen.findByLabelText('Pad controls');
+    const saved = { id: 'genesis-xy-angular-xy', name: 'Genesis XY + Angular XY', layout: { id: 'genesis-xy-angular-xy', components: [] }, isDefault: false };
+    loadGamepadLibrary.mockReturnValue([...loadGamepadLibrary(), saved]);
+    act(() => window.dispatchEvent(new CustomEvent('robo-boy-gamepads-changed')));
+    fireEvent.click(screen.getByRole('button', { name: 'Pad settings' }));
+    expect(await screen.findByRole('option', { name: `${saved.name} · Custom` })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Close pad settings' }));
+    sendAssistantChatMock.mockResolvedValueOnce(JSON.stringify({ kind: 'workspaceEdit', operations: [{ op: 'setPanelPad', panelId: 'panel-pad', padId: saved.id }] }));
+    fireEvent.click(screen.getByLabelText('Open Robo-Boy assistant'));
+    fireEvent.change(await screen.findByRole('textbox', { name: /Ask the assistant|Continue the conversation/ }), { target: { value: 'Show the new Genesis Pad' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await screen.findByText('Pad controls now shows the "Genesis XY + Angular XY" Pad.');
+    expect(screen.getByTestId('custom-gamepad')).toHaveTextContent(saved.id);
   });
 
   it('lets the assistant retarget a Pad panel, load and save layouts, and refuses what does not exist', async () => {

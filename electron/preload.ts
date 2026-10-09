@@ -49,6 +49,10 @@ const desktopBridge = {
   nativeWindowControls,
 
   assistant: {
+    sendApi: (id, request) => ipcRenderer.invoke('roboboy:assistant-api-send', id, request),
+    setBackgroundActive: enabled => ipcRenderer.invoke('roboboy:agent-background', enabled),
+    notify: (title, body) => ipcRenderer.invoke('roboboy:agent-notification', title, body),
+    onStopMonitors: listener => { const handler = () => listener(); ipcRenderer.on('roboboy:agent-stop-monitors', handler); return () => ipcRenderer.removeListener('roboboy:agent-stop-monitors', handler); },
     getApiKey: provider => ipcRenderer.invoke('roboboy:assistant-api-key', provider),
     setApiKey: (provider, key, policy) => ipcRenderer.invoke('roboboy:assistant-save-api-key', provider, key, policy),
     getApiKeyStorage: provider => ipcRenderer.invoke('roboboy:assistant-api-key-storage', provider),
@@ -60,6 +64,40 @@ const desktopBridge = {
     manageUsage: provider => ipcRenderer.invoke('roboboy:assistant-usage', provider),
     send: (id, request) => ipcRenderer.invoke('roboboy:assistant-send', id, request),
     cancel: id => ipcRenderer.invoke('roboboy:assistant-cancel', id),
+    onThinking: (id, handler) => {
+      const listener = (_event: unknown, requestId: string, text: unknown) => {
+        if (requestId === id && typeof text === 'string') handler(text);
+      };
+      ipcRenderer.on('roboboy:assistant-thinking', listener);
+      return () => ipcRenderer.removeListener('roboboy:assistant-thinking', listener);
+    },
+    onToken: (id, handler) => {
+      const listener = (_event: unknown, requestId: string, text: unknown) => {
+        if (requestId === id && typeof text === 'string') handler(text);
+      };
+      ipcRenderer.on('roboboy:assistant-token', listener);
+      return () => ipcRenderer.removeListener('roboboy:assistant-token', listener);
+    },
+    onToolCall: (id, handler) => {
+      // Tool replies and usage are scoped to one originating inference request.
+      let active = true;
+      const listener = async (_event: unknown, requestId: string, callId: string, name: string, input: unknown) => {
+        if (!active || requestId !== id) return;
+        let result;
+        try { result = await handler(name, input, callId); }
+        catch (cause) { result = { ok: false, error: cause instanceof Error ? cause.message : 'Host tool failed.' }; }
+        if (active) await ipcRenderer.invoke('roboboy:assistant-tool-result', id, callId, result).catch(() => {});
+      };
+      ipcRenderer.on('roboboy:assistant-tool', listener);
+      return () => { active = false; ipcRenderer.removeListener('roboboy:assistant-tool', listener); };
+    },
+    onUsage: (id, handler) => {
+      const listener = (_event: unknown, requestId: string, usage: { inputTokens?: unknown; outputTokens?: unknown }) => {
+        if (requestId === id && usage && typeof usage.inputTokens === 'number' && typeof usage.outputTokens === 'number' && Number.isFinite(usage.inputTokens) && Number.isFinite(usage.outputTokens) && usage.inputTokens >= 0 && usage.outputTokens >= 0) handler({ inputTokens: usage.inputTokens, outputTokens: usage.outputTokens });
+      };
+      ipcRenderer.on('roboboy:assistant-usage-event', listener);
+      return () => ipcRenderer.removeListener('roboboy:assistant-usage-event', listener);
+    },
   } satisfies AssistantSubscriptionBridge,
 
   window: {

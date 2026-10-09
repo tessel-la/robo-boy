@@ -1,4 +1,5 @@
 import TimeSeriesPanel from '../features/timeSeries/TimeSeriesPanel';
+import { flushSync } from 'react-dom';
 import DataExplorerPanel, { type ExplorerOpenRequest } from '../features/dataExplorer/DataExplorerPanel';
 import { recordValuesFor, timeSeriesValuesFor, visualizationStateFor } from '../features/dataExplorer/openTarget';
 import RecordReplayPanel from '../features/recordReplay/RecordReplayPanel';
@@ -43,6 +44,7 @@ import {
   importGamepadFile,
   importGamepadLayouts,
   loadGamepadLibrary,
+  GAMEPAD_STORAGE_EVENT,
 } from '../features/customGamepad/gamepadStorage';
 import { useCameraTopics } from '../hooks/useCameraTopics';
 import { applySavedGamepadToPanels, GamepadSaveMode } from '../features/customGamepad/gamepadPanelState';
@@ -1104,6 +1106,9 @@ const MainControlView: React.FC<MainControlViewProps> = ({
   const handleRegisterAssistantBridge = useCallback((panelId: string, bridge: BehaviorTreeAssistantBridge | null) => {
     assistantRef.current?.registerBehaviorTreeBridge(panelId, bridge);
   }, []);
+  const handleRegisterPadDraftReader = useCallback((reader: (() => CustomGamepadLayout) | null) => {
+    assistantRef.current?.registerPadDraftReader(reader);
+  }, []);
   const handleRegisterPanelSettingsBridge = useCallback((panelId: string, bridge: PanelSettingsBridge | null) => {
     assistantRef.current?.registerPanelSettingsBridge(panelId, bridge);
   }, []);
@@ -1137,6 +1142,17 @@ const MainControlView: React.FC<MainControlViewProps> = ({
   // State to trigger refresh of custom gamepads in AddPanelMenu
   const [customGamepadRefreshKey, setCustomGamepadRefreshKey] = useState(0);
   const gamepadLibrary = useMemo(() => loadGamepadLibrary(), [customGamepadRefreshKey]);
+  useEffect(() => {
+    // Authoring saves and undo use the same storage boundary as the manual editor.
+    // Refresh catalogs only; running controls keep their operator-activated layout snapshot.
+    const refresh = () => setCustomGamepadRefreshKey(value => value + 1);
+    window.addEventListener(GAMEPAD_STORAGE_EVENT, refresh);
+    window.addEventListener('storage', refresh);
+    return () => {
+      window.removeEventListener(GAMEPAD_STORAGE_EVENT, refresh);
+      window.removeEventListener('storage', refresh);
+    };
+  }, []);
   // Ref for the Add Panel button (+)
   const addButtonRef = useRef<HTMLButtonElement>(null);
   // --- End New State ---
@@ -2589,6 +2605,9 @@ const MainControlView: React.FC<MainControlViewProps> = ({
    * reported in the user's terms and shown in the chat.
    */
   const handleAssistantWorkspaceEdit = (operations: WorkspaceEditOperation[]): WorkspaceEditResult[] => {
+    // A save can precede this operation before React has committed its catalog refresh.
+    const availablePads = loadGamepadLibrary();
+    const findPad = (id: string) => availablePads.find(item => item.id === id || item.layout.id === id);
     const panelName = (type: string) => panelCatalogById.get(type)?.name || getWorkspaceTitle(type);
     const findPanel = (panelId: string) => {
       const bareId = panelId.replace(/^mobile:/, '');
@@ -2609,7 +2628,12 @@ const MainControlView: React.FC<MainControlViewProps> = ({
             results.push({ operation, ok: false, message: `No panel type "${operation.panelType}"; available: ${panelCatalog.map(panel => panel.id).join(', ')}.` });
             break;
           }
-          const padId = operation.padId && gamepadLibrary.some(item => item.id === operation.padId) ? operation.padId : undefined;
+          const requestedPad = type === 'pad' && operation.padId ? findPad(operation.padId) : undefined;
+          if (type === 'pad' && operation.padId && !requestedPad) {
+            results.push({ operation, ok: false, message: `No saved Pad with id "${operation.padId}".` });
+            break;
+          }
+          const padId = requestedPad?.id;
           if (isWorkspaceStacked && (workspaceTiles.length >= 2 || stackedReplacementPanelId)) {
             const target = (stackedReplacementPanelId
               ? workspacePanels.find(panel => panel.id === stackedReplacementPanelId)
@@ -2688,7 +2712,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({
         }
         case 'setPanelPad': {
           const panel = findPanel(operation.panelId);
-          const pad = gamepadLibrary.find(item => item.id === operation.padId);
+          const pad = findPad(operation.padId);
           if (!panel || panel.type !== 'pad') {
             results.push({ operation, ok: false, message: `No Pad panel with id "${operation.panelId}".` });
             break;
@@ -4546,6 +4570,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({
           onClose={handleCloseCustomEditor}
           onSave={handleSaveCustomGamepad}
           initialLayout={editorSession.initialLayout}
+          onRegisterDraftReader={handleRegisterPadDraftReader}
           ros={ros}
         />
       )}
@@ -4563,7 +4588,13 @@ const MainControlView: React.FC<MainControlViewProps> = ({
         onReviewPadProposal={handleReviewAssistantPad}
         onOpenResource={handleOpenAssistantResource}
         canOpenResource={canOpenAssistantResource}
-        onApplyWorkspaceEdit={handleAssistantWorkspaceEdit}
+        onApplyWorkspaceEdit={operations => {
+          // Native tool completion is a read-after-write boundary. Flush the owning React
+          // commit so the next model step observes mounted panels, not stale state.
+          let results: WorkspaceEditResult[] = [];
+          flushSync(() => { results = handleAssistantWorkspaceEdit(operations); });
+          return results;
+        }}
         workspace={buildWorkspaceSnapshot({
           connectionStatus,
           panels: [

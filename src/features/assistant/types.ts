@@ -9,6 +9,12 @@ import type { WorkspaceEditOperation, WorkspaceEditResult } from './tools/worksp
 export type { AssistantProviderId };
 
 export interface AssistantSettings {
+  mode?: 'edit' | 'goal' | 'ask' | 'plan';
+  monitorEnabled?: boolean;
+  monitorBackground?: boolean;
+  monitorDurationMinutes?: number;
+  monitorInferenceLimit?: number;
+  agentProfileId?: string;
   provider: AssistantProviderId;
   authMode?: import('../../runtime/assistantSubscription').AssistantAuthMode;
   apiKey: string;
@@ -59,6 +65,11 @@ export interface AssistantMessage {
    * "Context used" disclosure under the reply. This is how provenance stays visible without
    * cluttering the composer with pre-declared chips (see docs/ai-assistant.md). */
   contextUsed?: AssistantContextUsage[];
+  /** Provider-exposed thinking summaries; never mixed into the answer or user history. */
+  thinking?: string;
+  /** Bounded session-only tool activity; never represented as user messages. */
+  activity?: string[];
+  events?: import('./runtime/session').AgentEvent[];
 }
 
 export interface AssistantContextUsage {
@@ -75,6 +86,9 @@ export interface StoredAssistantMessage {
   role: 'user' | 'assistant';
   content: string;
   createdAt: number;
+  /** The session codec admits only validated Pad/tree artifacts from this union. */
+  response?: AssistantResponse;
+  resolution?: AssistantMessage['resolution'];
 }
 
 export type AssistantContextSourceKind = 'workspace' | 'ros' | 'tf' | 'rosout' | 'pad' | 'behaviorTree' | 'manual';
@@ -133,7 +147,13 @@ export interface WorkspaceSnapshot {
   /** Every robot connection tab in this window; only the current one's robot is in the rest of the context. */
   connections?: {
     current: string | null;
-    tabs: Array<{ id: string; label: string; description: string; status: 'disconnected' | 'connecting' | 'connected'; current: boolean }>;
+    tabs: Array<{
+      id: string;
+      label: string;
+      description: string;
+      status: 'disconnected' | 'connecting' | 'connected';
+      current: boolean;
+    }>;
   };
   /** App-level settings and installed panels. Nothing here is secret: credentials never enter it. */
   app?: {
@@ -184,6 +204,13 @@ export interface AssistantAutoContext {
   rosCatalog?: { nodes: string[]; parameters: string[] };
   padLibrary: Array<{ id: string; name: string; isDefault: boolean; layout: CustomGamepadLayout }>;
   behaviorTreeLibrary: Array<{ id: string; name: string; tree: BehaviorTree }>;
+  pendingDocuments?: Array<{
+    id: string;
+    documentId: string;
+    kind: 'pad' | 'behaviorTree';
+    name: string;
+    needsRevalidation: boolean;
+  }>;
   interfaceSchemas?: {
     topics: Record<string, unknown>;
     services: Record<string, unknown>;
@@ -203,9 +230,13 @@ export interface BehaviorTreeAssistantBridge {
   getPreviewTree(): BehaviorTree | null;
   captureCheckpoint(): BehaviorTreeAgentCheckpoint | null;
   applyPreview(tree: BehaviorTree | null): void;
+  /** Authoring only. Returns false while execution owns the open graph. */
+  applyDocument?(tree: BehaviorTree): boolean;
   restoreCheckpoint(checkpoint: BehaviorTreeAgentCheckpoint): void;
   notify(notice: { type: 'success' | 'error'; title: string; message: string }): void;
 }
+
+export type PadDraftReader = (() => CustomGamepadLayout) & { replaceDraft?: (layout: CustomGamepadLayout) => void };
 
 /**
  * Registered by a mounted panel (3D view, TF tree, …) so the assistant can read what the panel
@@ -255,6 +286,7 @@ export interface AssistantBehaviorTreeProposal {
 
 export interface AssistantPadProposal {
   kind: 'padProposal';
+  baseRevision?: string;
   layout: CustomGamepadLayout;
   issues: PadValidationIssue[];
 }
@@ -285,6 +317,7 @@ export interface AssistantWorkspaceEdit {
 }
 
 export type AssistantResponse =
+  | { kind: 'contextRequest'; summary: string; reads: import('./tools/contextTool').ContextRead[] }
   | AssistantExplanation
   | AssistantClarification
   | AssistantBehaviorTreeProposal

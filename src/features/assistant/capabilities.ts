@@ -75,6 +75,7 @@ export const describeCapabilities = (capabilities: readonly AssistantCapability[
     '',
     '- Everything the app holds is already below: every open panel and layout, every saved Pad and Behavior Tree in full, and the whole ROS graph. Never say you cannot see one of them, and never ask the user to paste one.',
     '- Typing `@` names a resource in a sentence, and for a ROS topic, service or action it also pulls live data too costly to carry for every one of them:',
+    '- Tags are optional references. You can retrieve the same live data yourself with contextRequest; never require a tag to complete a request.',
     catalog,
   ].join('\n');
 };

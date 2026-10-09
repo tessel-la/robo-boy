@@ -4,12 +4,14 @@ import { access, chmod, mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/p
 import { homedir } from 'node:os';
 import { delimiter, isAbsolute, join } from 'node:path';
 import type { SubscriptionChatRequest, SubscriptionState } from '../src/runtime/assistantSubscription';
+import type { HostTools } from '../src/features/assistant/tools/nativeTools';
+import { startAssistantMcp } from './assistantMcp';
 
 const INSTALL_MESSAGE =
   'Install or update the official Claude Code CLI (2.1.278 or newer), then try again. See code.claude.com/docs/en/setup.';
 
 /** Do not let ambient API keys, tokens, gateway settings or plugin environment select billing/tools. */
-export function claudeEnvironment(configDir: string): NodeJS.ProcessEnv {
+export function claudeEnvironment(configDir: string, hostTools = false): NodeJS.ProcessEnv {
   const result: NodeJS.ProcessEnv = {};
   for (const name of [
     'PATH',
@@ -33,7 +35,7 @@ export function claudeEnvironment(configDir: string): NodeJS.ProcessEnv {
     if (process.env[name]) result[name] = process.env[name];
   }
   result.CLAUDE_CONFIG_DIR = configDir;
-  result.CLAUDE_CODE_SAFE_MODE = '1';
+  if (!hostTools) result.CLAUDE_CODE_SAFE_MODE = '1';
   return result;
 }
 
@@ -62,15 +64,30 @@ export const CLAUDE_CHAT_FLAGS = [
   '--output-format',
   'stream-json',
   '--verbose',
+  '--include-partial-messages',
 ];
 
-/** A single successful result from the official runtime; partial text/tool calls are never applied. */
-export function claudeResult(output: string): string {
+export function claudeHostToolFlags(configFile: string, names: string[], readOnly = false): string[] {
+  const flags: string[] = [];
+  for (let index = 0; index < CLAUDE_CHAT_FLAGS.length; index++) {
+    const flag = CLAUDE_CHAT_FLAGS[index];
+    // Safe mode suppresses even explicit MCP servers. Keep restricted mode, disabled built-in
+    // tools, no custom settings/hooks/commands and strict MCP as the capability boundary.
+    if (flag === '--safe-mode') continue;
+    if (flag === '--disallowedTools') { index++; continue; }
+    if (flag === '--mcp-config') { flags.push(flag, configFile); index++; continue; }
+    flags.push(flag);
+  }
+  return [...flags, '--allowedTools', names.map(name => `mcp__roboboy__${name}`).join(','), '--max-turns', readOnly ? '10' : '50'];
+}
+
+/** A single successful result; only the supplied scoped host tools may appear in the transcript. */
+export function claudeResult(output: string, allowedTools?: ReadonlySet<string>): string {
   let result: any;
   for (const line of output.split(/\r?\n/)) {
     if (!line.trim()) continue;
     const event = JSON.parse(line);
-    if (event.type === 'assistant' && event.message?.content?.some((item: any) => item.type === 'tool_use')) {
+    if (event.type === 'assistant' && event.message?.content?.some((item: any) => item.type === 'tool_use' && !allowedTools?.has(item.name))) {
       throw new Error('Claude attempted a tool call. Robo-Boy subscription chat does not allow runtime tools.');
     }
     if (event.type === 'result') {
@@ -155,7 +172,12 @@ export class ClaudeSubscription {
     signal: AbortSignal,
     input?: string,
     cwd = this.directory,
-    executable?: string
+    executable?: string,
+    onThinking?: (text: string) => void,
+    onToken?: (text: string) => void,
+    hostTools = false,
+    onModelStep?: () => Promise<void>,
+    onUsage?: (usage: { inputTokens: number; outputTokens: number }) => void
   ): Promise<string> {
     signal.throwIfAborted();
     if (!this.prepared)
@@ -178,7 +200,7 @@ export class ClaudeSubscription {
     return new Promise<string>((resolve, reject) => {
       const child = spawn(binary, args, {
         cwd,
-        env: claudeEnvironment(this.directory),
+        env: claudeEnvironment(this.directory, hostTools),
         shell: false,
         windowsHide: true,
         detached: process.platform !== 'win32',
@@ -186,6 +208,8 @@ export class ClaudeSubscription {
       });
       let output = '',
         tooLarge = false;
+      let streamBuffer = '';
+      let steps = Promise.resolve(), stepFailure: Error | undefined;
       let hardKill: ReturnType<typeof setTimeout> | undefined;
       const kill = (force = false) => {
         try {
@@ -218,14 +242,33 @@ export class ClaudeSubscription {
           tooLarge = true;
           abort();
         }
+        if ((onThinking || onToken || onModelStep || onUsage) && !tooLarge && !signal.aborted) {
+          streamBuffer += chunk;
+          const lines = streamBuffer.split(/\r?\n/);
+          streamBuffer = lines.pop() ?? '';
+          for (const line of lines) {
+            try {
+              const event = JSON.parse(line);
+              if (event.type === 'result' && event.usage) onUsage?.({ inputTokens: event.usage.input_tokens ?? 0, outputTokens: event.usage.output_tokens ?? 0 });
+              if (event.type === 'stream_event' && event.event?.type === 'message_start' && onModelStep) {
+                steps = steps.then(onModelStep).catch(cause => { stepFailure = cause instanceof Error ? cause : new Error(String(cause)); abort(); });
+              }
+              const delta = event.type === 'stream_event' ? event.event?.delta : undefined;
+              if (delta?.type === 'thinking_delta' && typeof delta.thinking === 'string') onThinking?.(delta.thinking);
+              if (delta?.type === 'text_delta' && typeof delta.text === 'string') onToken?.(delta.text);
+            } catch { /* Completed output is validated by claudeResult. */ }
+          }
+        }
       });
       // Drain diagnostics without exposing credentials or the contents of prompts.
       child.stderr.resume();
       child.stdin.on('error', () => {});
       child.stdin.end(input);
-      child.on('close', code => {
+      child.on('close', async code => {
+        await steps;
         cleanup();
-        if (signal.aborted) reject(new Error('Claude request was cancelled or timed out.'));
+        if (stepFailure) reject(stepFailure);
+        else if (signal.aborted) reject(new Error('Claude request was cancelled or timed out.'));
         else if (tooLarge) reject(new Error('Claude response is too large.'));
         else if (code !== 0 && !(args[0] === 'auth' && args[1] === 'status' && code === 1))
           reject(
@@ -264,12 +307,19 @@ export class ClaudeSubscription {
     await this.run(['auth', 'logout'], signal);
   }
 
-  async send(request: SubscriptionChatRequest, signal: AbortSignal): Promise<string> {
+  async send(request: SubscriptionChatRequest, signal: AbortSignal, onThinking?: (text: string) => void, tools?: HostTools, onToken?: (text: string) => void, onUsage?: (usage: { inputTokens: number; outputTokens: number }) => void): Promise<string> {
     const state = await this.getState();
     if (!state.accounts.some(account => account.planEnabled))
       throw new Error(state.error ?? 'Sign in through Claude Code in Assistant settings before sending.');
     const cwd = await mkdtemp(join(this.directory, 'chat-'));
+    let mcp: Awaited<ReturnType<typeof startAssistantMcp>> | undefined;
+    let modelStep = Promise.resolve();
+    const checkpoint = () => { modelStep = modelStep.then(async () => { await tools?.checkpoint?.(); }); return modelStep; };
     try {
+      if (tools) {
+        mcp = await startAssistantMcp({ ...tools, execute: async (name, input, id) => { await modelStep; signal.throwIfAborted(); return tools.execute(name, input, id); } }, signal);
+        await writeFile(join(cwd, 'mcp.json'), JSON.stringify({ mcpServers: { roboboy: { type: 'http', url: mcp.url, headers: { Authorization: `Bearer ${mcp.token}` } } } }), { mode: 0o600 });
+      }
       await writeFile(
         join(cwd, 'instructions.txt'),
         request.systemPrompt +
@@ -286,7 +336,7 @@ export class ClaudeSubscription {
       const input = JSON.stringify({ type: 'user', message: { role: 'user', content } }) + '\n';
       const output = await this.run(
         [
-          ...CLAUDE_CHAT_FLAGS,
+          ...(tools ? claudeHostToolFlags(join(cwd, 'mcp.json'), tools.definitions.map(tool => tool.name), tools.scope === 'read-only') : CLAUDE_CHAT_FLAGS),
           '--model',
           request.model,
           ...(request.thinkingEffort ? ['--effort', request.thinkingEffort] : []),
@@ -295,11 +345,18 @@ export class ClaudeSubscription {
         ],
         signal,
         input,
-        cwd
+        cwd,
+        undefined,
+        onThinking,
+        onToken,
+        Boolean(tools),
+        tools ? checkpoint : undefined,
+        onUsage
       );
       signal.throwIfAborted();
-      return claudeResult(output);
+      return claudeResult(output, tools ? new Set(tools.definitions.map(tool => `mcp__roboboy__${tool.name}`)) : undefined);
     } finally {
+      await mcp?.close();
       await rm(cwd, { recursive: true, force: true });
     }
   }

@@ -1,16 +1,103 @@
 # AI Assistant
 
-Robo-Boy has one global AI assistant, reachable from anywhere in the connected app through a launcher button. It replaces the earlier Behavior-Tree-panel-owned chat assistant, which existed only while a BT panel was open and only knew about BT and ROS-discovery context. There is exactly one conversation: opening the assistant from a contextual button (for example a Behavior Tree panel's toolbar) pins that panel's context onto the existing conversation rather than starting a new one.
+Robo-Boy has one global AI assistant, reachable from anywhere in the connected app through a launcher button. It replaces the earlier Behavior-Tree-panel-owned assistant. Chats are scoped to the robot connection, with new/fork/search/export controls. Opening it from a panel pins that panel onto the current chat; it does not start a competing agent.
 
 ## User Workflow
 
 1. Press the assistant launcher, fixed in the bottom-right corner. It takes its size, icon size and edge inset from the `--floating-action-*` tokens in `src/index.css`, whose bottom offset clears a phone's gesture bar.
-2. On desktop the assistant is a fixed right-side panel (`clamp(420px, 32vw, 480px)`) running the full height under the app bar, on the launcher's side. It is non-modal — the workspace to its left stays live — and it does not drag, resize, or minimize. Below 768px it fills the screen under the app bar as a modal dialog with a focus trap, and the system back gesture closes it.
+2. On desktop it opens on the right and can be moved/resized. It is non-modal; workspace controls remain live. Mobile portrait docks into the workspace with a resizable boundary; landscape uses a side panel. Safe-area and visual-viewport handling keep the composer reachable above the keyboard, and the system back gesture closes it.
 3. Ask a question, or bring something with it. Files can be dropped anywhere on the panel or picked with the paperclip; an image shows as a thumbnail and opens full size when clicked. The microphone records a clip you can play back before sending, and `To text` converts it instead — a recording is sent as audio to providers that read audio (Gemini, and the OpenAI chat-completions shape), and refused with that suggestion for the ones that cannot (Anthropic, Ollama).
 4. `Enter` sends and `Shift+Enter` starts a new line. An in-progress IME composition never submits.
-5. Review any proposed change in the editor that owns it — see [Capability matrix](#capability-matrix) and [Trust model](#trust-model) below.
+5. Local workspace edits can be applied directly. Pad/BT authoring requires operator review: Pads open in their editor for Save/Cancel; trees preview on their owning canvas for Accept/Reject. Without an open tree canvas, the proposal card offers explicit acceptance into the library or rejection. A staged proposal is not a saved document. There is no authoring-policy settings switch. Saved Pad controls require **Activate updated controls**; a saved tree is not a running tree. Previous journal entries retain conflict-safe Undo.
+
+Mode, model and supported reasoning effort are directly accessible above the composer. **Edit**
+allows local app edits and reviewed authoring; **Goal** tracks a bounded objective and verifies its
+outcomes; **Plan** investigates and plans without edits; **Ask** answers without edits. Goal is not
+permission to execute the robot or an indefinite background scheduler. Controls are locked during
+a task; Stop first to change inference configuration. Custom workflows remain optional.
+
+### Native agent runtime
+
+The old JSON response loop is removed. One native tool conversation can discover resources,
+read bounded samples/logs/parameters/TF, retrieve exact schemas, inspect saved or unsaved documents,
+modify panels and save validated authoring. Tags are optional references, never access gates.
+Provider-exposed thinking, assistant text and tool activity are separate expandable UI parts.
+
+During work, **Steer**, **Queue** and **Interrupt** keep genuine user inputs distinct. Queued
+messages can be edited, removed or reordered. Session switches, reconnects, settings changes and
+Stop cancel owned work; late results cannot enter another chat. Closing the AI panel only hides
+it: current work and questions continue in the mounted connection session. This is not a promise
+of background execution after a browser is suspended or the application quits. Editing branches conversation
+history, not document history. Forking creates a separate conversation branch.
+
+The default task allowance is 50 model steps and 150 host calls, shared with up to three
+read-only investigations. Each child has its own ten-step/read-tool limits. Plans/questions,
+spawn/wait/inspect/message/cancel operations, usage events and per-call status are visible.
+Three identical tool failures pause continuation; successful effects are not blindly replayed.
+Context compaction retains complete tool/result exchanges and a bounded completed-effect ledger.
+Context compaction and bounded retrieval are automatic; there is no manual context-window setting.
+OpenAI subscription requests use the account's verified model context-window metadata when provided;
+unknown metadata retains a conservative fallback rather than guessing from the model name.
+Provider limits remain finite. If the current request alone is too large, reduce attachments or
+split the request. Unknown model IDs do not imply an invented context capacity.
+Native host calls are dispatched serially and receive deadlines when dispatched, not while queued.
+Timeouts report the owning tool or task deadline. Invalid/oversized host replies settle immediately,
+rather than leaving a rejected checkpoint alive until its timeout. Refreshed prompts do not repeat
+new tool observations already paired in native history. Stop/failure preserves partial assistant text,
+thinking and canceled activity in the transcript, clearly marked incomplete; completed mutations
+are not silently retried.
+
+Custom workflows are optional imported instructions, not prerequisites for Pad/BT authoring,
+plotting or ROS diagnosis. No example-specific workflows are shipped or enabled by default.
+Trusted `SKILL.md` imports never execute referenced scripts. Custom profiles can narrow tools and select
+an explicit same-provider model. Declarative tool hooks can block a tool or add a reminder before
+execution/after success/error; they cannot grant access or run shell commands.
+
+MCP integrations require explicit per-tool read/local-edit grants, credential-free HTTPS or
+loopback endpoints and compatible HTTP/CORS. Tokens stay session-only. Remote descriptions and
+results are untrusted data; a declared read grant is an operator trust decision, not a guarantee
+about a remote server's side effects. Do not grant robot-control tools. OAuth and arbitrary
+desktop stdio MCP servers are not implemented.
+
+Opt-in watches use deterministic, bounded ROS subscriptions; threshold/change edges trigger
+read-only analyses with expiry, a five-minute cooldown and an explicit inference allowance.
+Electron can keep these watches in the tray after window closure, with notifications and Stop/
+Quit controls. Quit/shutdown ends them; watches are not resurrected on restart. Web/mobile/Tauri
+are foreground-only. Hiding the app releases held virtual controls using their existing stop path.
+
+Chats and validated authoring artifacts/checkpoints are bounded local data. Raw captures, images,
+provider reasoning and native histories remain session-only. Recovered proposals require fresh
+validation; journal recovery reconciles an interrupted save and never replays it. Revisions,
+cooperative browser locks and final synchronous owner checks protect saved documents; existing
+manual edits are not overwritten by Undo.
 
 Settings (provider, model, API key, instructions) live in the gear icon inside the panel. Preferences persist in this browser; current Electron shells own API-key persistence natively.
+
+The header's **Chats** button opens searchable chat rows, archived chats, switching, rename, permanent
+delete, fork and export controls. A manual name survives later messages. Deletion requires confirmation,
+removes the local conversation, and stops that chat's active task; it does not delete robot documents
+or provider-side records.
+Chats and Settings replace the conversation body; Back or Escape returns to the conversation.
+Tool activity, watch status, queued messages and **Changes** live in the scrollable transcript,
+not the fixed composer. Tool results expand individually, with explicit Running/Done/Failed
+status words; token accounting has a separate disclosure. The composer has one input and one
+action row. **Message options** appears during a task for delivery choices; drawing is not part of
+chat. During a task, Stop remains available
+while drafting a follow-up. Replies and provider-exposed thinking share a semantic GFM Markdown
+renderer (tables, lists, code and safe links); user messages remain literal editable text.
+Tables/code scroll within their blocks. Raw HTML is never executed and Markdown images do not
+load remote URLs. Streaming follows only when already near the bottom; **Latest message** returns
+to the live reply without pulling users away from older messages. Multi-step tasks expose a checklist
+with Pending, In progress, Waiting for approval/input, Blocked and Done states. Approval is not
+completion. Agent questions remain in the transcript after the user's answer. Closed activity/context
+disclosures do not render invisible list markers into copied chat text.
+See [source comparison and remaining boundaries](assistant-ui-review.md).
+
+The assistant follows the handbook's [Robo-Boy product UI](https://github.com/tessel-la/tessella-handbook/blob/main/design/product-ui.md):
+runtime theme surfaces and fonts, restrained message tinting, shared panel resize controls,
+visible keyboard focus, and 44px touch controls. Settings respond to the panel width, including a
+narrow desktop frame. Provider and extension forms use the same spacing and control treatment.
+No fixed brand palette or fonts are imported into the application.
 
 ### API keys and subscription sign-in
 
@@ -65,14 +152,27 @@ Official contracts: [ChatGPT plan usage](https://developers.openai.com/siwc/toke
 
 ## Context
 
-**Everything the app holds goes in every turn.** The workspace snapshot (panels with their configuration, the current and saved layouts), every saved Pad and every saved Behavior Tree as complete JSON, the whole ROS graph, and the node and parameter lists. They are local reads, so making a user fetch the right one first cost more than carrying them all. Every reply lists what it used, with source and age, and a reconnect marks stale data rather than presenting it as current.
+**Resources are discoverable without tags, not dumped wholesale into every turn.** The native
+prompt includes workspace metadata, saved Pad/BT catalogs and bounded ROS graph information.
+Tools retrieve complete documents, revisions, exact schemas and bounded observations as needed.
+Open editor drafts are references too, not repeatedly embedded documents. Schema results stay in
+paired native tool observations rather than being duplicated into each refreshed system prompt.
+Large graphs are searchable/pageable. Every reply lists the gathered context with source and age;
+a reconnect marks stale data rather than presenting it as current. A provenance entry records
+what was supplied or retrieved, not proof that the model semantically relied on every entry.
 
-There is no context picker to manage. What is left for the user to choose is the data that is genuinely expensive: a topic's live sample, a service or action schema, a TF snapshot, a `/rosout` capture.
+There is no context picker to manage. The assistant can request a topic's live sample, a service or action schema, a TF snapshot, a `/rosout` capture, node/parameter details, camera image or displayed Pad values itself. Tags remain optional references; you do not need to attach resources before it can use them.
 
 Plotting requests automatically retrieve a schema and one bounded live sample for up to three
 explicitly named topics. A joint-state request without a topic name samples graph topics of type
 `sensor_msgs/msg/JointState` (or its ROS 1 spelling), so joint names and array indices are available
 without manually tagging the topic. It does not subscribe to every topic on the graph.
+
+“Watch joint states” configures a Data Explorer topic watch without ongoing model inference.
+Scheduled AI monitoring is separate, opt-in and bounded by its configured expiry and inference allowance.
+
+Sketch is available beside Attach and produces a PNG through the same attachment limits. In Chats,
+select a row to choose it for archive/rename/delete; use its separate Open action to enter it.
 
 The assistant can add a Time Series panel and configure it in one reply. Settings wait for that
 specific tile to mount, including a mobile replacement. If the model only adds the panel and
@@ -113,9 +213,9 @@ like any other panel's settings, and the assistant can act on it with `configure
   stops after 20 seconds or half a million messages and says where it stopped.
 
 Data that a request reads (a selected message, a log query, a sample, a read) arrives on the
-assistant's next turn. The model therefore puts the question in `followUp`, and the app sends it
-as soon as the data is there: a panel's `apply` may finish asynchronously, and the assistant waits
-for it before continuing.
+assistant's next model round within the same user turn. A panel's `apply` may finish
+asynchronously; the assistant waits for it before continuing. Its continuation and tool results
+are never inserted as messages from you.
 
 The assistant can also see which Behavior Tree is running, its active node and its last status,
 and it can set a camera panel's stream quality.
@@ -147,6 +247,33 @@ A message's tags are read from its own text, so the colouring survives a reload,
 
 ## What The Model Is Told About The App
 
+The assistant uses native tools, paired observations and plain assistant text. Workspace changes
+return actual owning-host outcomes before the next model step. The host flushes React commits
+at the read-after-write boundary. Stop, account changes and reconnect cancel owned work. The
+task/child allowances and recovery behavior are described above; `agentLoop.ts` no longer exists.
+
+All domain tools are offered even for short follow-ups such as "solve it". Keyword matching
+only optimizes eager retrieval; it no longer hides Pad/BT/layout
+instructions. Live captures remain session-only, carry age and connection generation, and can be
+used in a follow-up about the same capture. New conversation clears them.
+
+Provider-exposed thinking appears in a separate expandable assistant section while streaming
+and below the completed reply. It is never treated as answer JSON, a user message or persisted
+conversation content. OpenAI-compatible reasoning, Claude thinking, Gemini thought parts,
+Ollama thinking, and Electron subscription streams use this path. Providers that expose no
+thinking show tool activity instead. Read completions and failures remain in the expandable
+assistant section after the answer, in memory only.
+
+Pad service/action bindings must have an executable `eventOperations` payload. A primary action
+with a supplied request/goal is migrated to the correct button/toggle event; an absent or empty
+goal is rejected and returned to the model for correction. Retrieved schemas check supplied
+field names/types and nested arrays. Joint-trajectory goals additionally need distinct joint
+names, one finite position per joint, and increasing positive times. These checks do not certify
+joint limits, collision clearance or robot safety; motion remains in the reviewed Pad/BT flow.
+
+See [assistant investigation](assistant-investigation.md) for source comparisons and the protocol
+choice.
+
 Left to general ROS knowledge the model answers app questions from outside the app: asked whether Robo-Boy could measure the distance between two frames, it replied "write a `tf2_ros` node" — for something computed here from live `/tf` before a provider is called.
 
 So the assistant's self-description is data, not prose. Each capability is an `AssistantCapability` declared beside the code that implements it — `TF_CAPABILITY` next to the phrase parsers, `PAD_CAPABILITY` next to the Pad generator, and so on — collected in `ASSISTANT_CAPABILITIES` and rendered into the prompt by `describeCapabilities`. Delete a feature and its description goes with it.
@@ -155,33 +282,33 @@ So the assistant's self-description is data, not prose. Each capability is an `A
 
 ## Capability Matrix
 
-| Capability | Read automatically | Retrieve on demand | Propose (reviewed in its own editor) | Not accessible |
-| --- | --- | --- | --- | --- |
-| Connection status | ✅ | | | |
-| Open panels / layouts / selected Pad | ✅ (snapshot with each panel's configuration) | | | |
-| ROS topics/services/actions + schemas | | ✅ (cached, reconnect-aware) | | |
-| ROS nodes and parameters | | ✅ (rosapi, serialized) | | |
-| TF snapshot, two-frame transform / distance | | ✅ (on demand, no background subscription) | | |
-| `/rosout` recent messages | | ✅ (bounded: up to 40 messages over 4s, on demand) | | |
-| Every saved Pad and Behavior Tree | ✅ (complete JSON, every turn) | | | |
-| ROS node and parameter names | ✅ (every turn) | | | |
-| Live topic sample | | ✅ (3 messages by default, 40 at most, 24 KiB each) | | |
-| Workspace: add/remove panels, camera topic, stream quality or Pad of a panel, load/save layouts | | | ✅ applied at once through the same handlers as the menus; each outcome is listed in the reply | |
-| Open panel settings: 3D view (frames, visualizations), TF tree (filters), Time Series (signals, math, smoothing, window, Y axis, pause/clear) | ✅ (each bridged panel's current settings and signal status) | | ✅ applied at once through the panel's settings bridge; each outcome is listed in the reply | |
-| Data Explorer: resources and counts, watched-topic rates, QoS issues, diagnostics, `/rosout`, events, health rules | ✅ (while the panel is open; bounded) | ✅ (a resource's latest message and schema, up to 200 kept log entries) | ✅ watch/unwatch, health rules, selection and view, applied at once | |
-| Record & Replay: the open recording, its topics and definitions, playback, recordings on the ROS host, recorder state | ✅ (while the panel is open) | ✅ (messages at a position, or a whole stretch of up to six topics) | ✅ open a recording from the ROS host, playback, recording options; start/stop recording when asked | ❌ opening a file from this device (only the user can choose it) |
-| Behavior Tree run state (running, active node, status) | ✅ | | | ❌ starting, pausing or stopping a tree |
-| Camera frames | | ✅ (latest frame of open cameras, up to two, when asked what they show) | | |
-| Live values shown on a Pad | | ✅ (each displayed topic read once, formatted as the Pad shows it) | | |
-| Connection tabs | ✅ (labels and status) | | ✅ switch, open the connect form, close another tab | ❌ closing the tab the conversation runs in |
-| App settings: version, theme, installed panels, the assistant's provider and model | ✅ | | ✅ theme, offer or hide an installed panel, open the panel manager | ❌ installing or removing a panel (prepared for the user to review and apply), API keys and tokens |
-| Pad create / repair | | | ✅ (opens in the existing Pad editor) | |
-| Behavior Tree create / edit | | | ✅ (live canvas preview if a BT panel is open, otherwise saved-library) | |
-| Topic publish / service call / action goal | | | ✅ **review-only** — shown as a card, never run | |
-| External panel JSON / internals | | | | ❌ (the assistant sees an installed panel's name, version and whether it is offered, never its contents; it generates Pads, not external panels) |
-| ROS 2 lifecycle state | | | | ❌ (see [Known limitations](#known-limitations)) |
-| Provider API key | | | | ❌ (never placed in context, logs, or prompts) |
-| Filesystem / shell / ROS CLI / raw ROSLIB objects | | | | ❌ (does not exist anywhere in the app, on any platform) |
+| Capability                                                                                                                                    | Read automatically                                           | Retrieve on demand                                                      | Propose (reviewed in its own editor)                                                                | Not accessible                                                                                                                                   |
+| --------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ | ----------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Connection status                                                                                                                             | ✅                                                           |                                                                         |                                                                                                     |                                                                                                                                                  |
+| Open panels / layouts / selected Pad                                                                                                          | ✅ (snapshot with each panel's configuration)                |                                                                         |                                                                                                     |                                                                                                                                                  |
+| ROS topics/services/actions + schemas                                                                                                         |                                                              | ✅ (cached, reconnect-aware)                                            |                                                                                                     |                                                                                                                                                  |
+| ROS nodes and parameters                                                                                                                      |                                                              | ✅ (rosapi, serialized)                                                 |                                                                                                     |                                                                                                                                                  |
+| TF snapshot, two-frame transform / distance                                                                                                   |                                                              | ✅ (on demand, no background subscription)                              |                                                                                                     |                                                                                                                                                  |
+| `/rosout` recent messages                                                                                                                     |                                                              | ✅ (bounded: up to 40 messages over 4s, on demand)                      |                                                                                                     |                                                                                                                                                  |
+| Every saved Pad and Behavior Tree                                                                                                             | ✅ catalogs                                                  | ✅ complete documents and revisions                                     | ✅ validated save/patch with checkpoint/undo                                                        |                                                                                                                                                  |
+| ROS node and parameter names                                                                                                                  | ✅ (every turn)                                              |                                                                         |                                                                                                     |                                                                                                                                                  |
+| Live topic sample                                                                                                                             |                                                              | ✅ (3 messages by default, 40 at most, 24 KiB each)                     |                                                                                                     |                                                                                                                                                  |
+| Workspace: add/remove panels, camera topic, stream quality or Pad of a panel, load/save layouts                                               |                                                              |                                                                         | ✅ applied at once through the same handlers as the menus; each outcome is listed in the reply      |                                                                                                                                                  |
+| Open panel settings: 3D view (frames, visualizations), TF tree (filters), Time Series (signals, math, smoothing, window, Y axis, pause/clear) | ✅ (each bridged panel's current settings and signal status) |                                                                         | ✅ applied at once through the panel's settings bridge; each outcome is listed in the reply         |                                                                                                                                                  |
+| Data Explorer: resources and counts, watched-topic rates, QoS issues, diagnostics, `/rosout`, events, health rules                            | ✅ (while the panel is open; bounded)                        | ✅ (a resource's latest message and schema, up to 200 kept log entries) | ✅ watch/unwatch, health rules, selection and view, applied at once                                 |                                                                                                                                                  |
+| Record & Replay: the open recording, its topics and definitions, playback, recordings on the ROS host, recorder state                         | ✅ (while the panel is open)                                 | ✅ (messages at a position, or a whole stretch of up to six topics)     | ✅ open a recording from the ROS host, playback, recording options; start/stop recording when asked | ❌ opening a file from this device (only the user can choose it)                                                                                 |
+| Behavior Tree run state (running, active node, status)                                                                                        | ✅                                                           |                                                                         |                                                                                                     | ❌ starting, pausing or stopping a tree                                                                                                          |
+| Camera frames                                                                                                                                 |                                                              | ✅ (latest frame of open cameras, up to two, when asked what they show) |                                                                                                     |                                                                                                                                                  |
+| Live values shown on a Pad                                                                                                                    |                                                              | ✅ (each displayed topic read once, formatted as the Pad shows it)      |                                                                                                     |                                                                                                                                                  |
+| Connection tabs                                                                                                                               | ✅ (labels and status)                                       |                                                                         | ✅ switch, open the connect form, close another tab                                                 | ❌ closing the tab the conversation runs in                                                                                                      |
+| App settings: version, theme, installed panels, the assistant's provider and model                                                            | ✅                                                           |                                                                         | ✅ theme, offer or hide an installed panel, open the panel manager                                  | ❌ installing or removing a panel (prepared for the user to review and apply), API keys and tokens                                               |
+| Pad create / repair                                                                                                                           |                                                              | ✅ current editor draft                                                 | ✅ editor approval required; activation stays manual                                                |                                                                                                                                                  |
+| Behavior Tree create / edit                                                                                                                   |                                                              | ✅ current editor draft                                                 | ✅ explicit approval required; execution stays manual                                               |                                                                                                                                                  |
+| Topic publish / service call / action goal                                                                                                    |                                                              |                                                                         | ✅ **review-only** — shown as a card, never run                                                     |                                                                                                                                                  |
+| External panel JSON / internals                                                                                                               |                                                              |                                                                         |                                                                                                     | ❌ (the assistant sees an installed panel's name, version and whether it is offered, never its contents; it generates Pads, not external panels) |
+| ROS 2 lifecycle state                                                                                                                         |                                                              |                                                                         |                                                                                                     | ❌ (see [Known limitations](#known-limitations))                                                                                                 |
+| Provider API key                                                                                                                              |                                                              |                                                                         |                                                                                                     | ❌ (never placed in context, logs, or prompts)                                                                                                   |
+| Filesystem / shell / ROS CLI / raw ROSLIB objects                                                                                             |                                                              |                                                                         |                                                                                                     | ❌ (does not exist anywhere in the app, on any platform)                                                                                         |
 
 ## Trust Model
 
@@ -193,7 +320,8 @@ Three tiers, and the assistant never silently crosses from one to the next:
 
 **Robot-affecting execution never happens from chat.** A proposed publish, service call, or action goal renders as a review-only card with its target, type, and payload; there is no button that runs it. To act on one, put it into a Pad or a Behavior Tree and run it there, where the existing review, validation, and cancellation behavior applies. The former `tools/rosActionGuard.ts` execution path is removed, not disabled.
 
-Whole-conversation history is sent to the provider on every turn (see [Known limitations](#known-limitations)).
+Provider history is automatically budgeted, preserving complete tool/result groups and a bounded
+completed-effect ledger. Full documents are retrieved only as needed.
 
 ## Architecture
 
@@ -219,6 +347,12 @@ A mounted `BehaviorTreePanel` registers a `BehaviorTreeAssistantBridge` (`getCur
 ### Pad integration
 
 A Pad proposal is handed to `MainControlView`, which opens the existing Pad editor in create or edit mode against the proposed layout. Nothing is written to the Pad library until the user saves there.
+
+Operator-approved saves also notify the Pad catalog, so a newly saved document immediately appears
+in panel pickers. Workspace tools resolve Pad IDs from current storage, including a save followed
+by selection in the same task, rather than from a cached menu snapshot. Explicit unknown IDs are
+reported as failures, never silently replaced with the first template. Updating an existing Pad
+still leaves its running control snapshot unchanged until operator activation.
 
 ## Migration From The BT-Owned Assistant
 
@@ -286,7 +420,9 @@ The assistant cannot reach into an external panel's sandboxed iframe. It sees on
 
 ## Known Limitations
 
-- **The whole conversation is sent on every turn, and so is every Pad and Behavior Tree.** There is no summarization or sliding window, and the libraries are carried in full. A large library or a long conversation will grow the request past a small model's context window; the trade was made deliberately, against making the user fetch the right resource before asking about it.
+- **Context windows remain finite.** Catalogs and selective reads reduce repeated document data;
+  automatic compaction preserves tool/result groups and completed effects. A single oversized
+  request, attachment or catalog may still require narrowing. No app can promise unlimited context.
 - **Diagnostics are read only while a Data Explorer is open, and ROS 2 lifecycle state is not read.** The assistant can add an Explorer to read diagnostics. No cheap rosapi call enumerates which nodes are lifecycle nodes; doing so would require probing every node's service list, which is exactly the concurrent-rosapi-call risk the shared queue and `discoverAllROSResources` already guard against. Smallest credible future step: an explicit, user-named "check lifecycle state of node X" tool that queries only that one node's `~/get_state` service.
 - **ROS operation proposals are checked for existence and top-level message-type match, not full field-level payload schema.** A Behavior Tree or Pad proposal does get the full schema; a standalone publish/call/send card only gets the name/type check. Since nothing runs from chat, this bounds a review aid rather than an execution gate.
 - **A recording on this device cannot be opened by the assistant**, and reading one is bounded: at most six topics, 300 returned messages, about 60 KB and 20 seconds per read. Ask several narrower questions for a long recording.
@@ -295,7 +431,8 @@ The assistant cannot reach into an external panel's sandboxed iframe. It sees on
 - **Only Pads are generated, not external panels.** An external panel is a versioned, sandboxed artifact under `src/panels/`, outside the assistant's dependency boundary.
 - **The composer's tag colouring is a backdrop, not styled text.** A textarea cannot carry inline styling, so the marks are painted by a mirrored layer behind it. It must keep the same font, padding and wrapping as the textarea to stay aligned; a `contenteditable` composer would style the text directly but cost IME, undo, and mobile-keyboard behavior that currently works.
 - **Re-typing a mention by hand reuses the resource read for it earlier in the conversation** rather than re-reading it. Selecting it again from the picker forces a fresh read, and `Context used` always shows the age of what was actually sent.
-- **Domain-fragment prompt routing (whether to include the BT/Pad schema text for a turn) is keyword-based**, not a real intent classifier.
+- **Task-specific prefetch uses bounded heuristics**, not a real intent classifier. Native tools
+  remain available independently of keywords; the model can retrieve additional evidence.
 - **The assistant is not available before connecting** (on the entry/connect screen). Adding this would require lifting `useRos()` out of `MainControlView`, a materially separate and independently risky refactor; see [Application architecture](architecture.md#ros-boundary).
 - **No live-provider or live-ROS validation was performed as part of building this feature** — all automated coverage uses a mocked provider `fetch` and the existing `e2e/helpers/rosMock.ts`. No physical iOS or Android microphone testing has been done.
 

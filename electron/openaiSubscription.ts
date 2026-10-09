@@ -4,6 +4,8 @@ import { createServer } from 'node:http';
 import { readEncryptedJson, writeEncryptedJson, requireSecureStorage } from './assistantStorage';
 import { createRemoteJWKSet, jwtVerify } from 'jose';
 import type { SubscriptionChatRequest, SubscriptionState } from '../src/runtime/assistantSubscription';
+import type { HostTools } from '../src/features/assistant/tools/nativeTools';
+import { sendNativeChat } from '../src/features/assistant/providers/native';
 
 const AUTH = 'https://auth.openai.com';
 const RESOURCE = 'https://api.openai.com/v1';
@@ -187,7 +189,11 @@ export async function oauthCallback(
 }
 
 /** Responses streams are successful only at their completed event, never at EOF or a text delta. */
-export async function completedResponse(response: Response, signal: AbortSignal): Promise<string> {
+export async function completedResponse(
+  response: Response,
+  signal: AbortSignal,
+  onThinking?: (text: string) => void
+): Promise<string> {
   if (!response.ok) await checkedJson(response);
   if (!response.body) throw new Error('ChatGPT returned no response stream.');
   const reader = response.body.getReader();
@@ -203,6 +209,8 @@ export async function completedResponse(response: Response, signal: AbortSignal)
       .join('\n');
     if (!data || data === '[DONE]') return;
     const event = JSON.parse(data);
+    if (event.type === 'response.reasoning_summary_text.delta' && typeof event.delta === 'string')
+      onThinking?.(event.delta);
     if (event.type === 'response.output_text.delta') text += event.delta ?? '';
     if (text.length > 4 * 1024 * 1024) throw new Error('ChatGPT response is too large.');
     if (event.type === 'response.completed') completed = event.response?.status === 'completed';
@@ -235,6 +243,7 @@ export async function completedResponse(response: Response, signal: AbortSignal)
 export class OpenAiSubscription {
   private saved?: SavedState;
   private queue: Promise<unknown> = Promise.resolve();
+  private modelCatalog?: { accountId: string; fetchedAt: number; models: SubscriptionState['models'] };
   private jwks?: ReturnType<typeof createRemoteJWKSet>;
   constructor(private directory: string) {}
 
@@ -463,6 +472,11 @@ export class OpenAiSubscription {
         .map((model: any) => ({
           id: model.slug,
           label: typeof model.display_name === 'string' ? model.display_name : model.slug,
+          ...(Number.isInteger(model.context_window) &&
+          model.context_window >= 4096 &&
+          model.context_window <= 2_000_000
+            ? { contextWindowTokens: model.context_window }
+            : {}),
         }));
     } catch (error) {
       state.error = error instanceof Error ? error.message : 'Unable to load ChatGPT models.';
@@ -480,6 +494,13 @@ export class OpenAiSubscription {
       connected: !!account.tokens,
       planEnabled: !!account.tokens?.scopes.includes(PLAN_SCOPE),
     }));
+    if (
+      !state.error &&
+      current.activeAccountId &&
+      state.accounts.some(account => account.id === current.activeAccountId && account.connected && account.planEnabled)
+    ) {
+      this.modelCatalog = { accountId: current.activeAccountId, fetchedAt: Date.now(), models: state.models };
+    }
     return state;
   }
 
@@ -521,9 +542,51 @@ export class OpenAiSubscription {
     });
   }
 
-  async send(request: SubscriptionChatRequest, signal: AbortSignal): Promise<string> {
+  async send(
+    request: SubscriptionChatRequest,
+    signal: AbortSignal,
+    onThinking?: (text: string) => void,
+    tools?: HostTools,
+    onToken?: (text: string) => void,
+    onUsage?: (usage: { inputTokens: number; outputTokens: number }) => void
+  ): Promise<string> {
     const access = await this.access();
     signal.throwIfAborted();
+    if (tools) {
+      const accountId = (await this.exclusive(() => this.load())).activeAccountId;
+      if (
+        !this.modelCatalog ||
+        this.modelCatalog.accountId !== accountId ||
+        Date.now() - this.modelCatalog.fetchedAt > 300_000
+      )
+        await this.getState();
+      signal.throwIfAborted();
+      const catalog = this.modelCatalog;
+      const verifiedWindow =
+        catalog && catalog.accountId === accountId && Date.now() - catalog.fetchedAt <= 300_000
+          ? catalog.models.find(model => model.id === request.model)?.contextWindowTokens
+          : undefined;
+      const result = await sendNativeChat({
+        settings: {
+          provider: 'openai',
+          baseUrl: RESOURCE,
+          model: request.model,
+          apiKey: access,
+          thinkingEffort: request.thinkingEffort,
+        },
+        systemPrompt: request.systemPrompt,
+        messages: request.messages,
+        signal,
+        tools,
+        onThinking,
+        onToken,
+        onUsage,
+        contextWindowTokens: verifiedWindow ?? request.contextWindowTokens,
+        refreshSystemPrompt: () =>
+          (tools as HostTools & { systemPrompt?: string }).systemPrompt ?? request.systemPrompt,
+      });
+      return result;
+    }
     const response = await fetch(`${RESOURCE}/responses`, {
       method: 'POST',
       redirect: 'error',
@@ -533,7 +596,9 @@ export class OpenAiSubscription {
         model: request.model,
         store: false,
         stream: true,
-        ...(request.thinkingEffort ? { reasoning: { effort: request.thinkingEffort } } : {}),
+        ...(request.thinkingEffort || /^(?:gpt-[56](?:[.-]|$)|o[134](?:-|$))/.test(request.model)
+          ? { reasoning: { ...(request.thinkingEffort ? { effort: request.thinkingEffort } : {}), summary: 'auto' } }
+          : {}),
         instructions:
           request.systemPrompt +
           (request.jsonMode ? '\nReturn only one valid JSON object. No markdown or prose outside JSON.' : ''),
@@ -552,6 +617,6 @@ export class OpenAiSubscription {
         })),
       }),
     });
-    return completedResponse(response, signal);
+    return completedResponse(response, signal, onThinking);
   }
 }

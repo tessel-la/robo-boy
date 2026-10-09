@@ -21,6 +21,7 @@
 }
 
 .assistant-panel {
+  container: assistant-panel / inline-size;
   position: relative;
   display: grid;
   width: 100%;
@@ -29,12 +30,24 @@
   min-height: 0;
   grid-template-rows: auto minmax(0, 1fr) auto auto;
   overflow: hidden;
-  border: 1px solid var(--border-color, #d9dee7);
+  border: 1px solid var(--border-color);
   border-radius: 12px;
-  background: var(--card-bg, #fff);
-  color: var(--text-color, #1f2937);
-  box-shadow: 0 12px 34px rgba(15, 23, 42, 0.2);
+  background: var(--card-bg);
+  color: var(--text-color);
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--background-color) 75%, transparent);
   pointer-events: auto;
+  font-family: var(--font-family-ui);
+  font-variant-numeric: tabular-nums;
+}
+
+.assistant-panel > .assistant-chat[hidden],
+.assistant-panel > .assistant-form[hidden] {
+  display: none;
+}
+
+/* The global native-field baseline has a bottom margin. Panel grids own spacing instead. */
+.assistant-panel :is(input, select, textarea) {
+  margin: 0;
 }
 
 .assistant-panel.is-entering,
@@ -99,7 +112,15 @@
 
 .assistant-resize-handle {
   position: absolute;
-  z-index: 2;
+  z-index: 40;
+}
+/* Keep shared corner markers without the shared whole-panel focus decoration. */
+.assistant-overlay .assistant-panel.tree-panel-resize-frame::before {
+  border: 0;
+  box-shadow: none;
+}
+.assistant-panel .assistant-resize-handle.tree-panel-menu-resize-handle {
+  display: block;
 }
 
 .assistant-resize-handle.n,
@@ -118,10 +139,18 @@
   cursor: ew-resize;
 }
 
-.assistant-resize-handle.n { top: 0; }
-.assistant-resize-handle.s { bottom: 0; }
-.assistant-resize-handle.e { right: 0; }
-.assistant-resize-handle.w { left: 0; }
+.assistant-resize-handle.n {
+  top: 0;
+}
+.assistant-resize-handle.s {
+  bottom: 0;
+}
+.assistant-resize-handle.e {
+  right: 0;
+}
+.assistant-resize-handle.w {
+  left: 0;
+}
 
 .assistant-resize-handle.ne,
 .assistant-resize-handle.nw,
@@ -131,10 +160,26 @@
   height: 24px;
 }
 
-.assistant-resize-handle.ne { top: 0; right: 0; cursor: nesw-resize; }
-.assistant-resize-handle.sw { bottom: 0; left: 0; cursor: nesw-resize; }
-.assistant-resize-handle.nw { top: 0; left: 0; cursor: nwse-resize; }
-.assistant-resize-handle.se { bottom: 0; right: 0; cursor: nwse-resize; }
+.assistant-resize-handle.ne {
+  top: 0;
+  right: 0;
+  cursor: nesw-resize;
+}
+.assistant-resize-handle.sw {
+  bottom: 0;
+  left: 0;
+  cursor: nesw-resize;
+}
+.assistant-resize-handle.nw {
+  top: 0;
+  left: 0;
+  cursor: nwse-resize;
+}
+.assistant-resize-handle.se {
+  bottom: 0;
+  right: 0;
+  cursor: nwse-resize;
+}
 
 .assistant-header {
   display: flex;
@@ -145,8 +190,8 @@
   justify-content: space-between;
   gap: 10px;
   padding: 8px 12px;
-  border-bottom: 1px solid var(--border-color, #d9dee7);
-  background: var(--card-bg, #fff);
+  border-bottom: 1px solid var(--border-color);
+  background: var(--card-bg);
 }
 
 .assistant-title,
@@ -164,17 +209,14 @@
 
 .assistant-avatar {
   display: grid;
-  width: 36px;
-  height: 36px;
-  flex: 0 0 36px;
-  /* ✦ sits high in its em box, so centring the box does not centre the glyph. */
-  padding-top: 2px;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
   place-items: center;
-  border: 1px solid color-mix(in srgb, var(--primary-color, #2563eb) 28%, var(--border-color, #d9dee7));
-  border-radius: 10px;
-  background: color-mix(in srgb, var(--primary-color, #2563eb) 10%, var(--card-bg, #fff));
-  color: var(--primary-color, #2563eb);
-  font-size: 27px;
+  border: 0;
+  background: transparent;
+  color: var(--primary-color);
+  font-size: 22px;
   line-height: 1;
 }
 
@@ -186,6 +228,18 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.assistant-title-text {
+  min-width: 0;
+}
+.assistant-title-text small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-secondary);
+  font-size: 10px;
+  margin-top: 3px;
+}
 
 .assistant-header-actions {
   flex: 0 0 auto;
@@ -194,11 +248,15 @@
 
 .assistant-icon-button,
 .assistant-header-actions .assistant-new {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   min-height: 44px;
   border: 0;
   border-radius: 8px;
   background: transparent;
-  color: var(--text-secondary, #64748b);
+  color: var(--text-secondary);
   cursor: pointer;
 }
 
@@ -212,7 +270,7 @@
 
 .assistant-header-actions .assistant-new {
   padding: 0 9px;
-  color: var(--primary-color, #2563eb);
+  color: var(--text-secondary);
   font-size: 12px;
   font-weight: 700;
 }
@@ -223,8 +281,8 @@
 .assistant-header-actions .assistant-new:focus-visible,
 .assistant-icon-button.is-active {
   outline: none;
-  background: color-mix(in srgb, var(--primary-color, #2563eb) 9%, transparent);
-  color: var(--primary-color, #2563eb);
+  background: color-mix(in srgb, var(--primary-color) 9%, transparent);
+  color: var(--primary-color);
 }
 
 .assistant-settings-icon-swap {
@@ -239,7 +297,9 @@
   inset: 0;
   width: 100%;
   height: 100%;
-  transition: opacity 170ms ease, transform 210ms cubic-bezier(0.2, 0.78, 0.28, 1);
+  transition:
+    opacity 170ms ease,
+    transform 210ms cubic-bezier(0.2, 0.78, 0.28, 1);
 }
 
 .assistant-settings-icon-gear {
@@ -281,22 +341,22 @@
   max-width: 340px;
   align-self: center;
   margin: auto 0;
-  padding: 28px 18px;
-  justify-items: center;
-  color: var(--text-secondary, #64748b);
-  text-align: center;
+  padding: 20px 8px;
+  justify-items: start;
+  color: var(--text-secondary);
+  text-align: left;
 }
 
 .assistant-empty > span {
   margin-bottom: 12px;
-  color: var(--primary-color, #2563eb);
+  color: var(--primary-color);
   font-size: 32px;
   line-height: 1;
 }
 
 .assistant-empty h3 {
   margin: 0;
-  color: var(--text-color, #1f2937);
+  color: var(--text-color);
   font-size: 17px;
 }
 
@@ -307,12 +367,12 @@
 }
 
 .assistant-empty-hint {
-  color: var(--text-secondary, #64748b);
+  color: var(--text-secondary);
   font-size: 12px;
 }
 
 .assistant-empty-hint strong {
-  color: var(--primary-color, #2563eb);
+  color: var(--primary-color);
 }
 
 .assistant-message {
@@ -328,7 +388,7 @@
 .assistant-message-role {
   display: block;
   margin: 0 4px 5px;
-  color: var(--text-secondary, #64748b);
+  color: var(--text-secondary);
   font-size: 10px;
   font-weight: 700;
 }
@@ -341,6 +401,202 @@
   overflow-wrap: anywhere;
 }
 
+.assistant-message.assistant {
+  width: 100%;
+  max-width: 100%;
+}
+
+.assistant-markdown {
+  min-width: 0;
+  max-width: 100%;
+  padding: 10px 12px;
+  color: var(--text-color);
+  font-size: 14px;
+  line-height: 1.55;
+  text-align: left;
+}
+
+.assistant-message-content.assistant-markdown p,
+.assistant-message-content.assistant-markdown pre {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  color: inherit;
+  font-size: inherit;
+  white-space: normal;
+}
+
+.assistant-markdown > :first-child {
+  margin-top: 0;
+}
+.assistant-markdown > :last-child {
+  margin-bottom: 0;
+}
+.assistant-message-content.assistant-markdown p + p {
+  margin-top: 0.75em;
+}
+.assistant-markdown h3,
+.assistant-markdown h4,
+.assistant-markdown h5,
+.assistant-markdown h6 {
+  font-size: 1em;
+  margin: 1em 0 0.5em;
+}
+.assistant-markdown ul,
+.assistant-markdown ol {
+  padding-left: 1.5em;
+  margin: 0.75em 0;
+}
+.assistant-markdown li + li {
+  margin-top: 0.35em;
+}
+.assistant-markdown blockquote {
+  margin: 0.75em 0;
+  padding-left: 12px;
+  border-left: 3px solid var(--border-color);
+  color: var(--text-secondary);
+}
+.assistant-markdown a {
+  color: var(--primary-color);
+  text-decoration: underline;
+}
+.assistant-markdown code {
+  font: inherit;
+  background: var(--background-secondary);
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+.assistant-markdown hr {
+  border: 0;
+  border-top: 1px solid var(--border-color);
+  margin: 1em 0;
+}
+.assistant-markdown .task-list-item {
+  list-style: none;
+}
+.assistant-markdown .task-list-item input {
+  margin-right: 6px;
+}
+
+.assistant-markdown-table {
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  margin: 0.75em 0;
+}
+.assistant-markdown table {
+  border-collapse: collapse;
+  width: 100%;
+}
+.assistant-markdown th,
+.assistant-markdown td {
+  box-sizing: border-box;
+  border: 1px solid var(--border-color);
+  padding: 7px 10px;
+  min-width: 120px;
+}
+.assistant-markdown th {
+  background: var(--background-secondary);
+  font-weight: 700;
+}
+
+.assistant-code-block {
+  min-width: 0;
+  margin: 0.75em 0;
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--background-secondary);
+}
+.assistant-code-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 10px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.assistant-code-header button {
+  min-height: 44px;
+  background: transparent;
+  border: 0;
+  color: var(--primary-color);
+  cursor: pointer;
+  font: inherit;
+}
+.assistant-message-content.assistant-markdown .assistant-code-block pre {
+  margin: 0;
+  padding: 10px;
+  white-space: pre;
+  word-break: normal;
+  overflow-wrap: normal;
+  overflow-x: auto;
+}
+.assistant-code-block code {
+  padding: 0;
+  background: none;
+}
+.assistant-thinking .assistant-markdown {
+  padding: 8px 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.assistant-session-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.assistant-session-list button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  min-height: 36px;
+  padding: 6px 8px;
+  text-align: left;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--background-secondary);
+  color: var(--text-color);
+  font: inherit;
+  cursor: pointer;
+}
+.assistant-session-list button span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.assistant-session-list button small {
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+.assistant-session-list button[aria-current] {
+  border-color: var(--primary-color);
+}
+.assistant-jump-latest {
+  align-self: center;
+  flex-shrink: 0;
+  min-height: 44px;
+  padding: 6px 12px;
+  background: var(--card-bg);
+  color: var(--primary-color);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  font: inherit;
+  cursor: pointer;
+}
+.assistant-markdown :focus-visible,
+.assistant-session-list :focus-visible,
+.assistant-jump-latest:focus-visible {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 2px;
+}
+
 .assistant-message-content p {
   margin: 0;
   white-space: pre-wrap;
@@ -349,19 +605,19 @@
 .assistant-message-content p,
 .assistant-message-content pre {
   padding: 10px 12px;
-  border: 1px solid var(--border-color, #d9dee7);
+  border: 1px solid var(--border-color);
   border-radius: 12px;
-  background: var(--background-secondary, #f6f8fb);
-  color: var(--text-color, #1f2937);
-  font-size: 13px;
+  background: var(--background-secondary);
+  color: var(--text-color);
+  font-size: 14px;
   line-height: 1.55;
   text-align: left;
 }
 
 .assistant-message.user .assistant-message-content p {
-  border-color: var(--primary-color, #2563eb);
-  background: var(--primary-color, #2563eb);
-  color: var(--button-text-color, #fff);
+  border-color: color-mix(in srgb, var(--primary-color) 24%, var(--border-color));
+  background: color-mix(in srgb, var(--primary-color) 8%, var(--background-secondary));
+  color: var(--text-color);
 }
 
 .assistant-message-content pre,
@@ -387,15 +643,15 @@
   border: 0;
   border-radius: 7px;
   background: transparent;
-  color: var(--text-secondary, #64748b);
+  color: var(--text-secondary);
   cursor: pointer;
 }
 
 .assistant-message-actions button:hover,
 .assistant-message-actions button:focus-visible {
   outline: none;
-  background: var(--background-secondary, #f6f8fb);
-  color: var(--primary-color, #2563eb);
+  background: var(--background-secondary);
+  color: var(--primary-color);
 }
 
 .assistant-message-attachments,
@@ -416,7 +672,7 @@
   max-width: min(260px, 100%);
   padding: 0;
   overflow: hidden;
-  border: 1px solid var(--border-color, #d9dee7);
+  border: 1px solid var(--border-color);
   border-radius: 10px;
   background: none;
   cursor: zoom-in;
@@ -445,10 +701,10 @@
   gap: 8px;
   place-content: center;
   justify-items: center;
-  border: 2px dashed var(--primary-color, #2563eb);
+  border: 2px dashed var(--primary-color);
   border-radius: 14px;
-  background: color-mix(in srgb, var(--primary-color, #2563eb) 12%, var(--card-bg, #fff));
-  color: var(--primary-color, #2563eb);
+  background: color-mix(in srgb, var(--primary-color) 12%, var(--card-bg));
+  color: var(--primary-color);
   font-size: 13px;
   font-weight: 750;
   pointer-events: none;
@@ -466,7 +722,7 @@
   display: grid;
   padding: 24px;
   place-items: center;
-  background: rgba(9, 12, 20, 0.86);
+  background: color-mix(in srgb, var(--background-color) 86%, transparent);
   cursor: zoom-out;
 }
 
@@ -488,8 +744,8 @@
   place-items: center;
   border: 0;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.16);
-  color: #fff;
+  background: var(--card-bg);
+  color: var(--text-color);
   cursor: pointer;
 }
 
@@ -518,10 +774,10 @@
   display: inline-flex;
   max-width: 100%;
   align-items: center;
-  border: 1px solid var(--border-color, #d9dee7);
+  border: 1px solid var(--border-color);
   border-radius: 999px;
-  background: var(--card-bg, #fff);
-  color: var(--text-secondary, #64748b);
+  background: var(--card-bg);
+  color: var(--text-secondary);
   font-size: 11px;
 }
 
@@ -538,8 +794,8 @@
   min-width: 0;
   padding: 8px 10px;
   border-radius: 8px;
-  background: var(--background-secondary, #f6f8fb);
-  color: var(--text-secondary, #64748b);
+  background: var(--background-secondary);
+  color: var(--text-secondary);
   font-size: 12px;
   /* Provider errors quote long URLs and JSON; they wrap instead of running out of the panel. */
   white-space: pre-wrap;
@@ -549,8 +805,8 @@
 
 .assistant-status.error {
   align-self: stretch;
-  background: color-mix(in srgb, var(--error-color, #dc2626) 10%, var(--card-bg, #fff));
-  border: 1px solid color-mix(in srgb, var(--error-color, #dc2626) 30%, transparent);
+  background: color-mix(in srgb, var(--error-color) 10%, var(--card-bg));
+  border: 1px solid color-mix(in srgb, var(--error-color) 30%, transparent);
 }
 
 .assistant-message,
@@ -565,7 +821,7 @@
 .assistant-speech-error,
 .assistant-model-error,
 .assistant-proposal-warning {
-  color: var(--error-color, #dc2626);
+  color: var(--error-color);
 }
 
 .assistant-suggestions {
@@ -578,10 +834,10 @@
 .assistant-inline-actions button {
   min-height: 40px;
   padding: 0 12px;
-  border: 1px solid color-mix(in srgb, var(--primary-color, #2563eb) 38%, var(--border-color, #d9dee7));
+  border: 1px solid color-mix(in srgb, var(--primary-color) 38%, var(--border-color));
   border-radius: 8px;
-  background: var(--card-bg, #fff);
-  color: var(--primary-color, #2563eb);
+  background: var(--card-bg);
+  color: var(--primary-color);
   font: inherit;
   font-size: 12px;
   font-weight: 700;
@@ -594,7 +850,7 @@
 
 .assistant-context-used summary {
   min-height: 30px;
-  color: var(--text-secondary, #64748b);
+  color: var(--text-secondary);
   font-size: 11px;
   font-weight: 650;
   line-height: 30px;
@@ -606,9 +862,9 @@
   gap: 6px;
   margin: 2px 0 0;
   padding: 9px;
-  border: 1px solid var(--border-color, #d9dee7);
+  border: 1px solid var(--border-color);
   border-radius: 8px;
-  background: var(--background-secondary, #f6f8fb);
+  background: var(--background-secondary);
   list-style: none;
 }
 
@@ -620,13 +876,12 @@
 }
 
 .assistant-context-used li span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .assistant-context-used li em {
-  color: var(--text-secondary, #64748b);
+  color: var(--text-secondary);
   font-style: normal;
 }
 
@@ -635,9 +890,9 @@
   gap: 8px;
   margin-top: 8px;
   padding: 12px;
-  border: 1px solid color-mix(in srgb, var(--primary-color, #2563eb) 26%, var(--border-color, #d9dee7));
+  border: 1px solid color-mix(in srgb, var(--primary-color) 26%, var(--border-color));
   border-radius: 10px;
-  background: color-mix(in srgb, var(--primary-color, #2563eb) 5%, var(--card-bg, #fff));
+  background: color-mix(in srgb, var(--primary-color) 5%, var(--card-bg));
   font-size: 12px;
   line-height: 1.45;
 }
@@ -649,7 +904,7 @@
 
 .assistant-proposal-card small,
 .assistant-message-note {
-  color: var(--text-secondary, #64748b);
+  color: var(--text-secondary);
   font-size: 11px;
 }
 
@@ -666,9 +921,9 @@
 /* The frame lives on the shell, not the textarea, so the backdrop's box is the textarea's box. */
 .assistant-message-edit .assistant-textarea-shell {
   overflow: hidden;
-  border: 1px solid var(--primary-color, #2563eb);
+  border: 1px solid var(--primary-color);
   border-radius: 9px;
-  background: var(--card-bg, #fff);
+  background: var(--card-bg);
 }
 
 .assistant-message-edit textarea {
@@ -679,7 +934,7 @@
   border: 0;
   outline: none;
   background: transparent;
-  color: var(--text-color, #1f2937);
+  color: var(--text-color);
   font: inherit;
   resize: vertical;
 }
@@ -690,14 +945,14 @@
 }
 
 .assistant-inline-actions button.secondary {
-  border-color: var(--border-color, #d9dee7);
-  color: var(--text-secondary, #64748b);
+  border-color: var(--border-color);
+  color: var(--text-secondary);
 }
 
 .assistant-context-summary {
   padding: 7px 12px 0;
-  border-top: 1px solid var(--border-color, #d9dee7);
-  background: var(--card-bg, #fff);
+  border-top: 1px solid var(--border-color);
+  background: var(--card-bg);
 }
 
 .assistant-context-summary > button {
@@ -710,14 +965,14 @@
   padding: 0 8px;
   border: 0;
   border-radius: 8px;
-  background: var(--background-secondary, #f6f8fb);
-  color: var(--text-color, #1f2937);
+  background: var(--background-secondary);
+  color: var(--text-color);
   text-align: left;
   cursor: pointer;
 }
 
 .assistant-context-summary > button > svg {
-  color: var(--primary-color, #2563eb);
+  color: var(--primary-color);
 }
 
 .assistant-context-summary > button > span {
@@ -729,8 +984,8 @@
   justify-self: end;
   padding: 2px 8px;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--primary-color, #2563eb) 16%, transparent);
-  color: var(--primary-color, #2563eb);
+  background: color-mix(in srgb, var(--primary-color) 16%, transparent);
+  color: var(--primary-color);
   font-size: 10px;
   font-style: normal;
   font-weight: 750;
@@ -739,7 +994,7 @@
 
 .assistant-context-summary > button > small {
   overflow: hidden;
-  color: var(--text-secondary, #64748b);
+  color: var(--text-secondary);
   font-size: 10px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -750,7 +1005,7 @@
   display: grid;
   gap: 7px;
   padding: 7px 12px max(10px, env(safe-area-inset-bottom));
-  background: var(--card-bg, #fff);
+  background: var(--card-bg);
 }
 
 .assistant-context-tags:empty {
@@ -761,11 +1016,9 @@
   min-width: 0;
   min-height: 30px;
   padding-left: 9px;
-  border-color: color-mix(in srgb, var(--primary-color, #2563eb) 28%, var(--border-color, #d9dee7));
-  background: color-mix(in srgb, var(--primary-color, #2563eb) 7%, var(--card-bg, #fff));
+  border-color: color-mix(in srgb, var(--primary-color) 28%, var(--border-color));
+  background: color-mix(in srgb, var(--primary-color) 7%, var(--card-bg));
 }
-
-
 
 /* A tag that leads somewhere reads as a link without changing the text metrics the composer
    backdrop depends on. */
@@ -780,7 +1033,6 @@
   outline: none;
   text-decoration: underline;
 }
-
 
 .assistant-context-tag > span {
   overflow: hidden;
@@ -805,17 +1057,17 @@
 .assistant-composer {
   min-width: 0;
   padding: 4px 6px 6px;
-  border: 1px solid var(--border-color, #d9dee7);
+  border: 1px solid var(--border-color);
   border-radius: 12px;
-  background: var(--background-color, #fff);
+  background: var(--background-color);
 }
 
 .assistant-composer:focus-within {
-  border-color: var(--primary-color, #2563eb);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary-color, #2563eb) 13%, transparent);
+  border-color: var(--text-secondary);
+  box-shadow: none;
 }
 
-/* Attach, draw and the microphone read as one group on the left; send stays alone on the right. */
+/* Attach and microphone sit on the left; send stays on the right. */
 .assistant-speech-toolbar {
   display: flex;
   align-items: center;
@@ -838,7 +1090,7 @@
   gap: 7px;
   overflow: hidden;
   padding-left: 2px;
-  color: var(--text-secondary, #64748b);
+  color: var(--text-secondary);
   font-size: 11px;
   font-weight: 700;
   text-overflow: ellipsis;
@@ -846,7 +1098,7 @@
 }
 
 .assistant-speech-toolbar .assistant-speech-status.is-listening {
-  color: var(--error-color, #dc2626);
+  color: var(--error-color);
 }
 
 .assistant-speech-toolbar-start button,
@@ -864,11 +1116,92 @@
   padding: 0;
   place-items: center;
   background: transparent;
-  color: var(--text-secondary, #64748b);
+  color: var(--text-secondary);
   font-size: 15px;
 }
 
-.assistant-composer-speech { min-width: 0; }
+.assistant-speech-toolbar-start .assistant-composer-options-trigger {
+  display: inline-flex;
+  width: auto;
+  min-width: 70px;
+  max-width: 50cqw;
+  gap: 5px;
+  padding: 0 7px;
+  font-size: 12px;
+}
+.assistant-composer-options-trigger svg {
+  width: 10px;
+}
+.assistant-composer-model {
+  min-width: 0;
+  max-width: 130px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+@container assistant-panel (max-width: 400px) {
+  .assistant-composer-model {
+    display: none;
+  }
+}
+.assistant-composer-primary-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 4px;
+}
+.assistant-composer-options {
+  position: absolute;
+  z-index: 20;
+  bottom: calc(100% + 8px);
+  right: 10px;
+  left: 10px;
+  display: grid;
+  gap: 10px;
+  max-height: min(380px, var(--assistant-options-max-height, calc(100dvh - 240px)));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: var(--card-bg);
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--background-color) 75%, transparent);
+}
+.assistant-composer-options-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.assistant-composer-options label {
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.assistant-composer-options select,
+.assistant-composer-options > button {
+  min-width: 0;
+  min-height: 44px;
+  padding: 8px;
+  color: var(--text-color);
+  background: var(--background-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  font: inherit;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.assistant-composer-options > button {
+  text-align: left;
+  cursor: pointer;
+}
+.is-compact .assistant-composer {
+  --assistant-textarea-font-size: 16px;
+}
+
+.assistant-composer-speech {
+  min-width: 0;
+}
 
 .assistant-composer-speech > .assistant-field-label {
   position: absolute;
@@ -900,14 +1233,14 @@
   position: relative;
   box-sizing: border-box;
   width: 100%;
-  max-height: 220px;
+  max-height: var(--assistant-composer-max-height, 220px);
   min-height: 34px;
   padding: var(--assistant-textarea-padding);
   overflow-y: auto;
   border: 0;
   outline: 0;
   background: transparent;
-  color: var(--text-color, #1f2937);
+  color: var(--text-color);
   font: inherit;
   font-size: var(--assistant-textarea-font-size);
   line-height: var(--assistant-textarea-line-height);
@@ -933,7 +1266,7 @@
 /* The backdrop paints no text, so `currentColor` is transparent here and the tint has to name the
    surface's own text colour instead. */
 .assistant-textarea-highlight .assistant-inline-tag {
-  background: color-mix(in srgb, var(--text-color, #1f2937) 20%, transparent);
+  background: color-mix(in srgb, var(--text-color) 20%, transparent);
   color: transparent;
 }
 
@@ -946,7 +1279,7 @@
   border: 0;
   border-radius: 8px;
   background: transparent;
-  color: var(--text-secondary, #64748b);
+  color: var(--text-secondary);
   cursor: pointer;
 }
 
@@ -962,14 +1295,14 @@
   width: 44px;
   height: 44px;
   border-radius: 9px;
-  background: var(--primary-color, #2563eb);
-  color: var(--button-text-color, #fff);
+  background: var(--primary-color);
+  color: var(--button-text-color);
   font-size: 16px;
 }
 
 .assistant-mic.is-primary.listening {
-  background: var(--error-color, #dc2626);
-  color: #fff;
+  background: color-mix(in srgb, var(--error-color) 12%, var(--card-bg));
+  color: var(--error-color);
 }
 
 .assistant-speech-toolbar-start .assistant-mic {
@@ -980,8 +1313,8 @@
 }
 
 .assistant-mic.listening {
-  background: color-mix(in srgb, var(--error-color, #dc2626) 10%, transparent);
-  color: var(--error-color, #dc2626);
+  background: color-mix(in srgb, var(--error-color) 10%, transparent);
+  color: var(--error-color);
 }
 
 .assistant-send {
@@ -989,8 +1322,8 @@
   width: 44px;
   padding: 0;
   place-items: center;
-  background: var(--primary-color, #2563eb);
-  color: var(--button-text-color, #fff);
+  background: var(--primary-color);
+  color: var(--button-text-color);
   font: inherit;
   font-size: 12px;
   font-weight: 750;
@@ -1012,13 +1345,15 @@
   height: var(--floating-action-size);
   padding: 0;
   place-items: center;
-  border: 1px solid color-mix(in srgb, var(--primary-color, #2563eb) 55%, transparent);
+  border: 1px solid color-mix(in srgb, var(--primary-color) 55%, transparent);
   border-radius: 50%;
-  background: var(--primary-color, #2563eb);
-  color: var(--button-text-color, #fff);
-  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.25);
+  background: var(--primary-color);
+  color: var(--button-text-color);
+  box-shadow: 0 8px 22px color-mix(in srgb, var(--text-color) 20%, transparent);
   cursor: pointer;
-  transition: transform 160ms ease, box-shadow 160ms ease;
+  transition:
+    transform 160ms ease,
+    box-shadow 160ms ease;
 }
 
 .assistant-launcher.is-open {
@@ -1040,7 +1375,9 @@
 .assistant-launcher:hover,
 .assistant-launcher:focus-visible {
   outline: none;
-  box-shadow: 0 10px 26px rgba(15, 23, 42, 0.32), 0 0 0 4px color-mix(in srgb, var(--primary-color, #2563eb) 18%, transparent);
+  box-shadow:
+    0 10px 26px color-mix(in srgb, var(--text-color) 24%, transparent),
+    0 0 0 4px color-mix(in srgb, var(--primary-color) 18%, transparent);
 }
 
 .assistant-launcher svg {
@@ -1073,7 +1410,7 @@
 }
 
 .assistant-enter-hint {
-  color: var(--text-secondary, #64748b);
+  color: var(--text-secondary);
   text-align: right;
 }
 
@@ -1083,10 +1420,10 @@
   z-index: 20;
   right: 12px;
   left: 12px;
-  border: 1px solid var(--border-color, #d9dee7);
+  border: 1px solid var(--border-color);
   border-radius: 12px;
-  background: var(--card-bg, #fff);
-  box-shadow: 0 16px 38px rgba(15, 23, 42, 0.22);
+  background: var(--card-bg);
+  box-shadow: 0 16px 38px color-mix(in srgb, var(--text-color) 18%, transparent);
 }
 
 /* Both open above the composer they belong to. Without an explicit anchor an absolutely positioned
@@ -1101,7 +1438,9 @@
   overflow-y: auto;
 }
 
-.assistant-mention-picker.below { top: calc(100% + 8px); }
+.assistant-mention-picker.below {
+  top: calc(100% + 8px);
+}
 
 .assistant-context-picker {
   display: grid;
@@ -1120,7 +1459,7 @@
   justify-content: space-between;
   gap: 10px;
   padding: 8px 10px 8px 14px;
-  border-bottom: 1px solid var(--border-color, #d9dee7);
+  border-bottom: 1px solid var(--border-color);
 }
 
 .assistant-context-picker > header > div {
@@ -1133,7 +1472,7 @@
 
 .assistant-context-picker > header span,
 .assistant-context-section-heading span {
-  color: var(--text-secondary, #64748b);
+  color: var(--text-secondary);
   font-size: 10px;
 }
 
@@ -1146,7 +1485,7 @@
   border: 0;
   border-radius: 8px;
   background: transparent;
-  color: var(--text-secondary, #64748b);
+  color: var(--text-secondary);
   cursor: pointer;
 }
 
@@ -1157,9 +1496,9 @@
   gap: 8px;
   margin: 10px;
   padding: 0 11px;
-  border: 1px solid var(--border-color, #d9dee7);
+  border: 1px solid var(--border-color);
   border-radius: 9px;
-  color: var(--text-secondary, #64748b);
+  color: var(--text-secondary);
 }
 
 .assistant-context-search input {
@@ -1168,7 +1507,7 @@
   border: 0;
   outline: 0;
   background: transparent;
-  color: var(--text-color, #1f2937);
+  color: var(--text-color);
   font: inherit;
   font-size: 12px;
 }
@@ -1182,7 +1521,7 @@
 
 .assistant-context-sections > section {
   padding: 8px 0 4px;
-  border-top: 1px solid var(--border-color, #d9dee7);
+  border-top: 1px solid var(--border-color);
 }
 
 .assistant-context-sections > section:first-child {
@@ -1215,25 +1554,25 @@
   border: 0;
   border-radius: 8px;
   background: transparent;
-  color: var(--text-color, #1f2937);
+  color: var(--text-color);
   text-align: left;
   cursor: pointer;
 }
 
 /* A row that is already in context reads as on, and says so when chosen again. */
 .assistant-context-sections section > button.is-in-context {
-  background: color-mix(in srgb, var(--primary-color, #2563eb) 10%, transparent);
+  background: color-mix(in srgb, var(--primary-color) 10%, transparent);
 }
 
 .assistant-context-sections section > button.is-in-context strong {
-  color: var(--primary-color, #2563eb);
+  color: var(--primary-color);
 }
 
 .assistant-context-sections section > button:hover,
 .assistant-context-sections section > button:focus-visible,
 .assistant-mention-picker > button.active {
   outline: none;
-  background: var(--background-secondary, #f6f8fb);
+  background: var(--background-secondary);
 }
 
 .assistant-context-option-copy,
@@ -1257,7 +1596,7 @@
 .assistant-context-option-copy small,
 .assistant-mention-picker span {
   overflow: hidden;
-  color: var(--text-secondary, #64748b);
+  color: var(--text-secondary);
   font-size: 10px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1265,7 +1604,7 @@
 
 .assistant-context-empty {
   padding: 22px;
-  color: var(--text-secondary, #64748b);
+  color: var(--text-secondary);
   font-size: 12px;
   text-align: center;
 }
@@ -1288,8 +1627,8 @@
   grid-row: 2 / -1;
   inset: 0;
   overflow-y: auto;
-  background: var(--card-bg, #fff);
-  color: var(--text-color, #1f2937);
+  background: var(--card-bg);
+  color: var(--text-color);
   overscroll-behavior: contain;
   scrollbar-width: thin;
 }
@@ -1300,7 +1639,7 @@
   align-items: center;
   gap: 12px;
   padding: 12px 15px;
-  border-bottom: 1px solid var(--border-color, #d9dee7);
+  border-bottom: 1px solid var(--border-color);
 }
 
 .assistant-settings-heading {
@@ -1310,16 +1649,16 @@
 .assistant-settings-heading > span,
 .assistant-settings-section > h4 {
   display: block;
-  color: var(--text-secondary, #64748b);
-  font-size: 10px;
+  color: var(--text-secondary);
+  font-size: 12px;
   font-weight: 800;
   line-height: 1.2;
-  text-transform: uppercase;
+  text-transform: none;
 }
 
 .assistant-settings-heading h3 {
   margin: 3px 0 0;
-  color: var(--text-color, #1f2937);
+  color: var(--text-color);
   font-size: 16px;
   line-height: 1.2;
 }
@@ -1334,7 +1673,7 @@
 .assistant-settings-section {
   min-width: 0;
   padding: 14px 0;
-  border-bottom: 1px solid color-mix(in srgb, var(--border-color, #d9dee7) 78%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--border-color) 78%, transparent);
 }
 
 .assistant-settings-section > h4 {
@@ -1355,14 +1694,14 @@
   grid-column: 1 / -1;
 }
 
-.assistant-settings-grid label,
+.assistant-settings label,
 .assistant-setting-field,
 .assistant-settings-grid .assistant-speech-field {
   display: grid;
   min-width: 0;
   gap: 6px;
-  color: var(--text-secondary, #64748b);
-  font-size: 11px;
+  color: var(--text-secondary);
+  font-size: 12px;
   font-weight: 700;
 }
 
@@ -1373,13 +1712,113 @@
   width: 100%;
   min-height: 40px;
   padding: 8px 10px;
-  border: 1px solid var(--border-color, #d9dee7);
+  border: 1px solid var(--border-color);
   border-radius: 8px;
   outline: 0;
-  background: var(--background-color, #fff);
-  color: var(--text-color, #1f2937);
+  background: var(--background-color);
+  color: var(--text-color);
   font: inherit;
   font-size: 13px;
+}
+
+/* New agent settings use the same field rhythm as provider and panel settings. */
+.assistant-settings label + label,
+.assistant-settings details > label,
+.assistant-settings details > section,
+.assistant-settings details > button,
+.assistant-settings-section > label + small {
+  margin-top: 10px;
+}
+
+.assistant-settings-grid > label + label {
+  margin-top: 0;
+}
+
+.assistant-settings fieldset {
+  min-inline-size: 0;
+  display: grid;
+  gap: 10px;
+  margin: 12px 0;
+  padding: 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+}
+
+.assistant-settings legend {
+  color: var(--text-color);
+  font-size: 12px;
+}
+
+.assistant-settings input[type='checkbox'] {
+  width: 18px;
+  min-width: 18px;
+  min-height: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 0;
+  accent-color: var(--primary-color);
+}
+
+.assistant-settings label:has(> input[type='checkbox']) {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  gap: 10px;
+  color: var(--text-color);
+  font-weight: 400;
+}
+
+.assistant-settings summary {
+  min-height: 44px;
+  align-content: center;
+  color: var(--text-color);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.assistant-settings p,
+.assistant-settings small {
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.assistant-settings small {
+  display: block;
+}
+
+.assistant-settings [role='alert'] {
+  color: var(--error-color);
+}
+
+.assistant-settings button,
+.assistant-session-actions button,
+.assistant-pending button {
+  min-height: 36px;
+  padding: 7px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--card-bg);
+  color: var(--text-color);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.assistant-settings button:disabled,
+.assistant-pending button:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.assistant-panel :is(button, summary, input, select, textarea):focus-visible {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 2px;
+}
+.assistant-composer textarea:focus-visible {
+  outline: none;
 }
 
 .assistant-settings textarea {
@@ -1390,8 +1829,8 @@
 .assistant-settings input:focus,
 .assistant-settings select:focus,
 .assistant-settings textarea:focus {
-  border-color: var(--primary-color, #2563eb);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary-color, #2563eb) 12%, transparent);
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary-color) 12%, transparent);
 }
 
 .assistant-model-select-row {
@@ -1417,7 +1856,7 @@
   border: 1px solid var(--border-color);
   border-radius: 6px;
   padding: 7px 10px;
-  background: var(--background-color, #fff);
+  background: var(--background-color);
   color: var(--text-color);
   font: inherit;
   cursor: pointer;
@@ -1439,10 +1878,10 @@
   height: 40px;
   padding: 0;
   place-items: center;
-  border: 1px solid var(--border-color, #d9dee7);
+  border: 1px solid var(--border-color);
   border-radius: 8px;
-  background: var(--card-bg, #fff);
-  color: var(--primary-color, #2563eb);
+  background: var(--card-bg);
+  color: var(--primary-color);
 }
 
 .assistant-ollama-backend-toggle {
@@ -1453,9 +1892,9 @@
   justify-content: space-between;
   gap: 12px;
   padding: 0 10px;
-  border: 1px solid color-mix(in srgb, var(--border-color, #d9dee7) 82%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border-color) 82%, transparent);
   border-radius: 8px;
-  color: var(--text-color, #1f2937) !important;
+  color: var(--text-color) !important;
   font-size: 12px !important;
   cursor: pointer;
 }
@@ -1467,12 +1906,12 @@
   flex: 0 0 auto;
   margin: 0;
   padding: 0;
-  accent-color: var(--primary-color, #2563eb);
+  accent-color: var(--primary-color);
 }
 
 .assistant-key-note {
   margin: 14px 0 0;
-  color: var(--text-secondary, #64748b);
+  color: var(--text-secondary);
   font-size: 10px;
   line-height: 1.5;
 }
@@ -1497,20 +1936,30 @@
   transform: scaleY(0.3);
 }
 
-.assistant-listening-wave i:nth-child(2) { animation-delay: 0.12s; }
-.assistant-listening-wave i:nth-child(3) { animation-delay: 0.24s; }
-.assistant-listening-wave i:nth-child(4) { animation-delay: 0.36s; }
+.assistant-listening-wave i:nth-child(2) {
+  animation-delay: 0.12s;
+}
+.assistant-listening-wave i:nth-child(3) {
+  animation-delay: 0.24s;
+}
+.assistant-listening-wave i:nth-child(4) {
+  animation-delay: 0.36s;
+}
 
 .assistant-panel .spinning {
   animation: assistant-spin 0.8s linear infinite;
 }
 
 @keyframes assistant-spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 @keyframes assistant-wave {
-  to { transform: scaleY(1); }
+  to {
+    transform: scaleY(1);
+  }
 }
 
 @media (max-width: 767px) {
@@ -1541,9 +1990,9 @@
 
   .assistant-panel {
     border: 0;
-    border-top: 1px solid var(--border-color, #d9dee7);
+    border-top: 1px solid var(--border-color);
     border-radius: 14px 14px 0 0;
-    box-shadow: 0 -12px 32px rgba(15, 23, 42, 0.22);
+    box-shadow: 0 -12px 32px color-mix(in srgb, var(--text-color) 18%, transparent);
   }
 
   .assistant-overlay.is-mobile-takeover .assistant-panel {
@@ -1564,14 +2013,14 @@
     width: 34px;
     height: 3px;
     border-radius: 999px;
-    background: color-mix(in srgb, var(--text-secondary, #64748b) 42%, transparent);
+    background: color-mix(in srgb, var(--text-secondary) 42%, transparent);
     content: '';
     pointer-events: none;
     transform: translateX(-50%);
   }
 
   .assistant-overlay.is-mobile-resizing .assistant-panel {
-    box-shadow: 0 -16px 38px rgba(15, 23, 42, 0.26);
+    box-shadow: 0 -16px 38px color-mix(in srgb, var(--text-color) 22%, transparent);
   }
 
   .assistant-panel.is-entering,
@@ -1590,7 +2039,11 @@
 
   .assistant-launcher.is-compact {
     visibility: visible;
-    transition: opacity 150ms ease 130ms, transform 180ms ease 130ms, box-shadow 160ms ease, visibility 0s linear;
+    transition:
+      opacity 150ms ease 130ms,
+      transform 180ms ease 130ms,
+      box-shadow 160ms ease,
+      visibility 0s linear;
   }
 
   .assistant-launcher.is-compact.is-open {
@@ -1611,12 +2064,9 @@
   }
 
   .assistant-avatar {
-    /* `place-items: center` centres the glyph's box, not the glyph: ✦ sits high in its em box, so
-       the box has to give the difference back at the top. */
     width: 22px;
     height: 22px;
     flex-basis: 22px;
-    padding-top: 2px;
     border: 0;
     border-radius: 6px;
     background: none;
@@ -1689,13 +2139,21 @@
 }
 
 @keyframes assistant-mobile-panel-enter {
-  from { transform: translate3d(0, 100%, 0); }
-  to { transform: translate3d(0, 0, 0); }
+  from {
+    transform: translate3d(0, 100%, 0);
+  }
+  to {
+    transform: translate3d(0, 0, 0);
+  }
 }
 
 @keyframes assistant-mobile-panel-exit {
-  from { transform: translate3d(0, 0, 0); }
-  to { transform: translate3d(0, 100%, 0); }
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(0, 100%, 0);
+  }
 }
 
 @media (max-width: 380px) {
@@ -1708,7 +2166,6 @@
     padding: 0 6px;
     font-size: 11px;
   }
-
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1740,11 +2197,502 @@
   content: '✓';
   display: inline-block;
   width: 1.2em;
-  color: var(--success-color, #16a34a);
+  color: var(--success-color);
   font-weight: 700;
 }
 
 .assistant-result-list li.is-failed::before {
   content: '✗';
-  color: var(--error-color, #dc3545);
+  color: var(--error-color);
+}
+.assistant-thinking {
+  margin: 8px 0;
+  color: var(--text-secondary);
+  font-size: 0.85em;
+  overflow-wrap: anywhere;
+}
+.assistant-thinking summary {
+  cursor: pointer;
+  min-height: 44px;
+  display: list-item;
+}
+.assistant-thinking > div {
+  white-space: pre-wrap;
+}
+.assistant-thinking > div,
+.assistant-thinking > ul {
+  max-height: 260px;
+  overflow-y: auto;
+}
+.assistant-thinking ul {
+  padding-left: 20px;
+}
+.assistant-run-controls {
+  display: flex;
+  min-width: 0;
+  align-items: end;
+  gap: 10px;
+}
+
+.assistant-run-controls label {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+  gap: 4px;
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.assistant-run-controls select,
+.assistant-pending input,
+.assistant-sessions-body :is(input[type='search'], select) {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  min-height: 36px;
+  padding: 7px 9px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--background-secondary);
+  color: var(--text-color);
+  font: inherit;
+  font-size: 12px;
+}
+
+.assistant-model-label {
+  max-width: 40%;
+  overflow: hidden;
+  padding-bottom: 10px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.assistant-send.is-stop {
+  border: 1px solid var(--error-color);
+  background: color-mix(in srgb, var(--error-color) 12%, var(--card-bg));
+  color: var(--error-color);
+}
+
+.assistant-stop-action {
+  display: grid;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  place-items: center;
+  border: 1px solid var(--error-color);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--error-color) 8%, var(--card-bg));
+  color: var(--error-color);
+  cursor: pointer;
+}
+
+.assistant-task-panels:empty {
+  display: none;
+}
+.assistant-task-panels {
+  min-width: 0;
+  width: 100%;
+}
+.assistant-pending {
+  min-width: 0;
+  padding: 6px 0;
+  border-top: 1px solid var(--border-color);
+}
+.assistant-pending > div {
+  display: flex;
+  align-items: start;
+  gap: 6px;
+  padding: 6px 0;
+}
+.assistant-pending input {
+  min-width: 0;
+  flex: 1;
+}
+.assistant-pending-message {
+  flex-wrap: wrap;
+}
+.assistant-pending-message input {
+  flex-basis: 100%;
+}
+.assistant-pending details {
+  min-width: 0;
+  flex: 1;
+}
+.assistant-pending button {
+  min-width: 44px;
+}
+.assistant-pending pre {
+  max-height: 200px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.assistant-pending summary,
+.assistant-tool-events summary {
+  min-height: 36px;
+  align-content: center;
+  cursor: pointer;
+}
+.is-compact .assistant-pending summary,
+.is-compact .assistant-tool-events summary,
+.is-compact .assistant-thinking summary,
+.is-compact .assistant-context-used summary {
+  min-height: 44px;
+  align-content: center;
+}
+.assistant-pending summary {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.assistant-tool-events {
+  min-width: 0;
+  width: 100%;
+  margin: 6px 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.assistant-current-activity {
+  margin: 6px 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.assistant-event-list {
+  display: grid;
+  gap: 4px;
+  margin: 4px 0;
+  padding: 0;
+  list-style: none;
+}
+.assistant-event-list li {
+  padding: 4px 8px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--background-secondary);
+}
+.assistant-event-heading,
+.assistant-event-list summary {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.assistant-event-list summary::before {
+  content: '›';
+  flex: 0 0 auto;
+}
+.assistant-event-list details[open] > summary::before {
+  transform: rotate(90deg);
+}
+.assistant-event-list summary .assistant-event-label {
+  flex: 1;
+}
+.assistant-event-label {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.assistant-event-status {
+  flex: 0 0 auto;
+  font-size: 10px;
+}
+.assistant-event-status.is-done {
+  color: var(--success-color);
+}
+.assistant-event-status.is-failed {
+  color: var(--error-color);
+}
+.assistant-tool-events pre {
+  max-height: 180px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 11px;
+}
+
+.assistant-sessions-view {
+  position: absolute;
+  z-index: 30;
+  grid-column: 1;
+  grid-row: 2 / -1;
+  inset: 0;
+  min-height: 0;
+  overflow-y: auto;
+  background: var(--card-bg);
+  color: var(--text-color);
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+
+.assistant-sessions-view h3 {
+  margin: 0;
+  font-size: 16px;
+}
+.assistant-sessions-body {
+  display: grid;
+  min-width: 0;
+  gap: 16px;
+  padding: 16px;
+}
+.assistant-sessions-body label {
+  display: grid;
+  min-width: 0;
+  gap: 6px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.assistant-sessions-body .assistant-checkbox-row {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 10px;
+}
+.assistant-checkbox-row input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--primary-color);
+}
+.assistant-session-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.assistant-session-row {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 4px;
+}
+.assistant-session-row > button {
+  min-width: 0;
+  flex: 1;
+}
+.assistant-session-row > button[aria-pressed='true'] {
+  border-color: var(--text-secondary);
+  background: color-mix(in srgb, var(--text-color) 8%, var(--background-secondary));
+}
+.assistant-session-row-actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 2px;
+}
+.assistant-session-row-actions button {
+  justify-content: center;
+  width: 32px;
+  min-height: 32px;
+  border-color: transparent;
+  background: transparent;
+}
+.assistant-session-confirm {
+  padding: 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--background-secondary);
+}
+.assistant-session-confirm p {
+  margin: 0 0 10px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.assistant-session-confirm input {
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px;
+  font: inherit;
+  color: var(--text-color);
+  background: var(--background-color);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+}
+.assistant-session-confirm .assistant-inline-actions {
+  margin-top: 8px;
+}
+
+/* Always-visible, compact controls: catalogs belong to the provider; unknown model IDs
+   remain directly editable. Wrap rather than truncate controls in a narrow frame. */
+.assistant-chat-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+.assistant-chat-controls label {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+  font-size: 10px;
+  color: var(--text-secondary);
+}
+.assistant-chat-controls select,
+.assistant-chat-controls input {
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+  max-width: 100%;
+  height: 30px;
+  padding: 3px 5px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--background-secondary);
+  color: var(--text-color);
+  font: inherit;
+  font-size: 12px;
+}
+.assistant-chat-controls > label:first-child {
+  flex: 0 0 76px;
+}
+.assistant-chat-model {
+  flex: 1 1 96px;
+}
+.assistant-chat-effort {
+  flex: 0 0 112px;
+}
+.assistant-model-notice {
+  width: 100%;
+  margin: 0;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+.assistant-chat-controls :focus-visible,
+.assistant-session-confirm :focus-visible {
+  outline: 2px solid var(--text-secondary);
+  outline-offset: 2px;
+}
+.assistant-task-plan {
+  margin: 8px 0;
+  padding: 8px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  font-size: 12px;
+  background: var(--background-secondary);
+}
+.assistant-task-plan summary {
+  cursor: pointer;
+  color: var(--text-color);
+}
+.assistant-task-plan summary strong {
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+}
+.assistant-task-plan ol {
+  list-style: none;
+  display: grid;
+  gap: 8px;
+  padding: 0;
+  margin: 10px 0 0;
+}
+.assistant-task-plan li {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+.assistant-task-plan li > svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+  color: var(--text-secondary);
+}
+.assistant-task-plan li.is-done > svg {
+  color: var(--success-color, var(--primary-color));
+}
+.assistant-task-plan li.is-running > svg {
+  color: var(--primary-color);
+}
+.assistant-task-plan li.is-waiting > svg {
+  color: var(--warning-color, var(--text-color));
+}
+.assistant-task-plan li.is-blocked > svg {
+  color: var(--error-color);
+}
+.assistant-task-plan li div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.assistant-task-plan small {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+.assistant-task-plan .assistant-task-evidence {
+  white-space: pre-wrap;
+}
+@media (pointer: coarse) {
+  .assistant-chat-controls select,
+  .assistant-chat-controls input {
+    min-height: 44px;
+    font-size: 16px;
+  }
+  .assistant-session-list button,
+  .assistant-session-row-actions button {
+    min-height: 44px;
+  }
+  .assistant-session-row-actions button {
+    width: 44px;
+  }
+  .assistant-session-confirm input {
+    min-height: 44px;
+    font-size: 16px;
+  }
+}
+.assistant-view-note {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* Respond to the panel itself, including a narrow desktop floating frame. */
+@container assistant-panel (max-width: 520px) {
+  .assistant-settings-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@container assistant-panel (max-width: 400px) {
+  .assistant-header {
+    gap: 6px;
+    padding-inline: 8px;
+  }
+  .assistant-header h2 {
+    font-size: 14px;
+  }
+  .assistant-header-actions {
+    gap: 0;
+  }
+  .assistant-header-actions .assistant-new {
+    width: 44px;
+    padding: 0;
+  }
+  .assistant-new span {
+    display: none;
+  }
+  .assistant-avatar {
+    display: none;
+  }
+  .assistant-chat {
+    padding-inline: 12px;
+  }
+  .assistant-model-label {
+    max-width: 30%;
+  }
+}
+
+@media (pointer: coarse), (max-width: 767px) {
+  .assistant-settings :is(button, select, input:not([type='checkbox']), summary),
+  .assistant-session-actions button,
+  .assistant-sessions-body :is(input[type='search'], select),
+  .assistant-run-controls select,
+  .assistant-pending button,
+  .assistant-pending summary,
+  .assistant-tool-events summary {
+    min-height: 44px;
+  }
 }

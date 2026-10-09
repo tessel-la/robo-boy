@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { installRosMock, publishRosMessage, getActiveRosSubscriptionCount } from './helpers/rosMock';
+import { assistantStream } from './helpers/assistantMock';
 
 for (const mode of ['desktop', 'mobile', 'missing-follow-up'] as const) {
   test(`creates and configures a joint-state plot (${mode})`, async ({ page }) => {
@@ -39,7 +40,10 @@ for (const mode of ['desktop', 'mobile', 'missing-follow-up'] as const) {
       const request = route.request().postDataJSON();
       prompts.push(request.messages[0].content);
       const first = prompts.length === 1;
-      const response = first
+      const followUp = request.messages.findLast((message: { role: string }) => message.role === 'user')?.content.includes('what does the time series panel show?');
+      const response = followUp
+        ? { kind: 'explanation', message: 'The updated joint plot has two live signals.' }
+        : first
         ? {
             kind: 'workspaceEdit',
             summary: 'Joint plot created.',
@@ -54,7 +58,7 @@ for (const mode of ['desktop', 'mobile', 'missing-follow-up'] as const) {
       return route.fulfill({
         status: 200,
         contentType: 'text/event-stream',
-        body: `data: ${JSON.stringify({ choices: [{ delta: { content: JSON.stringify(response) } }] })}\n\ndata: [DONE]\n\n`,
+        body: assistantStream(response),
       });
     });
     // Simulate a publishing robot for the bounded assistant sample and the panel subscription.
@@ -79,7 +83,7 @@ for (const mode of ['desktop', 'mobile', 'missing-follow-up'] as const) {
     if (mode === 'missing-follow-up') {
       expect(prompts[1]).toContain('"type":"timeSeries"');
       expect(prompts[1]).toContain('"signals":[]');
-      expect(prompts[1]).toContain('"addSignals"');
+      expect(prompts[1]).toContain('addSignals');
     }
     await page.getByRole('button', { name: 'Close assistant', exact: true }).click();
     await expect(page.getByTestId('assistant-panel')).toHaveCount(0);
@@ -95,14 +99,16 @@ for (const mode of ['desktop', 'mobile', 'missing-follow-up'] as const) {
     if (mode === 'desktop') await page.screenshot({ path: 'test-results/assistant-joint-timeseries.png' });
 
     await page.getByLabel('Open Robo-Boy assistant').click();
+    const requestsBeforeFollowUp = prompts.length;
     await page
       .getByRole('textbox', { name: /Ask the assistant|Continue the conversation/ })
       .fill('what does the time series panel show?');
     await page.getByRole('button', { name: 'Send', exact: true }).click();
-    await expect(page.getByText('The joint plot is receiving data.')).toBeVisible();
+    await expect.poll(() => prompts.length).toBeGreaterThan(requestsBeforeFollowUp);
+    await expect(page.getByText('The updated joint plot has two live signals.', { exact: true })).toBeVisible();
     expect(prompts.at(-1)).toContain('"connected":true');
     expect(prompts.at(-1)).toContain('"fieldPath":"position[1]"');
     expect(prompts.at(-1)).toContain('"latestSampleAt":');
-    expect(prompts.at(-1)).toContain('plotting,');
+    expect(prompts.at(-1)).toContain('For Time Series');
   });
 }

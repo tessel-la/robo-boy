@@ -12,7 +12,7 @@ const ANTHROPIC_VERSION = '2023-06-01';
 const JSON_MODE_INSTRUCTION =
   '\n\nRespond with ONLY a single valid JSON object matching the schema above. No prose, no markdown code fences.';
 
-export const sendChat: SendChat = async ({ settings, systemPrompt, messages, signal, onToken, jsonMode }) => {
+export const sendChat: SendChat = async ({ settings, systemPrompt, messages, signal, onToken, onThinking, jsonMode }) => {
   const url = `${settings.baseUrl.replace(/\/$/, '')}/messages`;
   const effort = selectedThinkingEffort(settings.provider, settings.model, settings.thinkingEffort);
   const response = await checkedFetch(url, {
@@ -50,8 +50,11 @@ export const sendChat: SendChat = async ({ settings, systemPrompt, messages, sig
 
   return readSse(
     response,
-    payload =>
-      payload.type === 'content_block_delta' && payload.delta?.type === 'text_delta' ? payload.delta.text : undefined,
+    payload => {
+      if (payload.type !== 'content_block_delta') return undefined;
+      if (payload.delta?.type === 'thinking_delta') onThinking?.(payload.delta.thinking);
+      return payload.delta?.type === 'text_delta' ? payload.delta.text : undefined;
+    },
     onToken
   );
 };
