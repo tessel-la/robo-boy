@@ -12,9 +12,17 @@ export function RobotControl({ ros }: { ros: Ros | null }) {
   const status = useSyncExternalStore(session?.subscribe ?? emptySubscribe, session?.getSnapshot ?? emptySnapshot);
   const [label, setLabel] = useState('');
   const [target, setTarget] = useState('');
+  const nameEdited = useRef(false);
+  const savedLabel = status?.clients.find(client => client.id === status.selfId)?.label;
   const detailsRef = useRef<HTMLDetailsElement>(null);
   const seenRequests = useRef<string[]>([]);
   const menuId = useId();
+  useEffect(() => {
+    nameEdited.current = false;
+  }, [session]);
+  useEffect(() => {
+    if (!nameEdited.current) setLabel(savedLabel ?? '');
+  }, [savedLabel, session]);
   useEffect(() => {
     const incoming = status?.owner === status?.selfId && status?.token ? (status.requests ?? []) : [];
     if (incoming.some(request => !seenRequests.current.includes(request.id)) && detailsRef.current) {
@@ -48,32 +56,37 @@ export function RobotControl({ ros }: { ros: Ros | null }) {
       ? 'Waiting for behavior-tree runner status.'
       : status.state === 'blocked' || status.state === 'draining'
         ? status.reason
-        : owned && status.managing
-          ? status.reason
-          : owned
-            ? `You have control${status.pending ? ` · ${status.pending} running request(s)` : ''}`
-            : status.owner
-              ? `Read-only · ${status.ownerLabel} has control`
-              : 'Read-only · Control available';
+        : status.external?.enabled && !status.external.allowControl
+          ? status.external.reason
+          : owned && status.managing
+            ? status.reason
+            : owned
+              ? `You have control${status.pending ? ` · ${status.pending} running request(s)` : ''}`
+              : status.owner
+                ? `Read-only · ${status.ownerLabel} has control`
+                : 'Read-only · Control available';
   const others = status?.clients.filter(client => client.id !== status.selfId) ?? [];
-  const savedLabel = status?.clients.find(client => client.id === status.selfId)?.label;
   const nameSaved = Boolean(label.trim() && label.trim() === savedLabel);
   const canSetName = Boolean(status && label.trim() && !nameSaved);
   const requests = owned ? (status?.requests ?? []) : [];
   const requestPending = status?.request?.state === 'pending' || status?.request?.state === 'accepted';
   const canRequest =
-    status?.ready && (status.state === 'available' || (status.state === 'owned' && status.owner !== status.selfId));
+    status?.ready &&
+    (!status.external?.enabled || status.external.ready) &&
+    (status.state === 'available' || (status.state === 'owned' && status.owner !== status.selfId));
   const blocked = Boolean(status?.error || status?.state === 'blocked');
   const StatusIcon = blocked || !status ? FiAlertCircle : requests.length ? FiBell : owned ? FiUnlock : FiLock;
   const summary = blocked
     ? 'Command blocked'
     : status?.state === 'draining'
       ? 'Finishing work'
-      : owned
-        ? 'Control: you'
-        : status?.owner
-          ? `Control: ${status.ownerLabel}`
-          : 'Read-only';
+      : status?.external?.enabled && !status.external.allowControl
+        ? 'Robot-side lock'
+        : owned
+          ? 'Control: you'
+          : status?.owner
+            ? `Control: ${status.ownerLabel}`
+            : 'Read-only';
   return (
     <details ref={detailsRef} className={`robot-control ${owned ? 'has-control' : ''} ${blocked ? 'is-blocked' : ''}`}>
       <summary
@@ -120,6 +133,13 @@ export function RobotControl({ ros }: { ros: Ros | null }) {
           </p>
         )}
         {status?.reason && status.reason !== description && <p>{status.reason}</p>}
+        {status?.external?.enabled && (
+          <p className="robot-control-request-message" role="status" aria-live="polite">
+            {status.external.reason && status.external.reason !== description
+              ? status.external.reason
+              : 'The robot-side controller must approve each control request.'}
+          </p>
+        )}
         {requests.length > 0 && (
           <div className="robot-control-requests" aria-label="Incoming control requests">
             {requests.map(request => (
@@ -131,11 +151,13 @@ export function RobotControl({ ros }: { ros: Ros | null }) {
                   <button
                     className="robot-control-action is-primary"
                     type="button"
-                    disabled={!status?.ready || status.state !== 'owned' || Boolean(status.pending)}
+                    disabled={
+                      !status?.ready || status.state !== 'owned' || Boolean(status.pending) || request.ownerApproved
+                    }
                     onClick={() => session?.command('approve', { requestId: request.id })}
                     aria-label={`Grant control to ${request.label}`}
                   >
-                    Grant
+                    {request.ownerApproved ? 'Consent sent' : 'Grant'}
                   </button>
                   <button
                     className="robot-control-action"
@@ -146,6 +168,9 @@ export function RobotControl({ ros }: { ros: Ros | null }) {
                     Deny
                   </button>
                 </div>
+                {request.ownerApproved && status?.external?.enabled && !request.externalApproved && (
+                  <small>Waiting for robot-side approval.</small>
+                )}
               </div>
             ))}
             {Boolean(status?.pending) && <small>Finish or stop running work before granting control.</small>}
@@ -161,8 +186,13 @@ export function RobotControl({ ros }: { ros: Ros | null }) {
             Release control{status?.pending ? ' and stop work' : ''}
           </button>
         ) : status?.adoptable ? (
-          <button className="robot-control-action is-primary" type="button" onClick={() => session?.command('adopt')}>
-            Manage running tree
+          <button
+            className="robot-control-action is-primary"
+            type="button"
+            disabled={requestPending || (status.external?.enabled && !status.external.ready)}
+            onClick={() => session?.command('adopt')}
+          >
+            {requestPending ? 'Request sent' : 'Manage running tree'}
           </button>
         ) : (
           <button
@@ -187,7 +217,10 @@ export function RobotControl({ ros }: { ros: Ros | null }) {
           className="robot-control-section"
           onSubmit={event => {
             event.preventDefault();
-            if (canSetName) session?.command('identify', { label: label.trim() });
+            if (canSetName) {
+              nameEdited.current = false;
+              session?.command('identify', { label: label.trim() });
+            }
           }}
         >
           <label htmlFor={`${menuId}-name`}>Session name</label>
@@ -198,7 +231,10 @@ export function RobotControl({ ros }: { ros: Ros | null }) {
               placeholder={savedLabel || 'Your session name'}
               aria-describedby={savedLabel ? `${menuId}-name-status` : undefined}
               maxLength={64}
-              onChange={event => setLabel(event.target.value)}
+              onChange={event => {
+                nameEdited.current = true;
+                setLabel(event.target.value);
+              }}
             />
             <button
               className={`robot-control-action ${nameSaved ? 'is-saved' : ''}`}

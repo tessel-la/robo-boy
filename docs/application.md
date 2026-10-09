@@ -32,6 +32,11 @@ The packaged app asks for a host on its first launch and offers no default: it w
 
 Configure `ROS_DOMAIN_ID`, DDS middleware, and robot overlays on the ROS container; those settings are not owned by the frontend.
 
+Desktop control sessions use the local account name when available. You can replace it in
+**Session name**, and the app remembers that confirmed label. Web/mobile sessions keep a
+generated label until you choose one. See [Shared robot control](robot-control.md#session-names)
+for identity limits and optional robot-side ROS approval.
+
 The existing `ros-stack` Compose service satisfies the local contract on its own. Neither Caddy nor the web
 frontend is needed, so no certificate has to be created:
 

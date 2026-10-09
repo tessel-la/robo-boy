@@ -23,6 +23,8 @@ export interface PanelFetchReply {
 
 export interface RoboBoyDesktopBridge {
   shell: 'electron';
+  /** Display label only; never an authenticated identity. Absent in older shells. */
+  getUsername?(): Promise<string | undefined>;
   /** Native mesh/material/texture transport; absent in older shells. */
   robotResourceProtocol?: boolean;
   /** True on a Mac, where the system draws the window buttons. Absent in older shells. */

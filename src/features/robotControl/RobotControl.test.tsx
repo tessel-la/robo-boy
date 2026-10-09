@@ -47,7 +47,8 @@ describe('RobotControl', () => {
     const session = new ControlSession(ros);
     const view = render(<RobotControl ros={ros} />);
     act(() => status());
-    expect(screen.getByText('Current name: Alice')).toBeInTheDocument();
+    expect(screen.getByLabelText('Session name')).toHaveValue('Alice');
+    expect(screen.getByText('Name saved as Alice.')).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('Session name'), { target: { value: '  Charlie  ' } });
     fireEvent.click(screen.getByRole('button', { name: 'Set name' }));
     expect(send).toHaveBeenLastCalledWith(expect.objectContaining({ action: 'identify', label: 'Charlie' }));
@@ -72,6 +73,33 @@ describe('RobotControl', () => {
     expect(screen.queryByText('Current name: Charlie')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Set name' })).toBeDisabled();
     view.unmount();
+  });
+
+  it('shows robot-side policy and waits for approval without allowing local bypass', () => {
+    const { ros, send, status } = fakeControlRos();
+    const session = new ControlSession(ros);
+    const view = render(<RobotControl ros={ros} />);
+    act(() =>
+      status({ external: { enabled: true, ready: true, allowControl: false, reason: 'Disabled on the robot.' } })
+    );
+    expect(screen.getByText('Disabled on the robot.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Request control' }));
+    expect(send).toHaveBeenLastCalledWith(expect.objectContaining({ action: 'acquire' }));
+    act(() =>
+      status({
+        external: { enabled: true, ready: true, allowControl: false, reason: 'Disabled on the robot.' },
+        request: { id: 'robot-request', state: 'pending', message: 'Waiting for robot-side approval.' },
+      })
+    );
+    expect(screen.getByRole('button', { name: 'Request sent' })).toBeDisabled();
+    expect(screen.getByText('Waiting for robot-side approval.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Enable control' })).not.toBeInTheDocument();
+    act(() =>
+      status({ external: { enabled: true, ready: false, allowControl: false, reason: 'Policy disconnected.' } })
+    );
+    expect(screen.getByRole('button', { name: 'Request control' })).toBeDisabled();
+    view.unmount();
+    session.dispose();
   });
 
   it('lets an observer request a held lease and see or cancel the pending decision', () => {

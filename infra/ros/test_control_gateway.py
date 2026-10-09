@@ -12,7 +12,7 @@ import tornado.testing
 import tornado.web
 import tornado.websocket
 
-from control_gateway import Authority, application, monitor_runner, BT_COMMAND, BT_STATUS, STATUS_TOPIC
+from control_gateway import Authority, application, monitor_runner, BT_COMMAND, BT_STATUS, STATUS_TOPIC, EXTERNAL_STATE, EXTERNAL_DECISION, EXTERNAL_REQUESTS
 
 
 class AuthorityTests(unittest.TestCase):
@@ -468,6 +468,227 @@ class AuthorityTests(unittest.TestCase):
             self.assertTrue(marker.exists())
 
 
+
+class ExternalAuthorityTests(unittest.TestCase):
+    add = AuthorityTests.add
+    runner = AuthorityTests.runner
+    control = AuthorityTests.control
+    command = AuthorityTests.command
+    goal = AuthorityTests.goal
+
+    def setUp(self):
+        self.now = 0
+        self.authority = Authority(clock=lambda: self.now, external_lock=True)
+        self.sent, self.forwarded, self.closed = {}, {}, []
+        self.a, self.b = self.add(), self.add()
+        self.runner()
+        self.sequence = 0
+        self.policy(False)
+
+    def policy(self, allowed=True, controller='robot'):
+        self.sequence += 1
+        self.authority.external_state(dict(version=1, controllerId=controller, sequence=self.sequence, allowControl=allowed))
+
+    def request(self, client, action='acquire'):
+        self.control(client, action)
+        return self.authority.snapshot(client)['request']['id']
+
+    def decide(self, request, approve=True, controller='robot'):
+        self.authority.external_decision(dict(version=1, controllerId=controller, requestId=request, approve=approve))
+
+    def acquire(self, client):
+        self.policy()
+        self.decide(self.request(client))
+        self.assertEqual(self.authority.owner, client)
+
+    def test_disabled_by_default_and_policy_messages_cannot_activate_it(self):
+        authority = Authority()
+        authority.external_state(dict(version=1, controllerId='robot', sequence=1, allowControl=False))
+        self.assertFalse(authority.external_lock)
+        self.assertIsNone(authority.external_controller)
+
+    def test_global_switch_and_each_request_require_explicit_approval(self):
+        request = self.request(self.a)
+        self.decide(request)
+        self.assertIsNone(self.authority.owner)
+        self.policy()
+        self.assertIsNone(self.authority.owner)
+        self.decide(request)
+        self.assertEqual(self.authority.owner, self.a)
+        self.control(self.a, 'release')
+        new_request = self.request(self.a)
+        self.decide(request)
+        self.assertIsNone(self.authority.owner)
+        self.decide(new_request)
+        self.assertEqual(self.authority.owner, self.a)
+
+    def test_near_simultaneous_requests_have_one_winner(self):
+        self.policy()
+        first, second = self.request(self.a), self.request(self.b)
+        self.decide(first)
+        token = self.authority.token
+        self.decide(second)
+        self.assertEqual((self.authority.owner, self.authority.token), (self.a, token))
+        self.assertEqual(self.authority.snapshot(self.b)['request']['state'], 'cancelled')
+
+    def test_owner_and_robot_approval_are_both_required_in_either_order(self):
+        for robot_first in (True, False):
+            with self.subTest(robot_first=robot_first):
+                self.setUp()
+                self.acquire(self.a)
+                request = self.request(self.b, 'request')
+                if robot_first:
+                    self.decide(request)
+                else:
+                    self.control(self.a, 'approve', requestId=request)
+                self.assertEqual(self.authority.owner, self.a)
+                if robot_first:
+                    self.control(self.a, 'approve', requestId=request)
+                else:
+                    self.decide(request)
+                self.assertEqual(self.authority.owner, self.b)
+
+    def test_direct_transfer_requires_a_new_robot_decision(self):
+        self.acquire(self.a)
+        self.control(self.a, 'transfer', target=self.b)
+        self.assertEqual(self.authority.owner, self.a)
+        self.decide(self.authority.snapshot(self.b)['request']['id'])
+        self.assertEqual(self.authority.owner, self.b)
+
+    def test_disable_during_topic_barrier_cancels_handover(self):
+        self.acquire(self.a)
+        self.command(self.a, topic='/cmd_vel', msg={})
+        self.control(self.a, 'transfer', target=self.b)
+        self.decide(self.authority.snapshot(self.b)['request']['id'])
+        barrier = next(key for key in self.authority.pending)
+        self.policy(False)
+        self.authority.upstream(self.a, dict(op='service_response', id=barrier[1], result=True))
+        self.assertIsNone(self.authority.owner)
+        self.assertIsNone(self.authority.token)
+        self.assertEqual(self.authority.snapshot(self.b)['request']['state'], 'cancelled')
+
+    def test_disable_cancels_action_but_holds_reservation_until_terminal_result(self):
+        self.acquire(self.a)
+        self.goal(self.a)
+        old_token = self.authority.token
+        self.policy(False)
+        self.assertIsNone(self.authority.token)
+        self.assertTrue(self.authority.draining)
+        self.assertEqual(self.forwarded[self.a][-1]['op'], 'cancel_action_goal')
+        self.authority.receive(self.a, dict(op='publish', topic='/cmd_vel', msg={}, controlToken=old_token))
+        self.assertNotEqual(self.forwarded[self.a][-1]['op'], 'publish')
+        self.authority.upstream(self.a, dict(op='action_result', id='goal', status=2))
+        self.assertTrue(self.authority.pending)
+        self.authority.upstream(self.a, dict(op='action_result', id='goal', status=5))
+        self.assertIsNone(self.authority.owner)
+        self.assertFalse(self.authority.pending)
+        self.assertFalse(self.authority.fault)
+
+    def test_approval_never_interrupts_running_work(self):
+        self.acquire(self.a)
+        request = self.request(self.b, 'request')
+        self.control(self.a, 'approve', requestId=request)
+        self.goal(self.a)
+        self.decide(request)
+        self.assertEqual(self.authority.owner, self.a)
+        self.authority.tick()
+        self.assertEqual(self.authority.owner, self.a)
+        self.authority.upstream(self.a, dict(op='action_result', id='goal', status=4))
+        self.authority.tick()
+        self.assertEqual(self.authority.owner, self.b)
+
+    def test_policy_heartbeat_expires_even_when_owner_heartbeats(self):
+        self.acquire(self.a)
+        self.now = 9
+        self.control(self.a, 'heartbeat')
+        self.now = 10
+        self.runner()
+        self.authority.tick()
+        self.assertIsNone(self.authority.owner)
+        self.assertFalse(self.authority.external_status()['ready'])
+        self.policy()
+        self.assertIsNone(self.authority.owner)
+
+    def test_policy_restart_and_replayed_state_or_decision_cannot_restore_control(self):
+        self.acquire(self.a)
+        self.policy(controller='replacement')
+        self.assertIsNone(self.authority.owner)
+        request = self.request(self.b)
+        self.policy(controller='robot')
+        self.assertEqual(self.authority.external_controller, 'replacement')
+        self.decide(request, controller='robot')
+        self.assertIsNone(self.authority.owner)
+        self.now = 9
+        self.authority.external_state(dict(version=1, controllerId='replacement', sequence=2, allowControl=True))
+        self.now = 10
+        self.runner()
+        self.authority.tick()
+        self.assertFalse(self.authority.external_status()['ready'])
+
+    def test_deny_cancel_disconnect_and_expired_requests_ignore_late_decisions(self):
+        self.policy()
+        request = self.request(self.a)
+        self.decide(request, False)
+        self.decide(request)
+        self.assertEqual(self.authority.snapshot(self.a)['request']['state'], 'denied')
+        request = self.request(self.a)
+        self.control(self.a, 'cancel_request', requestId=request)
+        self.decide(request)
+        self.assertIsNone(self.authority.owner)
+        request = self.request(self.a)
+        self.authority.disconnect(self.a)
+        self.decide(request)
+        self.assertIsNone(self.authority.owner)
+        request = self.request(self.b)
+        for now in range(1, 61):
+            self.now = now
+            self.runner()
+            self.policy()
+        self.decide(request)
+        self.assertEqual(self.authority.snapshot(self.b)['request']['state'], 'expired')
+        self.assertIsNone(self.authority.owner)
+
+    def test_persistent_adoption_requires_approval_and_global_disable_stops_the_tree(self):
+        self.acquire(self.a)
+        self.runner('running', 'tree', 1)
+        self.authority.disconnect(self.a)
+        request = self.request(self.b, 'adopt')
+        self.assertTrue(self.authority.adoptable())
+        self.decide(request)
+        self.assertTrue(self.authority.managing)
+        sent = []
+        self.authority.runner_send = sent.append
+        self.policy(False)
+        self.assertTrue(self.authority.runner_busy)
+        self.assertEqual(json.loads(sent[-1]['msg']['data'])['command'], 'stop')
+        self.runner()
+        self.assertIsNone(self.authority.owner)
+
+    def test_policy_namespace_is_read_only_even_for_an_owner(self):
+        self.acquire(self.a)
+        for topic in (EXTERNAL_STATE, EXTERNAL_DECISION, EXTERNAL_REQUESTS):
+            self.command(self.a, topic=topic, msg=dict(data='{}'))
+            self.command(self.a, 'advertise', topic=topic, type='std_msgs/String')
+        self.command(self.a, 'call_service', service='/roboboy/control/external/controller/set_parameters', id='forged')
+        self.command(self.a, 'call_service', service='/rosapi/set_param', id='forged-param', args=dict(name='/roboboy/control/external/controller:allow_control', value='true'))
+        self.assertFalse(self.forwarded[self.a])
+        self.command(self.b, 'subscribe', topic=EXTERNAL_REQUESTS)
+        self.assertEqual(self.forwarded[self.b][-1]['op'], 'subscribe')
+
+    def test_request_snapshots_have_labels_but_never_lease_tokens(self):
+        sent = []
+        self.authority.external_send = sent.append
+        request = self.request(self.a)
+        self.control(self.a, 'acquire')
+        snapshot = json.loads(sent[-1]['msg']['data'])
+        self.assertEqual(len(snapshot['requests']), 1)
+        self.assertEqual(snapshot['requests'][0]['requestId'], request)
+        self.assertIn('label', snapshot['requests'][0])
+        self.assertNotIn('token', json.dumps(snapshot))
+        for state in ({}, dict(version=1, controllerId='robot', sequence=3, allowControl='true')):
+            self.authority.external_state(state)
+        self.assertFalse(self.authority.external_status()['allowControl'])
+
 class FakeBridge(tornado.websocket.WebSocketHandler):
     def initialize(self, received, sockets):
         self.received = received
@@ -642,6 +863,42 @@ class SocketTests(tornado.testing.AsyncHTTPTestCase):
         await b.write_message(json.dumps(dict(op='roboboy_control', action='acquire')))
         recovered = await self.status(b, lambda value: bool(value['token']))
         self.assertEqual(recovered['owner'], bid)
+
+    @tornado.testing.gen_test
+    async def test_external_policy_uses_private_ros_transport_and_cannot_be_written_by_clients(self):
+        self.authority.external_lock = True
+        task = asyncio.create_task(monitor_runner(self.authority, self.upstream_url))
+        try:
+            await self.until(lambda: self.authority.external_send is not None)
+            await self.until(lambda: any(message.get('topic') == EXTERNAL_STATE for _, message in self.received))
+            monitor = next(socket for socket, message in self.received if message.get('topic') == EXTERNAL_STATE)
+            async def publish(topic, value):
+                await monitor.write_message(json.dumps(dict(op='publish', topic=topic, msg=dict(data=json.dumps(value)))))
+            await publish(EXTERNAL_STATE, dict(version=1, controllerId='robot', sequence=1, allowControl=True))
+            await self.until(lambda: self.authority.external_status()['ready'])
+            a, aid = await self.connect()
+            b, _ = await self.connect()
+            await asyncio.gather(*(socket.write_message(json.dumps(dict(op='roboboy_control', action='acquire'))) for socket in (a, b)))
+            await self.until(lambda: len(self.authority.control_requests) == 2)
+            self.assertIsNone(self.authority.owner)
+            request = self.authority.snapshot(aid)['request']['id']
+            await self.until(lambda: any(message.get('op') == 'publish' and message.get('topic') == EXTERNAL_REQUESTS and len(json.loads(message['msg']['data'])['requests']) == 2 for _, message in self.received))
+            await publish(EXTERNAL_DECISION, dict(version=1, controllerId='robot', requestId=request, approve=True))
+            lease = await self.status(a, lambda value: bool(value['token']))
+            await a.write_message(json.dumps(dict(op='publish', topic=EXTERNAL_STATE, controlToken=lease['token'], msg=dict(data='{}'))))
+            blocked = await self.status(a, lambda value: bool(value['error']))
+            self.assertIn('native ROS', blocked['error'])
+            await publish(EXTERNAL_STATE, dict(version=1, controllerId='robot', sequence=2, allowControl=False))
+            await self.status(a, lambda value: not value['token'])
+            self.assertIsNone(self.authority.owner)
+            monitor.close()
+            await self.until(lambda: not self.authority.external_status()['ready'])
+        finally:
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
 
     @tornado.testing.gen_test
     async def test_private_runner_monitor_status_and_connection_loss(self):

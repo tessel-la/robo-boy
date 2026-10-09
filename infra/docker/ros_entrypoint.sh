@@ -145,6 +145,16 @@ ros2 launch /ros_ws/rosbridge_launch.xml \
 # its durable journal fences unconfirmed work after a crash.
 python3 /ros_ws/control_gateway.py --port "${ROSBRIDGE_PORT}" --upstream-port "${ROSBRIDGE_INTERNAL_PORT}" &
 
+# Optional robot-side policy; its global allow_control parameter starts false.
+# It runs on the robot even when no frontend or operator session is connected.
+if [ "${ROBOBOY_EXTERNAL_CONTROL_LOCK:-false}" = "true" ]; then
+    (while true; do
+        python3 /ros_ws/external_control_lock.py
+        echo "[external_control_lock] exited, restarting in 2s..."
+        sleep 2
+    done) &
+fi
+
 # Launch web_video_server
 ros2 run web_video_server web_video_server --ros-args -p address:=0.0.0.0 -p port:="${VIDEO_STREAM_PORT}" &
 

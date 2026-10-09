@@ -15,6 +15,7 @@ import uuid
 import tornado.ioloop
 import tornado.web
 import tornado.websocket
+from external_control_protocol import EXTERNAL_PREFIX, EXTERNAL_STATE, EXTERNAL_DECISION, EXTERNAL_REQUESTS
 
 STATUS_TOPIC = '/roboboy/control/status'
 BT_COMMAND = '/robo_boy/behavior_tree/command'
@@ -48,7 +49,7 @@ def topic_command(message):
 
 
 class Authority:
-    def __init__(self, marker=None, clock=time.monotonic):
+    def __init__(self, marker=None, clock=time.monotonic, external_lock=False):
         self.clock = clock
         self.marker = Path(marker) if marker else None
         self.fault = 'Gateway restarted with unconfirmed robot work; operator recovery required.' if self.marker and self.marker.exists() else ''
@@ -74,6 +75,122 @@ class Authority:
         self.runner_seen = 0
         self.runner_waiting = None
         self.runner_send = None
+        self.external_lock = external_lock
+        self.external_send = None
+        self.external_controller = None
+        self.external_sequence = -1
+        self.external_seen = None
+        self.external_allowed = False
+        self.external_reason = ''
+        self.retired_external_controllers = set()
+
+    def external_status(self):
+        ready = self.external_seen is not None and self.clock() - self.external_seen < LEASE_SECONDS
+        return dict(enabled=self.external_lock, ready=ready,
+                    allowControl=ready and self.external_allowed,
+                    reason=('Waiting for the robot-side control policy.' if not ready else
+                            self.external_reason or 'Control is disabled by the robot-side policy.')
+                    if self.external_lock and not (ready and self.external_allowed) else '')
+
+    def external_state(self, state):
+        if (not self.external_lock or not isinstance(state, dict) or state.get('version') != 1
+                or not isinstance(state.get('controllerId'), str) or not 1 <= len(state['controllerId']) <= 128
+                or type(state.get('sequence')) is not int or state['sequence'] < 0
+                or type(state.get('allowControl')) is not bool
+                or not isinstance(state.get('reason', ''), str) or len(state.get('reason', '')) > 256):
+            return
+        self.tick_expiry()
+        if state['controllerId'] in self.retired_external_controllers:
+            return
+        changed = self.external_controller is not None and self.external_controller != state['controllerId']
+        if not changed and state['sequence'] <= self.external_sequence:
+            return  # Replayed state never renews the policy heartbeat.
+        if changed or (not state['allowControl'] and (self.external_allowed or self.external_controller is None)):
+            if changed:
+                self.retired_external_controllers.add(self.external_controller)
+            self.fence_external('Robot-side control policy restarted.' if changed else
+                                state.get('reason') or 'Control disabled by the robot-side policy.')
+        self.external_controller = state['controllerId']
+        self.external_sequence = state['sequence']
+        self.external_seen = self.clock()
+        self.external_allowed = state['allowControl']
+        self.external_reason = state.get('reason', '')
+        self.broadcast()
+
+    def external_lost(self):
+        self.external_send = None
+        self.external_seen = None
+        self.fence_external('Robot-side policy connection lost. Request control after it reconnects.')
+        self.broadcast()
+
+    def fence_external(self, reason):
+        self.external_allowed = False
+        if self.transfer_target:
+            target = self.clients.get(self.transfer_target)
+            if target and target['request']:
+                target['request'] = {**target['request'], 'state': 'cancelled', 'message': reason}
+            self.transfer_target = None
+        self.clear_requests(reason)
+        if self.owner and not self.draining:
+            self.release(reason, stop_persistent=True)
+        elif self.runner_busy or self.runner_waiting:
+            self.release(reason, stop_persistent=True)
+
+    def external_decision(self, decision):
+        self.tick_expiry()
+        if (not self.external_lock or not isinstance(decision, dict) or decision.get('version') != 1
+                or decision.get('controllerId') != self.external_controller
+                or not self.external_status()['ready'] or type(decision.get('approve')) is not bool):
+            return
+        request_id = decision.get('requestId')
+        request = self.control_requests.get(request_id) if isinstance(request_id, str) else None
+        if not request or not request.get('external'):
+            return
+        if not decision['approve']:
+            self.finish_request(request_id, 'denied', 'The robot-side controller denied your request.')
+        elif self.external_status()['allowControl']:
+            request['externalApproved'] = True
+            self.complete_external_requests()
+        self.broadcast()
+
+    def request_external(self, client_id, intent, owner_approved):
+        if not self.external_status()['ready']:
+            raise ValueError('Waiting for the robot-side control policy. Try again when it reconnects.')
+        previous = self.clients[client_id]['request']
+        if previous and previous['id'] in self.control_requests:
+            return
+        request_id = str(uuid.uuid4())
+        self.control_requests[request_id] = dict(client=client_id, expires=self.clock() + REQUEST_SECONDS,
+                                                 external=True, intent=intent, owner=self.owner,
+                                                 ownerApproved=owner_approved, externalApproved=False)
+        self.clients[client_id]['request'] = dict(id=request_id, state='pending', message='Waiting for robot-side approval.')
+
+    def complete_external_requests(self):
+        if (self.fault or not self.runner_ready or not self.external_status()['allowControl']):
+            return
+        for request_id, request in list(self.control_requests.items()):
+            if not (request.get('externalApproved') and request.get('ownerApproved')):
+                continue
+            target = request['client']
+            if request['owner'] != self.owner or not self.clients.get(target, {}).get('connected'):
+                self.finish_request(request_id, 'cancelled', 'Control changed; request again.')
+                continue
+            adopt = request['intent'] == 'adopt'
+            if adopt:
+                if not self.adoptable():
+                    continue
+            elif self.draining or self.pending or self.runner_busy or self.runner_waiting:
+                continue
+            self.finish_request(request_id, 'accepted', 'Request approved; waiting for safe handover.')
+            if self.owner and not adopt:
+                self.release('Control transferred with robot-side approval.', target)
+            else:
+                self.grant(target)
+                self.draining = False
+                self.managing = adopt
+                self.stop_persistent = False
+                self.reason = 'Managing the persistent tree; new commands blocked until it finishes.' if adopt else ''
+            break  # One winner; grant/release cancels every competing request.
 
     def dirty(self):
         if self.marker and not self.marked:
@@ -100,7 +217,8 @@ class Authority:
                 self.draining = False
                 target = self.transfer_target
                 self.transfer_target = None
-                if target and self.clients.get(target, {}).get('connected'):
+                if (target and self.clients.get(target, {}).get('connected')
+                        and (not self.external_lock or self.external_status()['allowControl'])):
                     self.grant(target)
             self.retire_clients()
 
@@ -145,8 +263,11 @@ class Authority:
                     state='blocked' if self.fault else 'draining' if self.draining or (busy and not self.owner) else 'owned' if self.owner else 'available',
                     ready=self.runner_ready, pending=busy, adoptable=self.adoptable(), managing=self.managing, leaseMs=LEASE_SECONDS * 1000,
                     reason=self.fault or self.reason or ('Persistent robot work reserves control.' if busy and not self.owner else ''), error=error,
-                    requests=[dict(id=key, clientId=value['client'], label=self.clients[value['client']]['label']) for key, value in self.control_requests.items()] if client_id == self.owner and self.token and not self.fault else [],
+                    requests=[dict(id=key, clientId=value['client'], label=self.clients[value['client']]['label'],
+                                   ownerApproved=value.get('ownerApproved', False), externalApproved=value.get('externalApproved', False))
+                              for key, value in self.control_requests.items()] if client_id == self.owner and self.token and not self.fault else [],
                     request=self.clients[client_id]['request'],
+                    external=self.external_status(),
                     clients=[dict(id=key, label=value['label']) for key, value in self.clients.items() if value['connected']])
 
     def status(self, client_id, error=''):
@@ -158,6 +279,14 @@ class Authority:
     def broadcast(self):
         for client_id in list(self.clients):
             self.status(client_id)
+        if self.external_lock and self.external_send:
+            # No connection tokens cross the ROS policy boundary.
+            self.external_send(dict(op='publish', topic=EXTERNAL_REQUESTS, msg=dict(data=json.dumps(dict(
+                version=1, owner=self.owner, ownerLabel=self.owner_label if self.owner else None,
+                requests=[dict(requestId=key, clientId=value['client'],
+                               label=self.clients[value['client']]['label'], intent=value['intent'],
+                               ownerApproved=value['ownerApproved'])
+                          for key, value in self.control_requests.items() if value.get('external')])))))
 
     def forward(self, client_id, message, mutating=False):
         try:
@@ -175,6 +304,7 @@ class Authority:
         # Retry cancellation: a goal may not have been registered by rosbridge yet.
         if self.draining:
             self.cancel_work()
+        self.complete_external_requests()
         self.broadcast()
 
     def release(self, reason, target=None, stop_persistent=False):
@@ -239,6 +369,10 @@ class Authority:
                 raise ValueError(self.fault or 'Waiting for behavior-tree runner status.')
             if self.draining or not self.token or not self.owner or self.owner == client_id:
                 raise ValueError('Control is not held by another active session.')
+            if self.external_lock:
+                self.request_external(client_id, 'transfer', False)
+                self.broadcast()
+                return
             previous = self.clients[client_id]['request']
             if not previous or previous['id'] not in self.control_requests:
                 request_id = str(uuid.uuid4())
@@ -257,12 +391,20 @@ class Authority:
             if not self.owner and (self.pending or self.runner_busy or self.runner_waiting):
                 raise ValueError('Robot work is still running.')
             if not self.owner:
+                if self.external_lock:
+                    self.request_external(client_id, 'acquire', True)
+                    self.broadcast()
+                    return
                 self.grant(client_id)
                 self.reason = ''
             self.expires = now + LEASE_SECONDS
         elif action == 'adopt':
             if not self.adoptable():
                 raise ValueError('The persistent run cannot be adopted until other work finishes.')
+            if self.external_lock:
+                self.request_external(client_id, 'adopt', True)
+                self.broadcast()
+                return
             self.grant(client_id)
             self.draining = False
             self.managing = True
@@ -294,6 +436,15 @@ class Authority:
                     raise ValueError('Select another connected session.')
                 if self.pending or self.runner_busy or self.runner_waiting:
                     raise ValueError('Finish or stop running work before transferring control.')
+                if self.external_lock:
+                    if action == 'transfer':
+                        self.request_external(target, 'transfer', True)
+                        self.control_requests[self.clients[target]['request']['id']]['ownerApproved'] = True
+                    else:
+                        request['ownerApproved'] = True
+                    self.complete_external_requests()
+                    self.broadcast()
+                    return
                 if action == 'approve':
                     self.finish_request(request_id, 'accepted', 'Request accepted; waiting for safe handover.')
                 self.release('Control transferred by its owner.', target)
@@ -339,9 +490,18 @@ class Authority:
                     raise ValueError('Topics must use absolute canonical ROS names.')
                 if message['topic'] in (STATUS_TOPIC, BT_STATUS) and op not in ('subscribe', 'unsubscribe'):
                     raise ValueError('This status topic is read-only.')
+                if message['topic'].startswith(EXTERNAL_PREFIX) and op not in ('subscribe', 'unsubscribe'):
+                    raise ValueError('Robot-side control policy can only be changed through native ROS.')
             if op in ('call_service', 'cancel_action_goal', 'send_action_goal'):
                 if not canonical_name(message.get('service') if op == 'call_service' else message.get('action')):
                     raise ValueError('Services/actions must use absolute canonical ROS names.')
+                if message.get('service', message.get('action', '')).startswith(EXTERNAL_PREFIX):
+                    raise ValueError('Robot-side control policy can only be changed through native ROS.')
+                if message.get('service') in ('/rosapi/set_param', '/rosapi/delete_param'):
+                    args = message.get('args')
+                    name = args.get('name', '') if isinstance(args, dict) else ''
+                    if isinstance(name, str) and name.lstrip('/').startswith(EXTERNAL_PREFIX.lstrip('/')):
+                        raise ValueError('Robot-side control policy can only be changed through native ROS.')
             read = op in ('subscribe', 'unsubscribe', 'advertise', 'unadvertise', 'set_level')
             read = read or (op == 'call_service' and message.get('service') in READ_SERVICES)
             read = read or (op == 'publish' and message.get('topic') == '/roboboy/inspection/request')
@@ -355,6 +515,8 @@ class Authority:
             if not read:
                 if self.fault or not self.runner_ready:
                     raise ValueError(self.fault or 'Waiting for behavior-tree runner status.')
+                if self.external_lock and not self.external_status()['allowControl']:
+                    raise ValueError(self.external_status()['reason'])
                 if self.draining or self.owner != client_id or not self.token or message.get('controlToken') != self.token:
                     raise ValueError('Read-only session: request control before sending robot commands.')
                 if self.managing and not (op == 'publish' and message.get('topic') == BT_COMMAND and command.get('command') in ('stop', 'pause', 'resume')):
@@ -409,6 +571,9 @@ class Authority:
 
     def tick_expiry(self):
         now = self.clock()
+        if self.external_lock and self.external_seen is not None and now - self.external_seen >= LEASE_SECONDS:
+            self.external_seen = None
+            self.fence_external('Robot-side policy heartbeat expired. Request control after it reconnects.')
         for request_id, request in list(self.control_requests.items()):
             if now >= request['expires']:
                 self.finish_request(request_id, 'expired', 'Control request expired after 1 minute. You can request again.')
@@ -554,6 +719,23 @@ class GatewaySocket(tornado.websocket.WebSocketHandler):
             self.authority.disconnect(self.client_id)
 
 
+def external_sender(authority, socket):
+    def send(message):
+        def lost():
+            if authority.external_send is send:
+                authority.external_lost()
+                socket.close()
+        try:
+            future = socket.write_message(json.dumps(message))
+            def finished(result):
+                if result.cancelled() or result.exception():
+                    lost()
+            future.add_done_callback(finished)
+        except Exception:
+            lost()
+    return send
+
+
 async def monitor_runner(authority, url):
     while True:
         socket = None
@@ -563,6 +745,11 @@ async def monitor_runner(authority, url):
             await socket.write_message(json.dumps(dict(op='subscribe', topic=BT_STATUS, type='std_msgs/msg/String')))
             await socket.write_message(json.dumps(dict(op='advertise', topic=BT_COMMAND, type='std_msgs/msg/String')))
             await socket.write_message(json.dumps(dict(op='publish', topic=BT_COMMAND, msg=dict(data=json.dumps(dict(protocolVersion=1, command='status'))))))
+            if authority.external_lock:
+                for topic in (EXTERNAL_STATE, EXTERNAL_DECISION):
+                    await socket.write_message(json.dumps(dict(op='subscribe', topic=topic, type='std_msgs/msg/String')))
+                await socket.write_message(json.dumps(dict(op='advertise', topic=EXTERNAL_REQUESTS, type='std_msgs/msg/String')))
+                authority.external_send = external_sender(authority, socket)
             while True:
                 raw = await socket.read_message()
                 if raw is None:
@@ -570,11 +757,18 @@ async def monitor_runner(authority, url):
                 message = json.loads(raw)
                 if message.get('op') == 'publish' and message.get('topic') == BT_STATUS:
                     authority.runner_status(topic_command(message))
+                elif authority.external_lock and message.get('op') == 'publish':
+                    if message.get('topic') == EXTERNAL_STATE:
+                        authority.external_state(topic_command(message))
+                    elif message.get('topic') == EXTERNAL_DECISION:
+                        authority.external_decision(topic_command(message))
         except Exception:
             pass
         finally:
             authority.runner_ready = False
             authority.runner_send = None
+            if authority.external_lock:
+                authority.external_lost()
             authority.broadcast()
             if socket:
                 socket.close()
@@ -596,8 +790,13 @@ def main():
     parser.add_argument('--journal', default='/var/lib/roboboy-control/unconfirmed')
     parser.add_argument('--allowed-origins', default=os.environ.get('ROBOBOY_CONTROL_ALLOWED_ORIGINS', ''),
                         help='Comma-separated exact browser Origin values; empty preserves cross-origin access. Not authentication.')
+    parser.add_argument('--external-lock', choices=('true', 'false'),
+                        default=os.environ.get('ROBOBOY_EXTERNAL_CONTROL_LOCK', 'false').strip().lower(),
+                        help='Require robot-side ROS approval of control requests (default: false).')
     args = parser.parse_args()
-    authority = Authority(args.journal)
+    if args.external_lock not in ('true', 'false'):
+        parser.error('ROBOBOY_EXTERNAL_CONTROL_LOCK must be true or false.')
+    authority = Authority(args.journal, external_lock=args.external_lock == 'true')
     url = f'ws://127.0.0.1:{args.upstream_port}'
     allowed_origins = frozenset(origin.strip() for origin in args.allowed_origins.split(',') if origin.strip()) if args.allowed_origins.strip() else None
     application(authority, url, allowed_origins).listen(args.port, address='0.0.0.0')

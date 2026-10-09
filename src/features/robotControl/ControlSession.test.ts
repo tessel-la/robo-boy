@@ -1,6 +1,9 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Ros } from 'roslib';
 import { ControlSession, CONTROL_STATUS_TOPIC, controlSessionFor, type ControlStatus } from './ControlSession';
+
+import { defaultSessionName, rememberSessionName } from './sessionName';
+vi.mock('./sessionName', () => ({ defaultSessionName: vi.fn(async () => undefined), rememberSessionName: vi.fn() }));
 
 export function fakeControlRos() {
   const listeners = new Map<string, (message: unknown) => void>();
@@ -38,6 +41,10 @@ export function fakeControlRos() {
 }
 
 describe('ControlSession', () => {
+  beforeEach(() => {
+    vi.mocked(defaultSessionName).mockReset().mockResolvedValue(undefined);
+    vi.mocked(rememberSessionName).mockClear();
+  });
   afterEach(() => vi.useRealTimers());
   it('starts read-only, envelopes ROSLIB writes and never falls back to raw commands', () => {
     const { ros, send, status } = fakeControlRos();
@@ -65,6 +72,51 @@ describe('ControlSession', () => {
     session.dispose();
     expect(ros.callOnConnection).toBe(send);
     expect(controlSessionFor(ros)).toBeUndefined();
+  });
+
+  it('identifies the native user once without acquiring control', async () => {
+    vi.mocked(defaultSessionName).mockResolvedValue('operator');
+    const { ros, send } = fakeControlRos();
+    const session = new ControlSession(ros);
+    session.connected();
+    await Promise.resolve();
+    session.connected();
+    expect(send.mock.calls.filter(([message]) => message.action === 'identify')).toHaveLength(1);
+    expect(send).toHaveBeenCalledWith({ op: 'roboboy_control', action: 'identify', label: 'operator' });
+    expect(send.mock.calls.some(([message]) => message.action === 'acquire')).toBe(false);
+    session.dispose();
+  });
+
+  it('does not overwrite a manual name or send after disposal when native identity arrives late', async () => {
+    for (const dispose of [false, true]) {
+      let resolve!: (name: string) => void;
+      vi.mocked(defaultSessionName).mockReturnValue(
+        new Promise<string>(done => {
+          resolve = done;
+        })
+      );
+      const { ros, send } = fakeControlRos();
+      const session = new ControlSession(ros);
+      session.connected();
+      if (dispose) session.dispose();
+      else session.command('identify', { label: 'Chosen' });
+      send.mockClear();
+      resolve('Native');
+      await Promise.resolve();
+      expect(send).not.toHaveBeenCalled();
+      if (!dispose) session.dispose();
+    }
+  });
+
+  it('remembers only server-confirmed manual names', () => {
+    const { ros, status } = fakeControlRos();
+    const session = new ControlSession(ros);
+    session.command('identify', { label: 'Chosen' });
+    status();
+    expect(rememberSessionName).not.toHaveBeenCalled();
+    status({ clients: [{ id: 'a', label: 'Chosen' }] });
+    expect(rememberSessionName).toHaveBeenCalledExactlyOnceWith('Chosen');
+    session.dispose();
   });
 
   it('heartbeats while status broadcasts arrive, then stops on lost ownership', () => {

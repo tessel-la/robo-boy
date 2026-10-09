@@ -1,4 +1,5 @@
 import type { Ros } from 'roslib';
+import { defaultSessionName, rememberSessionName } from './sessionName';
 
 export const CONTROL_STATUS_TOPIC = '/roboboy/control/status';
 export interface ControlStatus {
@@ -16,7 +17,8 @@ export interface ControlStatus {
   reason: string;
   error: string;
   clients: { id: string; label: string }[];
-  requests?: { id: string; clientId: string; label: string }[];
+  requests?: { id: string; clientId: string; label: string; ownerApproved?: boolean; externalApproved?: boolean }[];
+  external?: { enabled: boolean; ready: boolean; allowControl: boolean; reason: string };
   request?: {
     id: string;
     state: 'pending' | 'accepted' | 'granted' | 'denied' | 'expired' | 'cancelled';
@@ -38,6 +40,10 @@ export class ControlSession {
   private heartbeat?: ReturnType<typeof setInterval>;
   private watchdog?: ReturnType<typeof setInterval>;
   private seen = 0;
+  private disposed = false;
+  private named = false;
+  private nameRevision = 0;
+  private pendingName?: { label: string; persist: boolean };
 
   constructor(ros: Ros) {
     this.ros = ros;
@@ -61,6 +67,15 @@ export class ControlSession {
   connected = () => {
     this.send?.({ op: 'subscribe', topic: CONTROL_STATUS_TOPIC });
     this.send?.({ op: 'roboboy_control', action: 'status' });
+    if (!this.named) {
+      this.named = true;
+      const revision = this.nameRevision;
+      void defaultSessionName().then(label => {
+        if (!label || this.disposed || revision !== this.nameRevision) return;
+        this.pendingName = { label, persist: false };
+        this.send?.({ op: 'roboboy_control', action: 'identify', label });
+      });
+    }
   };
   private readonly closed = () => {
     this.status = null;
@@ -88,13 +103,20 @@ export class ControlSession {
         status.pending < 0 ||
         (status.owner !== null && typeof status.owner !== 'string') ||
         (status.token !== null && typeof status.token !== 'string') ||
+        (status.external !== undefined &&
+          (typeof status.external?.enabled !== 'boolean' ||
+            typeof status.external?.ready !== 'boolean' ||
+            typeof status.external?.allowControl !== 'boolean' ||
+            typeof status.external?.reason !== 'string')) ||
         (status.requests !== undefined &&
           (!Array.isArray(status.requests) ||
             !status.requests.every(
               request =>
                 typeof request?.id === 'string' &&
                 typeof request?.clientId === 'string' &&
-                typeof request?.label === 'string'
+                typeof request?.label === 'string' &&
+                (request.ownerApproved === undefined || typeof request.ownerApproved === 'boolean') &&
+                (request.externalApproved === undefined || typeof request.externalApproved === 'boolean')
             ))) ||
         (status.request != null &&
           (typeof status.request.id !== 'string' ||
@@ -104,6 +126,13 @@ export class ControlSession {
       )
         return;
       this.status = status;
+      if (
+        this.pendingName &&
+        status.clients.find(client => client.id === status.selfId)?.label === this.pendingName.label
+      ) {
+        if (this.pendingName.persist) rememberSessionName(this.pendingName.label);
+        this.pendingName = undefined;
+      }
       this.seen = Date.now();
       if (status.owner === status.selfId && status.token) {
         this.heartbeat ??= setInterval(() => this.command('heartbeat'), 2000);
@@ -139,9 +168,14 @@ export class ControlSession {
       | 'deny',
     extra: { label?: string; target?: string; requestId?: string } = {}
   ) {
+    if (action === 'identify') {
+      ++this.nameRevision;
+      if (extra.label) this.pendingName = { label: extra.label, persist: true };
+    }
     this.send?.({ op: 'roboboy_control', action, token: this.status?.token, ...extra });
   }
   dispose() {
+    this.disposed = true;
     // Closing the socket releases the lease. An explicit release command also
     // stops persistent work, so it belongs to the user's Release button only.
     clearInterval(this.heartbeat);

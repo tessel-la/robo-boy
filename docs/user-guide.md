@@ -22,6 +22,8 @@ telemetry and editing. The menu shows the owner, blocked-command reasons, releas
 A persistent tree keeps its reservation across disconnects; reconnect and select **Manage running tree**
 to pause, resume, or stop it before sending other commands.
 See [Shared robot control](robot-control.md) for leases, recovery, and deployment requirements.
+An optional robot-side policy can require ROS approval of each request. When configured,
+the control menu shows its status; only the robot's native ROS operator can enable access.
 
 ## Main Views
 
