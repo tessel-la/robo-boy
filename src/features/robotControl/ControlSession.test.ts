@@ -46,6 +46,28 @@ describe('ControlSession', () => {
     vi.mocked(rememberSessionName).mockClear();
   });
   afterEach(() => vi.useRealTimers());
+  it('keeps server status fresh in shared mode without acquiring or heartbeating', () => {
+    vi.useFakeTimers();
+    const { ros, send, status } = fakeControlRos();
+    const session = new ControlSession(ros);
+    for (let i = 0; i < 20; i++) {
+      status({ enabled: false, idleMs: 0 });
+      vi.advanceTimersByTime(1000);
+    }
+    expect(session.hasRecentStatus()).toBe(true);
+    expect(session.getSnapshot()?.enabled).toBe(false);
+    expect(send).not.toHaveBeenCalled();
+    ros.callOnConnection({ op: 'publish', topic: '/cmd_vel' });
+    expect(send).toHaveBeenCalledWith({
+      op: 'roboboy_frame',
+      message: { op: 'publish', topic: '/cmd_vel', controlToken: undefined },
+    });
+    for (const invalid of [{ enabled: 'false' }, { idleMs: -1 }, { idleMs: '0' }]) {
+      status(invalid as unknown as Partial<ControlStatus>);
+      expect(session.getSnapshot()?.enabled).toBe(false);
+    }
+    session.dispose();
+  });
   it('starts read-only, envelopes ROSLIB writes and never falls back to raw commands', () => {
     const { ros, send, status } = fakeControlRos();
     const session = new ControlSession(ros);

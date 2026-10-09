@@ -1,6 +1,33 @@
 import { expect, test } from '@playwright/test';
 import { installRosMock } from './helpers/rosMock';
 
+test('shared control has no ownership buttons or client configuration', async ({ page }) => {
+  await installRosMock(page, { controlMode: 'shared' });
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Quick Connect 127.0.0.1', exact: true }).click();
+  await expect(page.getByLabel('Status: Connected')).toBeVisible();
+  const control = page.locator('.robot-control');
+  await expect(control.locator('summary')).toHaveText('Shared control');
+  await control.locator('summary').click();
+  await expect(control.getByText('Shared control · Connected sessions can send commands')).toBeVisible();
+  await expect(control.getByRole('button', { name: 'Request control' })).toHaveCount(0);
+  await expect(control.getByRole('button', { name: 'Release control' })).toHaveCount(0);
+  await expect(control.getByRole('spinbutton')).toHaveCount(0);
+  await expect(control.getByRole('checkbox')).toHaveCount(0);
+});
+
+test('indefinite idle control still requires explicit acquisition', async ({ page }) => {
+  await installRosMock(page, { controlMode: 'observer', idleSeconds: 0 });
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Quick Connect 127.0.0.1', exact: true }).click();
+  const control = page.locator('.robot-control');
+  await expect(control.locator('summary')).toHaveText('Read-only');
+  await control.locator('summary').click();
+  await expect(control.getByText(/Control has no idle timeout/)).toBeVisible();
+  await control.getByRole('button', { name: 'Request control' }).click();
+  await expect(control.locator('summary')).toHaveText('Control: you');
+});
+
 test('a new session starts as an observer and can explicitly acquire and release control', async ({ page }) => {
   await installRosMock(page, { controlMode: 'observer' });
   await page.goto('/');

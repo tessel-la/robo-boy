@@ -7,6 +7,7 @@ No await is allowed between authorization, recording work and forwarding it.
 import argparse
 import asyncio
 import json
+import math
 import os
 from pathlib import Path
 import time
@@ -49,7 +50,11 @@ def topic_command(message):
 
 
 class Authority:
-    def __init__(self, marker=None, clock=time.monotonic, external_lock=False):
+    def __init__(self, marker=None, clock=time.monotonic, external_lock=False, locking_enabled=True, idle_seconds=IDLE_SECONDS):
+        if not math.isfinite(idle_seconds * 1000) or idle_seconds < 0:
+            raise ValueError('Control idle timeout must be finite and nonnegative; 0 disables idle expiry.')
+        self.locking_enabled = locking_enabled
+        self.idle_seconds = idle_seconds
         self.clock = clock
         self.marker = Path(marker) if marker else None
         self.fault = 'Gateway restarted with unconfirmed robot work; operator recovery required.' if self.marker and self.marker.exists() else ''
@@ -114,6 +119,8 @@ class Authority:
         self.external_seen = self.clock()
         self.external_allowed = state['allowControl']
         self.external_reason = state.get('reason', '')
+        if not self.locking_enabled and self.external_allowed and not self.draining and not self.fault:
+            self.reason = ''
         self.broadcast()
 
     def external_lost(self):
@@ -131,7 +138,8 @@ class Authority:
         self.clear_requests(reason)
         if self.owner and not self.draining:
             self.release(reason, stop_persistent=True)
-        elif self.runner_busy or self.runner_waiting:
+        elif self.runner_busy or self.runner_waiting or (not self.locking_enabled and
+                (self.pending or any(client['wrote_topics'] for client in self.clients.values()))):
             self.release(reason, stop_persistent=True)
 
     def require_external_control(self):
@@ -163,10 +171,12 @@ class Authority:
                 self.draining = False
                 target = self.transfer_target
                 self.transfer_target = None
+                if not self.locking_enabled and (not self.external_lock or self.external_status()['allowControl']):
+                    self.reason = ''
                 if (target and self.clients.get(target, {}).get('connected')
                         and (not self.external_lock or self.external_status()['allowControl'])):
                     self.grant(target)
-            self.retire_clients()
+        self.retire_clients()
 
     def grant(self, client_id):
         self.clear_requests('Control changed; request control again if needed.')
@@ -204,11 +214,12 @@ class Authority:
     def snapshot(self, client_id, error=''):
         busy = len(self.pending) + int(self.runner_busy or bool(self.runner_waiting))
         return dict(version=1, selfId=client_id, owner=self.owner,
+                    enabled=self.locking_enabled, idleMs=self.idle_seconds * 1000,
                     ownerLabel=self.clients.get(self.owner, {}).get('label', self.owner_label) if self.owner else None,
                     token=self.token if self.owner == client_id and not self.draining and not self.fault else None,
-                    state='blocked' if self.fault else 'draining' if self.draining or (busy and not self.owner) else 'owned' if self.owner else 'available',
+                    state='blocked' if self.fault else 'draining' if self.draining or (self.locking_enabled and busy and not self.owner) else 'owned' if self.owner else 'available',
                     ready=self.runner_ready, pending=busy, adoptable=self.adoptable(), managing=self.managing, leaseMs=LEASE_SECONDS * 1000,
-                    reason=self.fault or self.reason or ('Persistent robot work reserves control.' if busy and not self.owner else ''), error=error,
+                    reason=self.fault or self.reason or ('Persistent robot work reserves control.' if self.locking_enabled and busy and not self.owner else ''), error=error,
                     requests=[dict(id=key, clientId=value['client'], label=self.clients[value['client']]['label'])
                               for key, value in self.control_requests.items()] if client_id == self.owner and self.token and not self.fault else [],
                     request=self.clients[client_id]['request'],
@@ -252,14 +263,17 @@ class Authority:
         self.draining = True
         self.token = None
         self.reason = reason
-        if self.owner and not was_draining and self.clients[self.owner]['wrote_topics']:
+        writers = [self.owner] if self.locking_enabled and self.owner else list(self.clients) if not self.locking_enabled else []
+        for writer in writers:
+            if was_draining or not self.clients[writer]['wrote_topics']:
+                continue
             # A response on the same upstream socket is a FIFO barrier: earlier
             # topic publishes must leave rosbridge before another owner writes.
             request = dict(op='call_service', service='/rosapi/get_time', id='control-barrier-' + str(uuid.uuid4()), args={})
             self.dirty()
-            self.pending[(self.owner, request['id'])] = request
-            self.clients[self.owner]['wrote_topics'] = False
-            self.forward(self.owner, request)
+            self.pending[(writer, request['id'])] = request
+            self.clients[writer]['wrote_topics'] = False
+            self.forward(writer, request)
         self.cancel_work()
         self.clean_if_safe()
 
@@ -272,7 +286,7 @@ class Authority:
                 protocolVersion=1, command='stop', sessionId=self.runner_waiting or self.runner_session)))))
 
     def adoptable(self):
-        return bool(not self.fault and self.runner_ready and not self.pending and not self.runner_waiting
+        return bool(self.locking_enabled and not self.fault and self.runner_ready and not self.pending and not self.runner_waiting
                     and self.runner_busy and (self.draining or not self.owner))
 
     def disconnect(self, client_id):
@@ -290,6 +304,8 @@ class Authority:
 
     def control(self, client_id, message):
         action = message.get('action')
+        if not self.locking_enabled and action not in ('identify', 'status'):
+            raise ValueError('Session control locking is disabled for this deployment.')
         if action != 'heartbeat':
             self.clients[client_id]['error'] = ''
         if action in ('acquire', 'adopt', 'request', 'transfer', 'approve'):
@@ -433,7 +449,9 @@ class Authority:
                 if self.fault or not self.runner_ready:
                     raise ValueError(self.fault or 'Waiting for behavior-tree runner status.')
                 self.require_external_control()
-                if self.draining or self.owner != client_id or not self.token or message.get('controlToken') != self.token:
+                if self.draining:
+                    raise ValueError('Robot work is still finishing.')
+                if self.locking_enabled and (self.owner != client_id or not self.token or message.get('controlToken') != self.token):
                     raise ValueError('Read-only session: request control before sending robot commands.')
                 if self.managing and not (op == 'publish' and message.get('topic') == BT_COMMAND and command.get('command') in ('stop', 'pause', 'resume')):
                     raise ValueError('Managing a persistent tree: stop or finish it before sending other commands.')
@@ -499,7 +517,7 @@ class Authority:
         if self.owner and not self.draining:
             if now >= self.expires:
                 self.release('Control heartbeat expired.')
-            elif now - self.activity >= IDLE_SECONDS and not self.pending and not self.runner_busy and not self.runner_waiting:
+            elif self.idle_seconds > 0 and now - self.activity >= self.idle_seconds and not self.pending and not self.runner_busy and not self.runner_waiting:
                 self.release('Control released after inactivity.')
 
     def upstream(self, client_id, message):
@@ -677,7 +695,17 @@ def application(authority, upstream_url, allowed_origins=None):
                                    websocket_ping_interval=3)
 
 
-def main():
+def idle_timeout(value):
+    try:
+        seconds = float(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError('Idle timeout must be a number of seconds.') from None
+    if not math.isfinite(seconds * 1000) or seconds < 0:
+        raise argparse.ArgumentTypeError('Idle timeout must be finite and nonnegative; 0 disables idle expiry.')
+    return seconds
+
+
+def parse_args(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--port', type=int, default=9090)
     parser.add_argument('--upstream-port', type=int, default=9092)
@@ -687,10 +715,24 @@ def main():
     parser.add_argument('--external-lock', choices=('true', 'false'),
                         default=os.environ.get('ROBOBOY_EXTERNAL_CONTROL_LOCK', 'false').strip().lower(),
                         help='Require the robot-side ROS allow_control switch (default: false).')
-    args = parser.parse_args()
+    parser.add_argument('--control-locking', choices=('true', 'false'),
+                        default=os.environ.get('ROBOBOY_CONTROL_LOCKING_ENABLED', 'true').strip().lower(),
+                        help='Require exclusive session ownership (default: true).')
+    parser.add_argument('--idle-seconds', type=idle_timeout,
+                        default=os.environ.get('ROBOBOY_CONTROL_IDLE_SECONDS', str(IDLE_SECONDS)),
+                        help='Release idle ownership after this many seconds; 0 keeps it until release or connection loss (default: 120).')
+    args = parser.parse_args(argv)
     if args.external_lock not in ('true', 'false'):
         parser.error('ROBOBOY_EXTERNAL_CONTROL_LOCK must be true or false.')
-    authority = Authority(args.journal, external_lock=args.external_lock == 'true')
+    if args.control_locking not in ('true', 'false'):
+        parser.error('ROBOBOY_CONTROL_LOCKING_ENABLED must be true or false.')
+    return args
+
+
+def main():
+    args = parse_args()
+    authority = Authority(args.journal, external_lock=args.external_lock == 'true',
+                          locking_enabled=args.control_locking == 'true', idle_seconds=args.idle_seconds)
     url = f'ws://127.0.0.1:{args.upstream_port}'
     allowed_origins = frozenset(origin.strip() for origin in args.allowed_origins.split(',') if origin.strip()) if args.allowed_origins.strip() else None
     application(authority, url, allowed_origins).listen(args.port, address='0.0.0.0')

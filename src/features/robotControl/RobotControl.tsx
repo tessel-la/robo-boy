@@ -49,6 +49,7 @@ export function RobotControl({ ros }: { ros: Ros | null }) {
     };
   }, []);
   if (!ros) return null;
+  const lockingEnabled = status?.enabled !== false;
   const owned = Boolean(status?.owner === status?.selfId && status?.token);
   const description = !status
     ? 'Control gateway unavailable — commands are disabled. Update the ROS stack.'
@@ -58,13 +59,15 @@ export function RobotControl({ ros }: { ros: Ros | null }) {
         ? status.reason
         : status.external?.enabled && !status.external.allowControl
           ? status.external.reason
-          : owned && status.managing
-            ? status.reason
-            : owned
-              ? `You have control${status.pending ? ` · ${status.pending} running request(s)` : ''}`
-              : status.owner
-                ? `Read-only · ${status.ownerLabel} has control`
-                : 'Read-only · Control available';
+          : !lockingEnabled
+            ? 'Shared control · Connected sessions can send commands'
+            : owned && status.managing
+              ? status.reason
+              : owned
+                ? `You have control${status.pending ? ` · ${status.pending} running request(s)` : ''}`
+                : status.owner
+                  ? `Read-only · ${status.ownerLabel} has control`
+                  : 'Read-only · Control available';
   const others = status?.clients.filter(client => client.id !== status.selfId) ?? [];
   const nameSaved = Boolean(label.trim() && label.trim() === savedLabel);
   const canSetName = Boolean(status && label.trim() && !nameSaved);
@@ -75,18 +78,27 @@ export function RobotControl({ ros }: { ros: Ros | null }) {
     (!status.external?.enabled || status.external.allowControl) &&
     (status.state === 'available' || (status.state === 'owned' && status.owner !== status.selfId));
   const blocked = Boolean(status?.error || status?.state === 'blocked');
-  const StatusIcon = blocked || !status ? FiAlertCircle : requests.length ? FiBell : owned ? FiUnlock : FiLock;
+  const StatusIcon =
+    blocked || !status
+      ? FiAlertCircle
+      : requests.length
+        ? FiBell
+        : owned || (!lockingEnabled && (!status.external?.enabled || status.external.allowControl))
+          ? FiUnlock
+          : FiLock;
   const summary = blocked
     ? 'Command blocked'
     : status?.state === 'draining'
       ? 'Finishing work'
       : status?.external?.enabled && !status.external.allowControl
         ? 'Robot-side lock'
-        : owned
-          ? 'Control: you'
-          : status?.owner
-            ? `Control: ${status.ownerLabel}`
-            : 'Read-only';
+        : !lockingEnabled
+          ? 'Shared control'
+          : owned
+            ? 'Control: you'
+            : status?.owner
+              ? `Control: ${status.ownerLabel}`
+              : 'Read-only';
   return (
     <details ref={detailsRef} className={`robot-control ${owned ? 'has-control' : ''} ${blocked ? 'is-blocked' : ''}`}>
       <summary
@@ -153,9 +165,7 @@ export function RobotControl({ ros }: { ros: Ros | null }) {
                   <button
                     className="robot-control-action is-primary"
                     type="button"
-                    disabled={
-                      !status?.ready || status.state !== 'owned' || Boolean(status.pending)
-                    }
+                    disabled={!status?.ready || status.state !== 'owned' || Boolean(status.pending)}
                     onClick={() => session?.command('approve', { requestId: request.id })}
                     aria-label={`Grant control to ${request.label}`}
                   >
@@ -180,29 +190,34 @@ export function RobotControl({ ros }: { ros: Ros | null }) {
             {status.request.message}
           </p>
         )}
-        {owned ? (
-          <button className="robot-control-action is-release" type="button" onClick={() => session?.command('release')}>
-            Release control{status?.pending ? ' and stop work' : ''}
-          </button>
-        ) : status?.adoptable ? (
-          <button
-            className="robot-control-action is-primary"
-            type="button"
-            disabled={requestPending || (status.external?.enabled && !status.external.allowControl)}
-            onClick={() => session?.command('adopt')}
-          >
-            {requestPending ? 'Request sent' : 'Manage running tree'}
-          </button>
-        ) : (
-          <button
-            className="robot-control-action is-primary"
-            type="button"
-            disabled={!canRequest || requestPending}
-            onClick={() => session?.command(status?.owner ? 'request' : 'acquire')}
-          >
-            {requestPending ? 'Request sent' : 'Request control'}
-          </button>
-        )}
+        {lockingEnabled &&
+          (owned ? (
+            <button
+              className="robot-control-action is-release"
+              type="button"
+              onClick={() => session?.command('release')}
+            >
+              Release control{status?.pending ? ' and stop work' : ''}
+            </button>
+          ) : status?.adoptable ? (
+            <button
+              className="robot-control-action is-primary"
+              type="button"
+              disabled={requestPending || (status.external?.enabled && !status.external.allowControl)}
+              onClick={() => session?.command('adopt')}
+            >
+              {requestPending ? 'Request sent' : 'Manage running tree'}
+            </button>
+          ) : (
+            <button
+              className="robot-control-action is-primary"
+              type="button"
+              disabled={!canRequest || requestPending}
+              onClick={() => session?.command(status?.owner ? 'request' : 'acquire')}
+            >
+              {requestPending ? 'Request sent' : 'Request control'}
+            </button>
+          ))}
         {!owned && status?.request?.state === 'pending' && (
           <button
             className="robot-control-action"
@@ -273,7 +288,11 @@ export function RobotControl({ ros }: { ros: Ros | null }) {
           </div>
         )}
         <small className="robot-control-footer">
-          Control releases after 2 minutes without commands. Running work keeps control until it finishes.
+          {!lockingEnabled
+            ? 'Control locking is disabled for this deployment. Connected sessions can send commands when the robot permits control.'
+            : status?.idleMs === 0
+              ? 'Control has no idle timeout. Release it when finished. Disconnects and heartbeat loss still release control.'
+              : `Control releases after ${(status?.idleMs ?? 120000) / 1000} seconds without commands. Running work keeps control until it finishes.`}
         </small>
       </div>
     </details>

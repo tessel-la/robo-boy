@@ -4,6 +4,8 @@ import { defaultSessionName, rememberSessionName } from './sessionName';
 export const CONTROL_STATUS_TOPIC = '/roboboy/control/status';
 export interface ControlStatus {
   version: 1;
+  enabled?: boolean;
+  idleMs?: number;
   selfId: string;
   owner: string | null;
   ownerLabel?: string;
@@ -89,6 +91,8 @@ export class ControlSession {
       const status = JSON.parse(message.data) as ControlStatus;
       if (
         status.version !== 1 ||
+        (status.enabled !== undefined && typeof status.enabled !== 'boolean') ||
+        (status.idleMs !== undefined && (!Number.isFinite(status.idleMs) || status.idleMs < 0)) ||
         typeof status.selfId !== 'string' ||
         !['available', 'owned', 'draining', 'blocked'].includes(status.state) ||
         !Array.isArray(status.clients) ||

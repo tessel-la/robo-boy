@@ -23,7 +23,8 @@ export type ScriptedServiceCall = {
 
 type MockRosResources = {
   /** Existing feature tests start as an established controller. Ownership UX tests opt into observer. */
-  controlMode?: 'owner' | 'observer';
+  controlMode?: 'owner' | 'observer' | 'shared';
+  idleSeconds?: number;
   /** Answers per action name, one per goal in turn; the last one repeats. */
   actionGoals?: Record<string, ScriptedActionGoal[]>;
   /** Answers per service name, one per call in turn; the last one repeats. */
@@ -46,6 +47,7 @@ const defaultResources: Required<MockRosResources> = {
 export async function installRosMock(page: Page, resources: MockRosResources = {}): Promise<void> {
   const mockResources = {
     controlMode: resources.controlMode ?? 'owner',
+    idleSeconds: resources.idleSeconds ?? 120,
     topics: resources.topics ?? defaultResources.topics,
     services: resources.services ?? defaultResources.services,
     actionServers: resources.actionServers ?? defaultResources.actionServers,
@@ -89,9 +91,11 @@ export async function installRosMock(page: Page, resources: MockRosResources = {
       private subscriptions = new Map<string, string>();
       private controlOwner = initResources.controlMode === 'owner';
       private controlLabel = 'Test operator';
+      private controlTimer?: ReturnType<typeof setInterval>;
       private controlStatus(error = '') {
         setTimeout(() => this.emit('message', { data: JSON.stringify({ op: 'publish', topic: '/roboboy/control/status', msg: { data: JSON.stringify({
-          version: 1, selfId: 'test-session', owner: this.controlOwner ? 'test-session' : null,
+          version: 1, enabled: initResources.controlMode !== 'shared', idleMs: initResources.idleSeconds * 1000,
+          selfId: 'test-session', owner: this.controlOwner ? 'test-session' : null,
           ownerLabel: this.controlLabel, token: this.controlOwner ? 'test-lease' : null,
           state: this.controlOwner ? 'owned' : 'available', ready: true, pending: 0,
           leaseMs: 10000, reason: '', error, adoptable: false, managing: false,
@@ -105,6 +109,8 @@ export async function installRosMock(page: Page, resources: MockRosResources = {
         setTimeout(() => {
           this.readyState = MockWebSocket.OPEN;
           this.emit('open', { type: 'open' });
+          // Shared sessions have no owner heartbeat to trigger status replies.
+          if (initResources.controlMode === 'shared') this.controlTimer = setInterval(() => this.controlStatus(), 1000);
         }, 0);
       }
 
@@ -136,7 +142,7 @@ export async function installRosMock(page: Page, resources: MockRosResources = {
           || (message.op === 'call_service' && message.service.startsWith('/rosapi/'))
           || (message.op === 'publish' && message.topic === '/roboboy/inspection/request')
           || (message.op === 'publish' && message.topic === '/robo_boy/behavior_tree/command' && JSON.parse(message.msg.data).command === 'status');
-        if (!read && ['publish', 'call_service', 'send_action_goal'].includes(message.op) && (!this.controlOwner || message.controlToken !== 'test-lease')) {
+        if (initResources.controlMode !== 'shared' && !read && ['publish', 'call_service', 'send_action_goal'].includes(message.op) && (!this.controlOwner || message.controlToken !== 'test-lease')) {
           this.controlStatus('Read-only session: request control before sending robot commands.');
           return;
         }
@@ -229,6 +235,7 @@ export async function installRosMock(page: Page, resources: MockRosResources = {
       close() {
         if (this.readyState === MockWebSocket.CLOSED) return;
         this.readyState = MockWebSocket.CLOSED;
+        clearInterval(this.controlTimer);
         MockWebSocket.instances.delete(this);
         this.emit('close', { type: 'close' });
       }

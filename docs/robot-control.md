@@ -1,6 +1,59 @@
 # Shared robot control
 
-Robo-Boy gives one connected **session** control of the entire ROS graph behind a robot endpoint. Other sessions can observe telemetry, inspect the graph, and edit panels and trees. A session means one WebSocket connection, not a browser profile or an authenticated account. Two tabs, two desktop windows, or two connections to the same endpoint are separate contenders.
+By default, Robo-Boy gives one connected **session** control of the entire ROS graph behind a robot endpoint. Other sessions can observe telemetry, inspect the graph, and edit panels and trees. A session means one WebSocket connection, not a browser profile or an authenticated account. Two tabs, two desktop windows, or two connections to the same endpoint are separate contenders.
+
+## Configure control at setup
+
+Configure session locking on the robot host in Compose's `.env` file. These settings apply to
+every web, Tauri, and Electron client using that gateway; they have no UI toggle.
+
+| Setting | Default | Behavior |
+| --- | --- | --- |
+| `ROBOBOY_CONTROL_LOCKING_ENABLED` | `true` | Require one session to acquire exclusive control. Set `false` for shared control without acquisition, transfer, or ownership heartbeats. |
+| `ROBOBOY_CONTROL_IDLE_SECONDS` | `120` | Release an idle owner after this many seconds without accepted commands and with no outstanding work. Set `0` for no idle expiry. Applies only when locking is enabled. |
+
+For exclusive control with a 60 s idle timeout:
+
+```dotenv
+ROBOBOY_CONTROL_LOCKING_ENABLED=true
+ROBOBOY_CONTROL_IDLE_SECONDS=60
+```
+
+For indefinite idle ownership, keep locking enabled and set `ROBOBOY_CONTROL_IDLE_SECONDS=0`.
+The owner must still send heartbeats; disconnect, heartbeat loss, explicit release, and the
+optional robot-side switch revoke control as before. A pending consent request still expires
+after 60 s independently of the owner's idle setting.
+
+To disable session locking:
+
+```dotenv
+ROBOBOY_CONTROL_LOCKING_ENABLED=false
+```
+
+Connected sessions can then send topics, services, and actions concurrently without requesting
+control. The menu shows **Shared control** and hides ownership buttons. Sessions can still set
+their display names. Disconnecting one session does not stop or block another session's work;
+the gateway keeps a disconnected session's upstream alive until its tracked work finishes.
+There is no exclusive handover or protection against conflicting commands in shared mode.
+
+The gateway stays in the connection path in both modes. Origin filtering, reserved policy
+namespaces, command validation, runner readiness, action lifetime tracking, and recovery fences
+for uncertain work remain enforced. Disabling session locking cannot bypass a recovery journal.
+The independent `ROBOBOY_EXTERNAL_CONTROL_LOCK` switch still blocks all commands when closed
+or unavailable. Closing it cancels tracked actions, stops persistent trees, and drains all
+clients' topic writes before reopening control.
+
+Apply changes by recreating the ROS stack with the updated image:
+
+```bash
+docker compose up -d --build ros-stack
+```
+
+These are startup settings. Recreating the stack disconnects existing sessions; clients reconnect
+under the new policy. Keep the recovery journal volume intact when changing modes.
+Standalone gateways accept the same environment variables or `--control-locking true|false`
+and `--idle-seconds 60` (use `0` for no idle expiry). Invalid booleans, negative timeouts, and
+nonfinite timeouts fail startup instead of silently changing policy.
 
 ## Why enforcement lives on the robot host
 
@@ -12,7 +65,7 @@ The gateway is the single authority. Admission, lease changes, pending-work reco
 
 The lock covers the **whole endpoint**, including every namespace and robot reachable through it. This is intentionally conservative: a navigation action, a velocity topic, and a gripper service can affect the same mechanism. Topic names and panel boundaries cannot prove resource independence. Multiple commands and parallel tree nodes from the same owner remain supported; the gateway prevents interference from other sessions rather than rescheduling the owner's program.
 
-## Operator workflow
+## Operator workflow with locking enabled
 
 1. Connect normally. The workspace starts **read-only**; there is no automatic acquisition, takeover, or retry of a blocked command.
 2. Open **Robot control** in the top bar (the lock icon on smaller screens, **Read-only** on desktop), optionally set a session name, and select **Request control**. When control is available, acquisition is atomic and first processed wins. When another session owns control, this sends that owner a consent request; it does not take over.
@@ -120,9 +173,9 @@ The owner sends a heartbeat every **2 seconds**. A lease expires after **10 seco
 
 WebSocket transport pings run every **3 seconds**, using Tornado's default pong timeout. This keeps observer and controller connections alive independently of ownership. A transport socket remaining open never extends the control lease without the owner's application heartbeat.
 
-A heartbeat only proves connectivity. After **120 seconds** without an accepted mutating command, control releases automatically, provided no work is outstanding. A long action or persistent run keeps the reservation while it runs. Continuous publishers count as command activity, including publishers emitting neutral values. Ownership is not tied to whether a panel is visible or a browser pointer is moving.
+A heartbeat only proves connectivity. After the configured idle timeout (**120 seconds** by default) without an accepted mutating command, control releases automatically, provided no work is outstanding. A timeout of `0` disables only idle expiry. A long action or persistent run keeps the reservation while it runs. Continuous publishers count as command activity, including publishers emitting neutral values. Ownership is not tied to whether a panel is visible or a browser pointer is moving.
 
-The two-minute inactivity timeout is **not a guaranteed minimum control duration**. Closing or refreshing the page closes its socket and fences ownership immediately; losing connectivity or browser suspension can stop heartbeats and expire the ten-second lease sooner. Switching tabs or workspaces preserves a connected socket when gateway status is fresh. Returning after status becomes stale recreates the connection as an observer. Browsers such as mobile Safari can suspend background timers and sockets, so background ownership cannot be guaranteed. Lease loss can leave telemetry connected; it does not itself disconnect the whole session.
+The configured inactivity timeout is **not a guaranteed minimum control duration**. Closing or refreshing the page closes its socket and fences ownership immediately; losing connectivity or browser suspension can stop heartbeats and expire the ten-second lease sooner. Switching tabs or workspaces preserves a connected socket when gateway status is fresh. Returning after status becomes stale recreates the connection as an observer. Browsers such as mobile Safari can suspend background timers and sockets, so background ownership cannot be guaranteed. Lease loss can leave telemetry connected; it does not itself disconnect the whole session.
 
 | Event | Expected behavior |
 | --- | --- |
@@ -165,9 +218,9 @@ The `control-journal` named volume survives container replacement. A marker is f
 - Use the `Ros` instance owned by `useRos`, or the existing permission-checked panel SDK operations. `ControlSession` attaches each lease token and wraps outgoing ROSLIB operations in `roboboy_frame`. Panels should not create an independent command socket, acquire control automatically, queue rejected writes, or store tokens. Subscriptions continue independently of ownership.
 - Use absolute canonical ROS names. Relative, private, duplicate-slash, and deprecated `#` action aliases are rejected so reserved names have one meaning.
 - Use ROS 2 `send_action_goal` / `cancel_action_goal` for actions. Direct calls to `/_action/` services are rejected because a send-goal service response does not establish action completion.
-- Only a positive allowlist of rosapi discovery/read services is available to observers. `set_param`, `delete_param`, and arbitrary robot services require control. The read-only inspection request topic and persistent-tree `status` requests remain available to observers. Recorder status and folder listings remain readable; start, stop, pause, resume, and split require control.
-- Publisher advertisement can occur while observing; actual publishes require ownership. Status-topic publishing, latched command publishers, service/action server advertisement, and unknown rosbridge operations are rejected. Cleanup, unsubscription, and unadvertisement remain allowed.
-- The reserved `/roboboy/control/status` topic is synthesized per connection by the gateway, including `selfId`, owner label, state, readiness, pending count, adoption availability, and that connection's token when appropriate. It is never forwarded from ROS. `roboboy_control` supports `identify`, `status`, `acquire`, `heartbeat`, `release`, `transfer`, `adopt`, `request`, `cancel_request`, `approve`, and `deny`. Only the owner with a valid token can release, transfer, renew, approve, or deny. `cancel_request`, `approve`, and `deny` require the exact `requestId`. Version-1 status adds optional `requests` entries (`id`, `clientId`, `label`) for the owner and a connection-specific `request` result (`id`, `state`, `message`), with states `pending`, `accepted`, `granted`, `denied`, `expired`, or `cancelled`.
+- Only a positive allowlist of rosapi discovery/read services is available to observers. `set_param`, `delete_param`, and arbitrary robot services require ownership when session locking is enabled. The read-only inspection request topic and persistent-tree `status` requests remain available to observers. Recorder status and folder listings remain readable; start, stop, pause, resume, and split require ownership when session locking is enabled.
+- Publisher advertisement can occur while observing; actual publishes require ownership when session locking is enabled. Status-topic publishing, latched command publishers, service/action server advertisement, and unknown rosbridge operations are rejected. Cleanup, unsubscription, and unadvertisement remain allowed.
+- The reserved `/roboboy/control/status` topic is synthesized per connection by the gateway, including `enabled` (session locking, defaults to `true` when absent), `idleMs` (`0` means no idle expiry, defaults to `120000` when absent), `selfId`, owner label, state, readiness, pending count, adoption availability, and that connection's token when appropriate. It is never forwarded from ROS. `roboboy_control` supports `identify`, `status`, `acquire`, `heartbeat`, `release`, `transfer`, `adopt`, `request`, `cancel_request`, `approve`, and `deny`. Only the owner with a valid token can release, transfer, renew, approve, or deny. `cancel_request`, `approve`, and `deny` require the exact `requestId`. Version-1 status adds optional `requests` entries (`id`, `clientId`, `label`) for the owner and a connection-specific `request` result (`id`, `state`, `message`), with states `pending`, `accepted`, `granted`, `denied`, `expired`, or `cancelled`.
 - Topic publishing is fire-and-forget. A FIFO barrier proves admission to ROS, not physical stopping. Robot controllers **must provide their own command watchdog/deadman and emergency-stop behavior**; no generic UI can infer a safe neutral message for every topic. Integrations that start asynchronous work through opaque topic messages or services that return before physical completion need a tracked ROS action or the persistent runner. Do not use a quick service response as proof that a background actuator job finished.
 
 New panels can therefore use existing ROS operations without implementing a second lock. An integration exposing a new asynchronous command transport must add its lifetime tracking at the gateway/robot boundary before relying on handover safety.
@@ -180,7 +233,7 @@ Rebuild the ROS stack with the frontend upgrade:
 docker compose up -d --build ros-stack
 ```
 
-Endpoint URLs and Caddy routes are unchanged. An old frontend can still observe the gateway but cannot issue unchecked writes. An updated frontend connected to raw legacy rosbridge receives no authority status and its command envelopes are rejected; it does not fall back to unsafe control. The upgraded runner is required for acquisition, including when no tree panel is open. Local recording replay does not connect to the gateway.
+Endpoint URLs and Caddy routes are unchanged. With session locking enabled, an old frontend can still observe the gateway but cannot issue unchecked writes. An updated frontend connected to raw legacy rosbridge receives no authority status and its command envelopes are rejected; it does not fall back to unsafe control. The upgraded runner is required for acquisition, including when no tree panel is open. Local recording replay does not connect to the gateway.
 
 Run **one authority for a shared control domain**. Two independent gateways to the same hardware would have independent leases; exposing the private rosbridge or other command paths would bypass this boundary. Use the deployment's existing network access controls/authentication for trusted users. This change coordinates sessions; it does not add accounts or roles, and it cannot arbitrate unrelated native ROS publishers, shell tools, or trusted loopback/DDS peers.
 

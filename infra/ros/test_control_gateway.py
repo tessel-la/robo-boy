@@ -1,8 +1,12 @@
 """Policy and real multi-WebSocket tests; no ROS installation required."""
 import asyncio
 import json
+import contextlib
+import io
+import os
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 import tornado.httpserver
@@ -12,13 +16,39 @@ import tornado.testing
 import tornado.web
 import tornado.websocket
 
-from control_gateway import Authority, application, monitor_runner, BT_COMMAND, BT_STATUS, STATUS_TOPIC, EXTERNAL_STATE, EXTERNAL_PREFIX
+from control_gateway import Authority, application, monitor_runner, parse_args, BT_COMMAND, BT_STATUS, STATUS_TOPIC, EXTERNAL_STATE, EXTERNAL_PREFIX
+
+
+class ConfigurationTests(unittest.TestCase):
+    def test_defaults_environment_and_cli_overrides(self):
+        with patch.dict(os.environ, {}, clear=True):
+            args = parse_args([])
+            self.assertEqual((args.control_locking, args.idle_seconds), ('true', 120))
+        with patch.dict(os.environ, dict(ROBOBOY_CONTROL_LOCKING_ENABLED='false', ROBOBOY_CONTROL_IDLE_SECONDS='0')):
+            args = parse_args([])
+            self.assertEqual((args.control_locking, args.idle_seconds), ('false', 0))
+            args = parse_args(['--control-locking', 'true', '--idle-seconds', '60'])
+            self.assertEqual((args.control_locking, args.idle_seconds), ('true', 60))
+
+    def test_invalid_configuration_fails_startup(self):
+        for variable, values in (
+            ('ROBOBOY_CONTROL_LOCKING_ENABLED', ('yes', '0', '')),
+            ('ROBOBOY_CONTROL_IDLE_SECONDS', ('-1', 'NaN', 'inf', '1e308', 'forever', '')),
+        ):
+            for value in values:
+                with self.subTest(variable=variable, value=value), patch.dict(os.environ, {variable: value}, clear=True):
+                    with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as error:
+                        parse_args([])
+                    self.assertEqual(error.exception.code, 2)
 
 
 class AuthorityTests(unittest.TestCase):
     def setUp(self):
         self.now = 0
-        self.authority = Authority(clock=lambda: self.now)
+        self.reset()
+
+    def reset(self, **options):
+        self.authority = Authority(clock=lambda: self.now, **options)
         self.sent, self.forwarded, self.closed = {}, {}, []
         self.a, self.b = self.add(), self.add()
         self.runner()
@@ -305,6 +335,86 @@ class AuthorityTests(unittest.TestCase):
             self.authority.tick()
         self.assertIsNone(self.authority.owner)
 
+    def test_configured_idle_expiry_checks_command_activity_between_ticks(self):
+        self.reset(idle_seconds=60)
+        self.control(self.a, 'acquire')
+        self.now = 59
+        self.authority.expires = 70
+        self.runner()
+        self.command(self.a, topic='/cmd_vel', msg={})
+        self.now = 118
+        self.authority.expires = 130
+        self.runner()
+        self.authority.tick()
+        self.assertEqual(self.authority.owner, self.a)
+        self.now = 119
+        self.runner()
+        self.command(self.a, topic='/cmd_vel', msg={})
+        self.assertIsNone(self.authority.token)
+        self.assertEqual(self.authority.reason, 'Control released after inactivity.')
+        self.assertEqual(len([m for m in self.forwarded[self.a] if m['op'] == 'publish']), 1)
+        self.assertEqual(self.authority.snapshot(self.b)['idleMs'], 60000)
+
+    def test_indefinite_idle_still_recovers_on_heartbeat_loss_and_disconnect(self):
+        self.reset(idle_seconds=0)
+        self.control(self.a, 'acquire')
+        for self.now in range(1, 601):
+            self.runner()
+            self.control(self.a, 'heartbeat')
+        self.assertEqual(self.authority.owner, self.a)
+        self.now += 10
+        self.runner()
+        self.authority.tick()
+        self.assertIsNone(self.authority.owner)
+        self.control(self.b, 'acquire')
+        self.authority.disconnect(self.b)
+        self.assertIsNone(self.authority.owner)
+
+    def test_shared_control_allows_commands_from_both_clients_without_leases(self):
+        self.reset(locking_enabled=False)
+        for client in (self.a, self.b):
+            self.command(client, topic='/cmd_vel', msg={})
+            self.command(client, 'call_service', id='service', service='/reset')
+            self.goal(client)
+            self.assertEqual([m['op'] for m in self.forwarded[client]], ['publish', 'call_service', 'send_action_goal'])
+            self.assertNotIn('controlToken', self.forwarded[client][0])
+        self.assertEqual(len(self.authority.pending), 4)
+        self.authority.disconnect(self.a)
+        self.command(self.b, topic='/cmd_vel', msg={})
+        self.assertEqual(self.authority.snapshot(self.b)['state'], 'available')
+        self.assertFalse(self.authority.snapshot(self.b)['enabled'])
+        self.assertIsNone(self.authority.owner)
+        self.assertIsNone(self.authority.token)
+        self.assertFalse(self.authority.draining)
+        self.control(self.b, 'acquire')
+        self.assertIn('disabled', self.authority.clients[self.b]['error'])
+        self.authority.upstream(self.a, dict(op='action_result', id='goal', status=4))
+        self.authority.upstream(self.a, dict(op='service_response', id='service', result=True))
+        self.assertNotIn(self.a, self.authority.clients)
+
+    def test_shared_control_keeps_validation_and_recovery_fences(self):
+        self.reset(locking_enabled=False)
+        self.command(self.a, topic=STATUS_TOPIC, msg={})
+        self.command(self.a, topic='/cmd_vel', msg={}, latch=True)
+        self.command(self.a, topic='relative', msg={})
+        self.assertFalse(self.forwarded[self.a])
+        self.goal(self.a)
+        self.command(self.b, 'cancel_action_goal', id='goal', action='/move')
+        self.assertFalse(self.forwarded[self.b])
+        self.authority.upstream_lost(self.a)
+        self.command(self.b, topic='/cmd_vel', msg={})
+        self.assertEqual(self.authority.snapshot(self.b)['state'], 'blocked')
+        self.assertFalse(self.forwarded[self.b])
+
+    def test_shared_control_cannot_bypass_a_restart_journal(self):
+        with tempfile.TemporaryDirectory() as directory:
+            marker = Path(directory) / 'unconfirmed'
+            marker.write_text('Unconfirmed work')
+            self.reset(marker=marker, locking_enabled=False)
+            self.command(self.a, topic='/cmd_vel', msg={})
+            self.assertFalse(self.forwarded[self.a])
+            self.assertEqual(self.authority.snapshot(self.a)['state'], 'blocked')
+
     def test_long_action_survives_idle_and_cancellation_requires_terminal_result(self):
         self.control(self.a, 'acquire')
         self.goal(self.a)
@@ -478,7 +588,10 @@ class ExternalAuthorityTests(unittest.TestCase):
 
     def setUp(self):
         self.now = 0
-        self.authority = Authority(clock=lambda: self.now, external_lock=True)
+        self.reset()
+
+    def reset(self, **options):
+        self.authority = Authority(clock=lambda: self.now, external_lock=True, **options)
         self.sent, self.forwarded, self.closed = {}, {}, []
         self.a, self.b = self.add(), self.add()
         self.runner()
@@ -503,6 +616,32 @@ class ExternalAuthorityTests(unittest.TestCase):
         authority.external_state(dict(version=1, controllerId='robot', sequence=1, allowControl=False))
         self.assertFalse(authority.external_lock)
         self.assertIsNone(authority.external_controller)
+
+    def test_shared_control_respects_switch_and_drains_all_clients_before_reopening(self):
+        self.reset(locking_enabled=False)
+        self.command(self.a, topic='/cmd_vel', msg={})
+        self.assertFalse(self.forwarded[self.a])
+        self.policy()
+        for client in (self.a, self.b):
+            self.command(client, topic='/cmd_vel', msg={})
+            self.goal(client)
+        self.policy(False)
+        self.assertTrue(self.authority.draining)
+        barriers = {}
+        for client in (self.a, self.b):
+            self.assertEqual(self.forwarded[client][-1]['op'], 'cancel_action_goal')
+            barriers[client] = next(m['id'] for m in self.forwarded[client] if m.get('service') == '/rosapi/get_time')
+        self.policy()
+        self.command(self.b, topic='/cmd_vel', msg={})
+        self.assertEqual(self.forwarded[self.b][-1]['op'], 'cancel_action_goal')
+        for client in (self.a, self.b):
+            self.authority.upstream(client, dict(op='service_response', id=barriers[client], result=True))
+            self.authority.upstream(client, dict(op='action_result', id='goal', status=5))
+        self.assertFalse(self.authority.draining)
+        self.command(self.b, topic='/cmd_vel', msg={})
+        self.assertEqual(self.forwarded[self.b][-1]['op'], 'publish')
+        self.command(self.b, topic=EXTERNAL_STATE, msg={})
+        self.assertEqual(self.forwarded[self.b][-1]['topic'], '/cmd_vel')
 
     def test_closed_switch_blocks_requests_but_preserves_read_only_operations(self):
         for action in ('acquire', 'adopt', 'request', 'transfer', 'approve'):
@@ -699,14 +838,15 @@ class FakeBridge(tornado.websocket.WebSocketHandler):
             self.write_message(json.dumps(dict(op='publish', topic=BT_STATUS, msg=dict(data=json.dumps(dict(protocolVersion=1, state='idle', activeWork=0, runnerId='runner'))))))
 
 
-class SocketTests(tornado.testing.AsyncHTTPTestCase):
+class SocketFixture(tornado.testing.AsyncHTTPTestCase):
+    locking_enabled = True
     def get_app(self):
         self.received, self.bridge_sockets = [], []
         bridge_app = tornado.web.Application([(r'/.*', FakeBridge, dict(received=self.received, sockets=self.bridge_sockets))])
         self.bridge_server = tornado.httpserver.HTTPServer(bridge_app)
         sockets = tornado.netutil.bind_sockets(0, '127.0.0.1')
         self.bridge_server.add_sockets(sockets)
-        self.authority = Authority()
+        self.authority = Authority(locking_enabled=self.locking_enabled)
         self.authority.runner_status(dict(protocolVersion=1, state='idle', activeWork=0, runnerId='runner'))
         self.upstream_url = f'ws://127.0.0.1:{sockets[0].getsockname()[1]}'
         self.clients = []
@@ -744,6 +884,8 @@ class SocketTests(tornado.testing.AsyncHTTPTestCase):
         self.bridge_server.stop()
         super().tearDown()
 
+
+class SocketTests(SocketFixture):
     @tornado.testing.gen_test
     async def test_origin_allowlist_rejects_unlisted_browser_origins_before_upstream_connect(self):
         allowed = frozenset(('https://roboboy.example', 'http://127.0.0.1:5173', 'tauri://localhost'))
@@ -912,6 +1054,28 @@ class SocketTests(tornado.testing.AsyncHTTPTestCase):
                 await task
             except asyncio.CancelledError:
                 pass
+
+
+class SharedSocketTests(SocketFixture):
+    locking_enabled = False
+
+    @tornado.testing.gen_test
+    async def test_simultaneous_commands_need_no_owner_or_token(self):
+        a, aid = await self.connect()
+        b, bid = await self.connect()
+        await asyncio.gather(*(socket.write_message(json.dumps(dict(op='roboboy_frame', message=dict(
+            op='publish', topic='/cmd_vel', msg=dict(client=client))))) for socket, client in ((a, aid), (b, bid))))
+        await self.until(lambda: len([m for _, m in self.received if m.get('topic') == '/cmd_vel']) == 2)
+        self.assertIsNone(self.authority.owner)
+        self.assertIsNone(self.authority.token)
+        a.close()
+        await self.until(lambda: aid not in self.authority.clients)
+        await b.write_message(json.dumps(dict(op='publish', topic='/cmd_vel', msg={})))
+        await self.until(lambda: len([m for _, m in self.received if m.get('topic') == '/cmd_vel']) == 3)
+        await b.write_message(json.dumps(dict(op='roboboy_control', action='status')))
+        status = await self.status(b)
+        self.assertFalse(status['enabled'])
+        self.assertIsNone(status['token'])
 
 
 if __name__ == '__main__':

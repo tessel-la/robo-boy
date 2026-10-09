@@ -42,6 +42,41 @@ function fakeControlRos() {
 import { RobotControl } from './RobotControl';
 
 describe('RobotControl', () => {
+  it('shows shared control without ownership buttons or UI configuration', () => {
+    const { ros, status } = fakeControlRos();
+    const session = new ControlSession(ros);
+    const view = render(<RobotControl ros={ros} />);
+    act(() => status({ enabled: false }));
+    expect(screen.getByText('Shared control')).toBeInTheDocument();
+    expect(screen.getByText('Shared control · Connected sessions can send commands')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Request control' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Release control' })).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Session name')).toBeInTheDocument();
+    act(() =>
+      status({
+        enabled: false,
+        external: { enabled: true, ready: true, allowControl: false, reason: 'Disabled on the robot.' },
+      })
+    );
+    expect(screen.getByText('Robot-side lock')).toBeInTheDocument();
+    expect(screen.getByText('Disabled on the robot.')).toBeInTheDocument();
+    view.unmount();
+    session.dispose();
+  });
+
+  it('describes the configured idle timeout and indefinite control', () => {
+    const { ros, status } = fakeControlRos();
+    const session = new ControlSession(ros);
+    const view = render(<RobotControl ros={ros} />);
+    act(() => status({ idleMs: 60000 }));
+    expect(screen.getByText(/Control releases after 60 seconds without commands/)).toBeInTheDocument();
+    act(() => status({ idleMs: 0 }));
+    expect(screen.getByText(/Control has no idle timeout/)).toBeInTheDocument();
+    expect(screen.queryByRole('spinbutton')).not.toBeInTheDocument();
+    view.unmount();
+    session.dispose();
+  });
+
   it('confirms a name only after the gateway acknowledges it and clears confirmation when edited or disconnected', () => {
     const { ros, send, status } = fakeControlRos();
     const session = new ControlSession(ros);
