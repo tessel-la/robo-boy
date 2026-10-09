@@ -7,7 +7,8 @@ const CONVERSATION_STORAGE_KEY = 'robo-boy-assistant-conversation-v1';
 const CONVERSATION_VERSION = 1;
 /** Cap persisted history so localStorage never grows unbounded across a long-lived session. */
 const MAX_PERSISTED_MESSAGES = 100;
-const conversationKey = (scope: string) => scope === 'default' ? CONVERSATION_STORAGE_KEY : `${CONVERSATION_STORAGE_KEY}:${encodeURIComponent(scope)}`;
+const conversationKey = (scope: string) =>
+  scope === 'default' ? CONVERSATION_STORAGE_KEY : `${CONVERSATION_STORAGE_KEY}:${encodeURIComponent(scope)}`;
 
 const PROVIDER_DEFAULTS: Record<AssistantProviderId, Pick<AssistantSettings, 'baseUrl' | 'model'>> = {
   openai: { baseUrl: 'https://api.openai.com/v1', model: 'gpt-4.1-mini' },
@@ -35,7 +36,7 @@ export const getProviderDefaults = (provider: AssistantProviderId) => ({
 export const getDefaultAssistantSettings = (): AssistantSettings => ({
   provider: 'openai-compatible',
   authMode: 'api-key',
-  authoringMode: 'review',
+  mode: 'edit',
   apiKey: '',
   ...PROVIDER_DEFAULTS['openai-compatible'],
   systemContext: '',
@@ -49,9 +50,17 @@ export const loadAssistantSettings = (): AssistantSettings => {
   try {
     const stored = localStorage.getItem(SETTINGS_STORAGE_KEY);
     const settings = stored ? { ...defaults, ...JSON.parse(stored) } : defaults;
-    if (settings.authoringMode !== 'automatic') settings.authoringMode = 'review';
-    if (settings.authMode !== 'subscription' || !['openai', 'anthropic'].includes(settings.provider)) settings.authMode = 'api-key';
-    settings.thinkingEffort = selectedThinkingEffort(settings.provider, settings.model, settings.thinkingEffort, settings.authMode === 'subscription');
+    delete settings.authoringMode;
+    delete settings.contextWindowTokens;
+    if (!['edit', 'goal', 'plan', 'ask'].includes(settings.mode)) settings.mode = 'edit';
+    if (settings.authMode !== 'subscription' || !['openai', 'anthropic'].includes(settings.provider))
+      settings.authMode = 'api-key';
+    settings.thinkingEffort = selectedThinkingEffort(
+      settings.provider,
+      settings.model,
+      settings.thinkingEffort,
+      settings.authMode === 'subscription'
+    );
     return settings;
   } catch {
     return defaults;

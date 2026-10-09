@@ -86,7 +86,6 @@ for (const kind of ['pad', 'behaviorTree'] as const) for (const mobile of [false
 });
 
 for (const mobile of [false, true]) test(`saves and selects a new Genesis Pad in one native task (${mobile ? 'mobile' : 'desktop'})`, async ({ page }, testInfo) => {
-  await page.addInitScript(() => localStorage.setItem('robo-boy-assistant-settings', JSON.stringify({ authoringMode: 'automatic' })));
   if (mobile) await page.setViewportSize({ width: 390, height: 844 });
   const topic = '/arm_1/servo_node/delta_twist_cmds';
   const messageType = 'geometry_msgs/msg/TwistStamped';
@@ -113,14 +112,21 @@ for (const mobile of [false, true]) test(`saves and selects a new Genesis Pad in
   let round = 0;
   await page.route('**/chat/completions', route => route.fulfill({ status: 200, contentType: 'text/event-stream', body: assistantStream(round++ === 0
     ? { kind: 'tool', name: 'save_document', input: { kind: 'pad', document: pad } }
-    : round === 2 ? { kind: 'workspaceEdit', operations: [{ op: 'setPanelPad', panelId, padId: pad.id }] }
+    : round === 2 ? { kind: 'tool', name: 'ask_user', input: { question: 'Review and save the Genesis Pad in its editor, then reply saved.' } }
+    : round === 3 ? { kind: 'workspaceEdit', operations: [{ op: 'setPanelPad', panelId, padId: pad.id }] }
     : { kind: 'explanation', message: 'The saved Genesis Pad is visible in the panel.' }) }));
   await page.getByLabel('Open Robo-Boy assistant').click();
   await page.getByRole('textbox', { name: 'Ask the assistant' }).fill('Create a Genesis Pad with XY translation and XY rotation joysticks and show it.');
   await page.getByRole('button', { name: 'Send', exact: true }).click();
+  await expect(page.getByText('Review and save the Genesis Pad in its editor, then reply saved.', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Review in Pad editor' }).click();
+  await expect(page.getByRole('heading', { name: 'Gamepad Editor' })).toBeVisible();
+  await page.getByRole('button', { name: 'Save Gamepad', exact: true }).click();
+  await page.getByRole('textbox', { name: 'Continue the conversation' }).fill('Saved');
+  await page.getByRole('button', { name: 'Send', exact: true }).click();
   await expect(page.getByText('The saved Genesis Pad is visible in the panel.')).toBeVisible();
   await expect(page.getByText(`No saved Pad with id "${pad.id}".`)).toHaveCount(0);
-  expect(round).toBe(3);
+  expect(round).toBe(4);
   await page.getByRole('button', { name: 'Close assistant', exact: true }).click();
   await expect(card.getByText('X/Y translation', { exact: true })).toBeVisible();
   await expect(card.getByText('X/Y rotation', { exact: true })).toBeVisible();
@@ -132,8 +138,7 @@ for (const mobile of [false, true]) test(`saves and selects a new Genesis Pad in
   await page.screenshot({ path: testInfo.outputPath('genesis-pad-selected.png') });
 });
 
-for (const automatic of [false, true]) for (const mobile of [false, true]) test(`autonomously captures Home and ${automatic ? 'saves' : 'prepares'} an executable Pad goal (${mobile ? 'mobile' : 'desktop'})`, async ({ page }, testInfo) => {
-  if (automatic) await page.addInitScript(() => localStorage.setItem('robo-boy-assistant-settings', JSON.stringify({ authoringMode: 'automatic' })));
+for (const saveTool of [false, true]) for (const mobile of [false, true]) test(`autonomously captures Home and prepares an executable Pad goal through ${saveTool ? 'save_document' : 'propose_pad'} (${mobile ? 'mobile' : 'desktop'})`, async ({ page }, testInfo) => {
   if (mobile) await page.setViewportSize({ width: 390, height: 844 });
   await installRosMock(page, {
     topics: [{ name: '/joint_states', type: 'sensor_msgs/msg/JointState' }],
@@ -166,9 +171,8 @@ for (const automatic of [false, true]) for (const mobile of [false, true]) test(
               },
             }],
           },
-        } : { kind: 'explanation', message: automatic ? 'Home is saved; controls and robot motion remain operator-owned.' : 'Home is ready for review.' };
-    if (automatic && reply.kind === 'padProposal') reply = { kind: 'tool', name: 'save_document', input: { kind: 'pad', document: reply.layout } };
-    else if (automatic && round === 3) reply = { kind: 'tool', name: 'read_document', input: { kind: 'pad', id: 'home-pad' } };
+        } : { kind: 'explanation', message: 'Home is ready for review.' };
+    if (saveTool && reply.kind === 'padProposal') reply = { kind: 'tool', name: 'save_document', input: { kind: 'pad', document: reply.layout } };
     await route.fulfill({ status: 200, contentType: 'text/event-stream', body: assistantStream(reply, 'I will read the robot data before proposing a goal.') });
   });
   await page.goto('/');
@@ -181,31 +185,24 @@ for (const automatic of [false, true]) for (const mobile of [false, true]) test(
   await page.getByRole('button', { name: 'Send', exact: true }).click();
   await waitForRosSubscription(page, '/joint_states');
   await publishRosMessage(page, '/joint_states', { name: ['panda_joint1', 'panda_joint2'], position: [0.25, -0.75] });
-  if (automatic) {
-    await expect(page.getByText('Home is saved; controls and robot motion remain operator-owned.')).toBeVisible();
-    await page.getByTestId('assistant-panel').getByText('Changes (1)', { exact: true }).click();
-    await expect(page.getByRole('button', { name: 'Undo', exact: true })).toBeVisible();
-  } else {
-    await expect(page.getByRole('button', { name: 'Review in Pad editor' })).toBeVisible();
-    await expect(page.getByText('Home is ready for review.')).toBeVisible();
-  }
-  expect(requests).toHaveLength(automatic ? 4 : 3);
+  await expect(page.getByRole('button', { name: 'Review in Pad editor' })).toBeVisible();
+  await expect(page.getByText('Home is ready for review.')).toBeVisible();
+  expect(requests).toHaveLength(3);
   expect(requests[0].systemPrompt).toContain('### Live ROS graph');
   expect(requests[0].systemPrompt).toContain('"name":"/joint_states"');
   expect(requests[1].messages.filter((turn: any) => turn.role === 'user')).toEqual(requests[0].messages.filter((turn: any) => turn.role === 'user'));
   expect(JSON.stringify(requests[1].messages)).toContain('tool_call_id');
-  expect(requests[1].systemPrompt).toContain('"position":[0.25,-0.75]');
-  expect(requests[1].systemPrompt).toContain('time_from_start');
+  expect(JSON.stringify(requests[1].messages)).toContain('position');
+  expect(JSON.stringify(requests[1].messages)).toContain('time_from_start');
   await page.getByTestId('assistant-panel').getByText('Thinking', { exact: true }).click();
   await expect(page.getByText(/I will read the robot data/)).toBeVisible();
   await expect(page.locator('.assistant-message.user')).toHaveCount(1);
   await page.screenshot({ path: testInfo.outputPath('home-proposal.png') });
   // Robot motion stays in the reviewed Pad workflow, never in assistant retrieval.
-  if (!automatic) {
-    await page.getByRole('button', { name: 'Review in Pad editor' }).click();
-    await expect(page.getByRole('heading', { name: 'Gamepad Editor' })).toBeVisible();
-    await page.getByRole('button', { name: 'Save Gamepad', exact: true }).click();
-  }
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('robo-boy-custom-gamepads') ?? '{}').customLayouts?.some((item: { id: string }) => item.id === 'home-pad') ?? false)).toBe(false);
+  await page.getByRole('button', { name: 'Review in Pad editor' }).click();
+  await expect(page.getByRole('heading', { name: 'Gamepad Editor' })).toBeVisible();
+  await page.getByRole('button', { name: 'Save Gamepad', exact: true }).click();
   const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('robo-boy-custom-gamepads') ?? '{}').customLayouts.find((item: { id: string }) => item.id === 'home-pad').layout);
   expect(saved.components[0].eventOperations.press).toMatchObject({
     name: action, messageType: type,
@@ -213,8 +210,4 @@ for (const automatic of [false, true]) for (const mobile of [false, true]) test(
   });
   const robotCalls = await page.evaluate(() => (window as any).__getRosCommands().filter((command: any) => command.op === 'send_action_goal' || command.op === 'call_service' && !command.service.startsWith('/rosapi/')));
   expect(robotCalls).toEqual([]);
-  if (automatic) {
-    await page.getByRole('button', { name: 'Undo', exact: true }).click();
-    await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('robo-boy-custom-gamepads') ?? '{}').customLayouts.some((item: { id: string }) => item.id === 'home-pad'))).toBe(false);
-  }
 });

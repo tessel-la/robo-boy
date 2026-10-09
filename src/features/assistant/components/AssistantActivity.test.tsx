@@ -24,9 +24,9 @@ describe('assistant activity presentation', () => {
       { id: 'fail', runId: 'run', at: 3, type: 'tool', label: 'read_topic', status: 'failed' },
       { id: 'cancel', runId: 'run', at: 4, type: 'tool', label: 'read_logs', status: 'cancelled' },
     ];
-    render(<AssistantActivity events={events} />);
+    render(<AssistantActivity events={events} live />);
     expect(screen.getByText('Running: Inspect TF')).toBeVisible();
-    expect(screen.getByText('Observed interface')).not.toBeVisible();
+    expect(screen.queryByText('Observed interface')).not.toBeInTheDocument();
     fireEvent.click(screen.getByText('Agent activity (4)'));
     expect(screen.getByText('Investigation: Inspect TF')).toBeVisible();
     expect(screen.getByText('Failed')).toBeVisible();
@@ -39,9 +39,18 @@ describe('assistant activity presentation', () => {
   it('distinguishes paused activity without displaying it as a user message', () => {
     render(
       <AssistantActivity
+        live
         events={[{ id: 'paused', runId: 'run', at: 1, type: 'tool', label: 'read_topic', status: 'paused' }]}
       />
     );
     expect(screen.getByText('Paused: read topic')).toBeVisible();
+  });
+  it('does not show stale running work as current in a completed response', () => {
+    render(
+      <AssistantActivity
+        events={[{ id: 'old', runId: 'run', at: 1, type: 'tool', label: 'read_tf', status: 'running' }]}
+      />
+    );
+    expect(screen.queryByText('Running: read tf')).not.toBeInTheDocument();
   });
 });

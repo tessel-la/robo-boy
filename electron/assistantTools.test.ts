@@ -13,7 +13,6 @@ describe('subscription capability boundaries', () => {
     await Promise.resolve();
     const id = dispatch.mock.calls[0][0];
     expect(() => tools.reply('wrong', { ok: true })).toThrow(/expired/);
-    expect(() => tools.reply(id, { ok: 'yes' })).toThrow(/Invalid/);
     tools.reply(id, { ok: true, value: { positions: [1, 2] } });
     await expect(pending).resolves.toMatchObject({ ok: true, value: { positions: [1, 2] } });
     expect(() => tools.reply(id, { ok: true })).toThrow(/expired/);
@@ -62,20 +61,52 @@ describe('subscription capability boundaries', () => {
       tools = new SubscriptionTools(new AbortController().signal, dispatch);
     await expect(tools.execute('read_tf', null)).resolves.toMatchObject({ ok: false });
     await expect(tools.execute('read_tf', { huge: 'x'.repeat(270_000) })).resolves.toMatchObject({ ok: false });
-    const pending = tools.execute('read_tf', {});
+    for (const [value, error] of [
+      [{ ok: 'yes' }, /Invalid/],
+      [{ ok: true, value: 'x'.repeat(140_000) }, /too large/],
+      [{ ok: true, image: { mimeType: 'text/html', data: 'evil' } }, /image/],
+    ] as const) {
+      const pending = tools.execute('read_tf', {});
+      const rejected = expect(pending).rejects.toThrow(error);
+      await Promise.resolve();
+      await Promise.resolve();
+      const id = dispatch.mock.calls.at(-1)![0];
+      expect(() => tools.reply(id, value)).toThrow(error);
+      await rejected;
+      expect(() => tools.reply(id, { ok: true })).toThrow(/expired/);
+    }
+  });
+  it('fails an oversized escaped checkpoint immediately instead of timing out __step', async () => {
+    const dispatch = vi.fn();
+    const tools = new SubscriptionTools(new AbortController().signal, dispatch);
+    const result = tools.checkpoint();
+    const rejected = expect(result).rejects.toThrow(/too large/);
     await Promise.resolve();
-    const id = dispatch.mock.calls[0][0];
-    expect(() => tools.reply(id, { ok: true, value: 'x'.repeat(140_000) })).toThrow(/too large/);
-    expect(() => tools.reply(id, { ok: true, image: { mimeType: 'text/html', data: 'evil' } })).toThrow(/image/);
-    tools.reply(id, { ok: false, error: 'Unavailable' });
-    await pending;
+    // Raw text fits the checkpoint limit; its serialized envelope does not.
+    const systemPrompt = '"'.repeat(80_000);
+    expect(() => tools.reply(dispatch.mock.calls[0][0], { ok: true, value: { systemPrompt } })).toThrow(/too large/);
+    await rejected;
+  });
+  it('settles a failed steering checkpoint without waiting for a deadline', async () => {
+    const dispatch = vi.fn();
+    const tools = new SubscriptionTools(new AbortController().signal, dispatch);
+    const result = tools.checkpoint();
+    const rejected = expect(result).rejects.toThrow(/Steering requested/);
+    await Promise.resolve();
+    tools.reply(dispatch.mock.calls[0][0], {
+      ok: false,
+      error: 'Steering requested. Completed changes are preserved.',
+    });
+    await rejected;
   });
   it('starts deadlines at dispatch rather than while a parallel call waits in the queue', async () => {
     vi.useFakeTimers();
     try {
       const dispatch = vi.fn();
       const controller = new AbortController();
-      const tools = new SubscriptionTools(controller.signal, dispatch, undefined, undefined, reason => controller.abort(reason));
+      const tools = new SubscriptionTools(controller.signal, dispatch, undefined, undefined, reason =>
+        controller.abort(reason)
+      );
       const first = tools.execute('read_tf', {});
       const second = tools.execute('read_topic', { name: '/joint_states' });
       await vi.advanceTimersByTimeAsync(29_000);
@@ -87,18 +118,27 @@ describe('subscription capability boundaries', () => {
       expect(dispatch).toHaveBeenCalledTimes(2);
       tools.reply(dispatch.mock.calls[1][0], { ok: true });
       await second;
-    } finally { vi.useRealTimers(); }
+    } finally {
+      vi.useRealTimers();
+    }
   });
   it('preserves the timed-out tool name as the cancellation reason', async () => {
     vi.useFakeTimers();
     try {
       const controller = new AbortController();
-      const tools = new SubscriptionTools(controller.signal, vi.fn(), undefined, undefined, reason => controller.abort(reason));
+      const tools = new SubscriptionTools(controller.signal, vi.fn(), undefined, undefined, reason =>
+        controller.abort(reason)
+      );
       const result = tools.execute('read_tf', {});
       await vi.advanceTimersByTimeAsync(30_000);
       await expect(result).resolves.toMatchObject({ ok: false });
-      expect(controller.signal.reason).toMatchObject({ name: 'TimeoutError', message: expect.stringContaining('read_tf timed out') });
-    } finally { vi.useRealTimers(); }
+      expect(controller.signal.reason).toMatchObject({
+        name: 'TimeoutError',
+        message: expect.stringContaining('read_tf timed out'),
+      });
+    } finally {
+      vi.useRealTimers();
+    }
   });
   it('never dispatches queued mutations after disposal', async () => {
     const dispatch = vi.fn();

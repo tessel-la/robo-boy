@@ -1,10 +1,18 @@
 import { describe, expect, it } from 'vitest';
-import { ASSISTANT_CAPABILITIES, composeAssistantSystemPrompt } from './prompt';
+import { ASSISTANT_CAPABILITIES, composeAssistantSystemPrompt, composeNativeSystemPrompt } from './prompt';
 import { CONTEXT_CATALOG } from './capabilities';
 import type { AssistantAutoContext, AssistantContextChip } from './types';
 
 const autoContext = (overrides: Partial<AssistantAutoContext> = {}): AssistantAutoContext => ({
-  workspace: { connectionStatus: 'connected', openPanels: [], selectedPadLayoutId: null, openBehaviorTreeId: null, savedLayouts: [], panelCatalog: [], fetchedAt: Date.now() },
+  workspace: {
+    connectionStatus: 'connected',
+    openPanels: [],
+    selectedPadLayoutId: null,
+    openBehaviorTreeId: null,
+    savedLayouts: [],
+    panelCatalog: [],
+    fetchedAt: Date.now(),
+  },
   padLibrary: [],
   behaviorTreeLibrary: [],
   ...overrides,
@@ -20,6 +28,27 @@ const compose = (input: Partial<Parameters<typeof composeAssistantSystemPrompt>[
   });
 
 describe('composeAssistantSystemPrompt', () => {
+  it('budgets escaped native context without dropping instructions or slicing observation JSON', () => {
+    const prompt = composeNativeSystemPrompt({
+      settings: { systemContext: '', robotContext: '', mode: 'goal' },
+      autoContext: autoContext(),
+      needs: { behaviorTree: true, pad: true, rosAction: false, workspace: true },
+      pinnedChips: [
+        {
+          id: 'huge',
+          label: 'Large capture',
+          source: 'ros',
+          automatic: true,
+          fetchedAt: Date.now(),
+          value: '"'.repeat(80_000),
+        },
+      ],
+    });
+    expect(JSON.stringify({ ok: true, value: { systemPrompt: prompt } }).length).toBeLessThan(128 * 1024);
+    expect(prompt).toContain('Context omitted for budget: Large capture');
+    expect(prompt).toContain('Goal mode');
+    expect(prompt).toContain('operator review');
+  });
   /**
    * Without a capability section the model answers from general ROS knowledge: asked whether
    * Robo-Boy can measure the distance between two frames it replied "write a tf2_ros node", for
@@ -67,12 +96,26 @@ describe('composeAssistantSystemPrompt', () => {
 
   it('marks a stale ROS graph rather than presenting it as current', () => {
     const fresh = compose({
-      autoContext: autoContext({ ros: { resources: { topics: [], services: [], actions: [] } as never, fetchedAt: Date.now(), generation: 1, stale: false } }),
+      autoContext: autoContext({
+        ros: {
+          resources: { topics: [], services: [], actions: [] } as never,
+          fetchedAt: Date.now(),
+          generation: 1,
+          stale: false,
+        },
+      }),
     });
     expect(fresh).not.toContain('STALE');
 
     const stale = compose({
-      autoContext: autoContext({ ros: { resources: { topics: [], services: [], actions: [] } as never, fetchedAt: Date.now(), generation: 0, stale: true } }),
+      autoContext: autoContext({
+        ros: {
+          resources: { topics: [], services: [], actions: [] } as never,
+          fetchedAt: Date.now(),
+          generation: 0,
+          stale: true,
+        },
+      }),
     });
     expect(stale).toContain('STALE');
   });
@@ -98,8 +141,10 @@ describe('composeAssistantSystemPrompt', () => {
     expect(prompt).toContain('## Items the user explicitly pinned for this turn');
   });
 
-  it('includes the user\'s own instructions when they set them', () => {
-    const prompt = compose({ settings: { systemContext: 'Answer in metric units.', robotContext: 'Two-wheeled rover.' } });
+  it("includes the user's own instructions when they set them", () => {
+    const prompt = compose({
+      settings: { systemContext: 'Answer in metric units.', robotContext: 'Two-wheeled rover.' },
+    });
 
     expect(prompt).toContain('Additional assistant instructions:\nAnswer in metric units.');
     expect(prompt).toContain('Robot and mission context:\nTwo-wheeled rover.');

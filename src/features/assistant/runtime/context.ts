@@ -30,7 +30,7 @@ export function compactSessionHistory(messages: ModelMessage[], charBudget: numb
     if (used + count > charBudget) {
       if (index === turns.length - 1)
         throw new Error(
-          'Current request exceeds the model context allowance. Reduce attachments or raise the verified context-window setting.'
+          'The current request is too large after automatic context compaction. Reduce attachments or split it into smaller requests; completed changes are preserved.'
         );
       break;
     }

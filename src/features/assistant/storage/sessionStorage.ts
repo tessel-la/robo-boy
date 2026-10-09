@@ -34,10 +34,24 @@ function safeMessage(message: StoredAssistantMessage): StoredAssistantMessage {
 export interface SavedAgentSession {
   id: string;
   title: string;
+  titleEdited?: boolean;
   createdAt: number;
   updatedAt: number;
   archived: boolean;
   messages: StoredAssistantMessage[];
+}
+export function snapshotAgentSession(
+  session: SavedAgentSession,
+  messages: StoredAssistantMessage[]
+): SavedAgentSession {
+  return {
+    ...session,
+    messages,
+    updatedAt: Date.now(),
+    title: session.titleEdited
+      ? session.title
+      : messages.find(message => message.role === 'user')?.content.slice(0, 80) || session.title,
+  };
 }
 export interface AgentSessions {
   version: 1;
@@ -76,6 +90,8 @@ export function loadAgentSessions(scope: string, legacy: StoredAssistantMessage[
           .slice(-20)
           .map((item: SavedAgentSession) => ({
             ...item,
+            title: item.title.slice(0, 80),
+            titleEdited: item.titleEdited === true,
             messages: item.messages
               .filter(
                 message =>

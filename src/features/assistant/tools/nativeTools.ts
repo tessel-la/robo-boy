@@ -94,7 +94,7 @@ export const HOST_TOOL_DEFINITIONS: readonly HostToolDefinition[] = [
   {
     name: 'save_document',
     description:
-      'Validate a Pad or behavior tree authoring document. Under the default review policy, stage a preview for operator approval; awaiting-review means not saved. With explicitly enabled automatic authoring, save with a checkpoint. Read existing documents first and include baseRevision. Never executes a BT or activates robot controls.',
+      'Validate a Pad or behavior tree authoring document and stage a preview for operator approval; awaiting-review means not saved. Read existing documents first and include baseRevision. Never executes a BT or activates robot controls.',
     inputSchema: object(
       {
         kind: { type: 'string', enum: ['pad', 'behaviorTree'] },
@@ -113,7 +113,7 @@ export const HOST_TOOL_DEFINITIONS: readonly HostToolDefinition[] = [
   {
     name: 'patch_tree',
     description:
-      'Stage targeted edits to a behavior tree for review (or save with a checkpoint under explicit automatic authoring). Use complete persisted nodes/edges from read_document. Preserve unrelated graph elements. Requires baseRevision; never runs the tree.',
+      'Stage targeted edits to a behavior tree for review. Use complete persisted nodes/edges from read_document. Preserve unrelated graph elements. Requires baseRevision; never runs the tree.',
     inputSchema: object({
       id: name,
       baseRevision: name,
@@ -138,7 +138,7 @@ export const HOST_TOOL_DEFINITIONS: readonly HostToolDefinition[] = [
   {
     name: 'patch_pad',
     description:
-      'Stage validated targeted edits to a Pad for review (or save with a checkpoint under explicit automatic authoring), preserving unrelated controls. Read the document first. upsertComponents replaces/adds complete components; removal is explicit. Saving does not activate changed robot controls.',
+      'Stage validated targeted edits to a Pad for review, preserving unrelated controls. Read the document first. upsertComponents replaces/adds complete components; removal is explicit. Saving does not activate changed robot controls.',
     inputSchema: object(
       {
         id: name,
@@ -191,7 +191,7 @@ export const HOST_TOOL_DEFINITIONS: readonly HostToolDefinition[] = [
   {
     name: 'update_plan',
     description:
-      'Keep a concise task checklist. Mark an item done only with actual evidence; do not expose private chain of thought.',
+      'Before a multi-step request, publish a concise task checklist. Update it after actual outcomes. Use waiting for operator approval, blocked for a real blocker, and done only with evidence. Do not expose private chain of thought.',
     inputSchema: object({
       tasks: {
         type: 'array',
@@ -200,7 +200,7 @@ export const HOST_TOOL_DEFINITIONS: readonly HostToolDefinition[] = [
           {
             id: name,
             label: name,
-            status: { type: 'string', enum: ['pending', 'running', 'done', 'blocked'] },
+            status: { type: 'string', enum: ['pending', 'running', 'done', 'blocked', 'waiting'] },
             evidence: { type: 'string', maxLength: 2000 },
           },
           ['id', 'label', 'status']

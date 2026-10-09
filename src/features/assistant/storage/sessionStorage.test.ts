@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { loadAgentSessions, newAgentSession, storeAgentSessions } from './sessionStorage';
+import { loadAgentSessions, newAgentSession, snapshotAgentSession, storeAgentSessions } from './sessionStorage';
 import type { StoredAssistantMessage } from '../types';
 const proposal: StoredAssistantMessage = {
   role: 'assistant',
@@ -21,6 +21,22 @@ const proposal: StoredAssistantMessage = {
 };
 beforeEach(() => localStorage.clear());
 describe('robot-scoped recoverable chats', () => {
+  it('derives fresh chat titles but preserves operator renames through snapshots and reload', () => {
+    const empty = newAgentSession();
+    const messages = [{ role: 'user' as const, content: 'Inspect joints', createdAt: 1 }];
+    expect(snapshotAgentSession(empty, messages).title).toBe('Inspect joints');
+    const renamed = snapshotAgentSession({ ...empty, title: 'Robot checks', titleEdited: true }, messages);
+    storeAgentSessions('A', { version: 1, activeId: renamed.id, sessions: [renamed] });
+    const restored = loadAgentSessions('A', []).sessions[0];
+    expect(snapshotAgentSession(restored, [{ ...messages[0], content: 'New request' }]).title).toBe('Robot checks');
+  });
+  it('does not restore a deleted chat on reload', () => {
+    const deleted = newAgentSession([{ role: 'user', content: 'Delete me', createdAt: 1 }]);
+    const kept = newAgentSession();
+    storeAgentSessions('A', { version: 1, activeId: deleted.id, sessions: [deleted, kept] });
+    storeAgentSessions('A', { version: 1, activeId: kept.id, sessions: [kept] });
+    expect(loadAgentSessions('A', []).sessions.map(item => item.id)).toEqual([kept.id]);
+  });
   it('migrates legacy text into one chat, then isolates robot scopes', () => {
     const legacy = [{ role: 'user' as const, content: 'Robot A', createdAt: 1 }];
     const first = loadAgentSessions('robot-A', legacy);

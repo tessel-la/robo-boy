@@ -17,6 +17,10 @@ vi.mock('../providers/index', async importOriginal => {
       if (!raw) return 'Tool work completed.';
       let response: Record<string, any>;
       try { response = JSON.parse(raw); } catch { return raw; }
+      if (response.kind === 'tool') {
+        observation = await request.tools!.execute(response.name, response.input, crypto.randomUUID());
+        continue;
+      }
       if (response.kind === 'explanation') return response.message;
       if (response.kind === 'clarification') return response.question;
       if (raw === previous) return response.summary || 'Tool work completed.';
@@ -78,6 +82,35 @@ describe('GlobalAssistant', () => {
     return ref;
   };
 
+  it('keeps a tool question in history after answering and completes the same run', async () => {
+    sendAssistantChatMock.mockResolvedValueOnce(JSON.stringify({ kind: 'tool', name: 'ask_user', input: { question: 'Which home pose?' } })).mockResolvedValueOnce('Current pose selected.');
+    renderOpenAssistant();
+    fireEvent.change(screen.getByLabelText('Ask the assistant'), { target: { value: 'Prepare Home' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(await screen.findByText('Which home pose?')).toBeVisible();
+    fireEvent.change(screen.getByLabelText('Continue the conversation'), { target: { value: 'Current measured pose' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(await screen.findByText('Current pose selected.')).toBeVisible();
+    expect(document.querySelectorAll('.assistant-message.user')).toHaveLength(2);
+    expect(screen.getByText('Which home pose?')).toBeVisible();
+    expect(localStorage.getItem('robo-boy-assistant-conversation-v1')).toContain('Which home pose?');
+  });
+  it('renames and deletes the last chat without resurrecting its legacy history', async () => {
+    sendAssistantChatMock.mockResolvedValue('Done.');
+    renderOpenAssistant();
+    fireEvent.change(screen.getByLabelText('Ask the assistant'), { target: { value: 'Inspect joints' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await screen.findByText('Done.');
+    fireEvent.click(screen.getByRole('button', { name: 'Chats' }));
+    fireEvent.click(screen.getByLabelText('Rename chat Inspect joints'));
+    fireEvent.change(screen.getByLabelText('Chat name'), { target: { value: 'Daily check' } });
+    fireEvent.click(screen.getByText('Save name'));
+    expect(await screen.findByRole('button', { name: 'Daily check Current' })).toBeVisible();
+    fireEvent.click(screen.getByLabelText('Delete chat Daily check'));
+    fireEvent.click(screen.getByText('Delete permanently'));
+    expect(await screen.findByRole('button', { name: 'New chat Current' })).toBeVisible();
+    expect(localStorage.getItem('robo-boy-assistant-conversation-v1')).not.toContain('Inspect joints');
+  });
   it('docks on a tall phone and takes over short or keyboard-reduced viewports', () => {
     expect(resolveCompactAssistantFrame({ viewportTop: 0, viewportHeight: 210, viewportWidth: 390, toolbarBottom: 48 }))
       .toEqual({ top: 48, height: 162, workspaceInset: 0, takeover: true });
@@ -129,7 +162,7 @@ describe('GlobalAssistant', () => {
       request.onThinking?.('Reading current pose.');
       return JSON.stringify({ kind: 'contextRequest', reads: [{ kind: 'topic', name: '/joint_states' }, { kind: 'schema', resource: 'action', name: '/home' }] });
     }).mockResolvedValueOnce(JSON.stringify({ kind: 'padProposal', layout: { name: 'Captured Home', components: [{ type: 'button', action: { type: 'action', name: '/home', messageType: type }, config: {} }] } }))
-      .mockResolvedValueOnce(JSON.stringify(proposal(10))).mockResolvedValueOnce(JSON.stringify(proposal(20)));
+      .mockResolvedValueOnce(JSON.stringify(proposal(10))).mockResolvedValueOnce('Home ready for review.').mockResolvedValueOnce(JSON.stringify(proposal(20)));
     const review = vi.fn();
     renderOpenAssistant({ ros: { isConnected: true, getTopics: vi.fn(), callOnConnection: vi.fn() } as never, isConnected: true, onReviewPadProposal: review });
     fireEvent.change(screen.getByLabelText('Ask the assistant'), { target: { value: 'Use the current joint pose as Home and add its button to the Pad' } });
@@ -138,12 +171,14 @@ describe('GlobalAssistant', () => {
     expect(review.mock.calls[0][0].components[0].eventOperations.press.payload.trajectory.points[0].positions).toEqual([0.42]);
     expect(sample).toHaveBeenCalledOnce();
     expect(document.querySelectorAll('.assistant-message.user')).toHaveLength(1);
+    fireEvent.click(await screen.findByText('Thinking', { exact: true }));
     await waitFor(() => expect(document.querySelector('.assistant-message.assistant .assistant-thinking')).toHaveTextContent('Reading current pose.'));
     expect(JSON.stringify(sendAssistantChatMock.mock.calls[2][0].observation)).toContain('no payload');
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled());
     fireEvent.change(screen.getByLabelText('Continue the conversation'), { target: { value: 'Make that 20 seconds' } });
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
     await waitFor(() => expect(screen.getByRole('button', { name: 'Review in Pad editor' })).toBeInTheDocument());
-    const followUp = sendAssistantChatMock.mock.calls[3][0];
+    const followUp = sendAssistantChatMock.mock.calls[4][0];
     expect(followUp.systemPrompt).toContain('joint_verified_A');
     expect(followUp.systemPrompt).toContain('## Authoring formats');
     expect(sample).toHaveBeenCalledOnce();

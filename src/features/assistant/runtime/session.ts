@@ -11,7 +11,7 @@ export interface PendingInput {
 export interface AgentTask {
   id: string;
   label: string;
-  status: 'pending' | 'running' | 'done' | 'blocked';
+  status: 'pending' | 'running' | 'done' | 'blocked' | 'waiting';
   evidence?: string;
 }
 export interface AgentEvent {
@@ -23,6 +23,7 @@ export interface AgentEvent {
   status: 'running' | 'done' | 'failed' | 'cancelled' | 'paused';
   detail?: string;
   parentId?: string;
+  tasks?: AgentTask[];
 }
 export class AgentYield extends Error {
   constructor() {
@@ -82,9 +83,20 @@ export class AgentRun {
     status: AgentEvent['status'],
     detail?: string,
     id: string = createUuid(),
-    parentId?: string
+    parentId?: string,
+    tasks?: AgentTask[]
   ): void {
-    const event: AgentEvent = { id, runId: this.id, at: Date.now(), type, label, status, detail, parentId };
+    const event: AgentEvent = {
+      id,
+      runId: this.id,
+      at: Date.now(),
+      type,
+      label,
+      status,
+      detail,
+      parentId,
+      ...(tasks ? { tasks: tasks.map(task => ({ ...task })) } : {}),
+    };
     const old = this.events.findIndex(item => item.id === id);
     if (old >= 0) this.events[old] = event;
     else this.events.push(event);
@@ -117,10 +129,25 @@ export class AgentRun {
     question.resolve(text);
     return true;
   }
-  ask(question: string): Promise<string> {
+  updatePlan(tasks: AgentTask[]): void {
+    this.tasks = tasks.map(task => ({ ...task }));
+    this.emit(
+      'task',
+      'Task checklist',
+      tasks.length && tasks.every(task => task.status === 'done')
+        ? 'done'
+        : tasks.some(task => task.status === 'waiting' || task.status === 'blocked')
+          ? 'paused'
+          : 'running',
+      undefined,
+      `${this.id}:plan`,
+      undefined,
+      this.tasks
+    );
+  }
+  ask(question: string, id = createUuid()): Promise<string> {
     this.controller.signal.throwIfAborted();
     if (this.question) throw new Error('A question is already waiting for an answer.');
-    const id = createUuid();
     this.emit('question', question, 'running', undefined, id);
     return new Promise((resolve, reject) => {
       this.question = { id, label: question, resolve, reject };
@@ -137,30 +164,44 @@ export class AgentRun {
       controller = new AbortController();
     const cancel = () => controller.abort(this.controller.signal.reason);
     this.controller.signal.addEventListener('abort', cancel, { once: true });
-    const result = this.investigate(task, execute, controller, id)
-      .finally(() => this.controller.signal.removeEventListener('abort', cancel));
+    const result = this.investigate(task, execute, controller, id).finally(() =>
+      this.controller.signal.removeEventListener('abort', cancel)
+    );
     this.children.set(id, { controller, cancelled: false, result, task, execute });
     return id;
   }
-  private async investigate(task: string, execute: (task: string, signal: AbortSignal, id: string) => Promise<unknown>, controller: AbortController, id: string, label = task): Promise<HostToolResult> {
+  private async investigate(
+    task: string,
+    execute: (task: string, signal: AbortSignal, id: string) => Promise<unknown>,
+    controller: AbortController,
+    id: string,
+    label = task
+  ): Promise<HostToolResult> {
     let rejectAbort!: (cause: unknown) => void;
-    const cancelled = new Promise<never>((_resolve, reject) => { rejectAbort = reject; });
+    const cancelled = new Promise<never>((_resolve, reject) => {
+      rejectAbort = reject;
+    });
     const abort = () => rejectAbort(controller.signal.reason);
     controller.signal.addEventListener('abort', abort, { once: true });
     try {
       controller.signal.throwIfAborted();
       this.emit('child', label, 'running', undefined, id);
-      const value = await Promise.race([Promise.resolve().then(() => {
-        controller.signal.throwIfAborted();
-        return execute(task, controller.signal, id);
-      }), cancelled]);
+      const value = await Promise.race([
+        Promise.resolve().then(() => {
+          controller.signal.throwIfAborted();
+          return execute(task, controller.signal, id);
+        }),
+        cancelled,
+      ]);
       controller.signal.throwIfAborted();
       this.emit('child', label, 'done', undefined, id);
       return { ok: true, value };
     } catch (cause) {
       this.emit('child', label, controller.signal.aborted ? 'cancelled' : 'failed', String(cause), id);
       return { ok: false, error: cause instanceof Error ? cause.message : String(cause) };
-    } finally { controller.signal.removeEventListener('abort', abort); }
+    } finally {
+      controller.signal.removeEventListener('abort', abort);
+    }
   }
   messageChild(id: string, task: string): void {
     const child = this.children.get(id);
@@ -216,7 +257,7 @@ export class InputQueue {
   ): PendingInput {
     if (!text.trim() && !attachments.length) throw new Error('A queued message cannot be empty.');
     const item = { id: createUuid(), text: text.trim(), delivery, attachments: [...attachments] };
-    const priority = (mode: InputDelivery) => mode === 'interrupt' ? 0 : mode === 'steer' ? 1 : 2;
+    const priority = (mode: InputDelivery) => (mode === 'interrupt' ? 0 : mode === 'steer' ? 1 : 2);
     const next = this.items.findIndex(pending => priority(pending.delivery) > priority(delivery));
     if (next < 0) this.items.push(item);
     else this.items.splice(next, 0, item);

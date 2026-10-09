@@ -8,7 +8,13 @@ Robo-Boy has one global AI assistant, reachable from anywhere in the connected a
 2. On desktop it opens on the right and can be moved/resized. It is non-modal; workspace controls remain live. Mobile portrait docks into the workspace with a resizable boundary; landscape uses a side panel. Safe-area and visual-viewport handling keep the composer reachable above the keyboard, and the system back gesture closes it.
 3. Ask a question, or bring something with it. Files can be dropped anywhere on the panel or picked with the paperclip; an image shows as a thumbnail and opens full size when clicked. The microphone records a clip you can play back before sending, and `To text` converts it instead — a recording is sent as audio to providers that read audio (Gemini, and the OpenAI chat-completions shape), and refused with that suggestion for the ones that cannot (Anthropic, Ollama).
 4. `Enter` sends and `Shift+Enter` starts a new line. An in-progress IME composition never submits.
-5. Local workspace edits can be applied directly. Pad/BT authoring defaults to **Review before saving**: Pads open in their editor for Save/Cancel; trees preview on their owning canvas for Accept/Reject. A staged proposal is not a saved document. Explicit **Automatic authoring with Undo** is available in settings; expand **Changes** for its diff and conflict-safe Undo. Saved Pad controls require **Activate updated controls**; a saved tree is not a running tree.
+5. Local workspace edits can be applied directly. Pad/BT authoring requires operator review: Pads open in their editor for Save/Cancel; trees preview on their owning canvas for Accept/Reject. Without an open tree canvas, the proposal card offers explicit acceptance into the library or rejection. A staged proposal is not a saved document. There is no authoring-policy settings switch. Saved Pad controls require **Activate updated controls**; a saved tree is not a running tree. Previous journal entries retain conflict-safe Undo.
+
+Mode, model and supported reasoning effort are directly accessible above the composer. **Edit**
+allows local app edits and reviewed authoring; **Goal** tracks a bounded objective and verifies its
+outcomes; **Plan** investigates and plans without edits; **Ask** answers without edits. Goal is not
+permission to execute the robot or an indefinite background scheduler. Controls are locked during
+a task; Stop first to change inference configuration. Custom workflows remain optional.
 
 ### Native agent runtime
 
@@ -29,9 +35,13 @@ read-only investigations. Each child has its own ten-step/read-tool limits. Plan
 spawn/wait/inspect/message/cancel operations, usage events and per-call status are visible.
 Three identical tool failures pause continuation; successful effects are not blindly replayed.
 Context compaction retains complete tool/result exchanges and a bounded completed-effect ledger.
-The model context-window setting is an operator-verified limit, not inferred model metadata.
+Context compaction and bounded retrieval are automatic; there is no manual context-window setting.
+Provider limits remain finite. If the current request alone is too large, reduce attachments or
+split the request. Unknown model IDs do not imply an invented context capacity.
 Native host calls are dispatched serially and receive deadlines when dispatched, not while queued.
-Timeouts report the owning tool or task deadline. Stop/failure preserves partial assistant text,
+Timeouts report the owning tool or task deadline. Invalid/oversized host replies settle immediately,
+rather than leaving a rejected checkpoint alive until its timeout. Refreshed prompts do not repeat
+new tool observations already paired in native history. Stop/failure preserves partial assistant text,
 thinking and canceled activity in the transcript, clearly marked incomplete; completed mutations
 are not silently retried.
 
@@ -61,18 +71,24 @@ manual edits are not overwritten by Undo.
 
 Settings (provider, model, API key, instructions) live in the gear icon inside the panel. Preferences persist in this browser; current Electron shells own API-key persistence natively.
 
-The header's **Chats** button opens searchable chat rows, archived chats, switching, fork and export controls.
+The header's **Chats** button opens searchable chat rows, archived chats, switching, rename, permanent
+delete, fork and export controls. A manual name survives later messages. Deletion requires confirmation,
+removes the local conversation, and stops that chat's active task; it does not delete robot documents
+or provider-side records.
 Chats and Settings replace the conversation body; Back or Escape returns to the conversation.
 Tool activity, watch status, queued messages and **Changes** live in the scrollable transcript,
 not the fixed composer. Tool results expand individually, with explicit Running/Done/Failed
 status words; token accounting has a separate disclosure. The composer has one input and one
-action row. **Message options** holds mode, model/settings, drawing and running-task delivery
-choices, keeping optional controls out of the resting panel. During a task, Stop remains available
+action row. **Message options** appears during a task for delivery choices; drawing is not part of
+chat. During a task, Stop remains available
 while drafting a follow-up. Replies and provider-exposed thinking share a semantic GFM Markdown
 renderer (tables, lists, code and safe links); user messages remain literal editable text.
 Tables/code scroll within their blocks. Raw HTML is never executed and Markdown images do not
 load remote URLs. Streaming follows only when already near the bottom; **Latest message** returns
-to the live reply without pulling users away from older messages.
+to the live reply without pulling users away from older messages. Multi-step tasks expose a checklist
+with Pending, In progress, Waiting for approval/input, Blocked and Done states. Approval is not
+completion. Agent questions remain in the transcript after the user's answer. Closed activity/context
+disclosures do not render invisible list markers into copied chat text.
 See [source comparison and remaining boundaries](assistant-ui-review.md).
 
 The assistant follows the handbook's [Robo-Boy product UI](https://github.com/tessel-la/tessella-handbook/blob/main/design/product-ui.md):
@@ -276,8 +292,8 @@ So the assistant's self-description is data, not prose. Each capability is an `A
 | Live values shown on a Pad | | ✅ (each displayed topic read once, formatted as the Pad shows it) | | |
 | Connection tabs | ✅ (labels and status) | | ✅ switch, open the connect form, close another tab | ❌ closing the tab the conversation runs in |
 | App settings: version, theme, installed panels, the assistant's provider and model | ✅ | | ✅ theme, offer or hide an installed panel, open the panel manager | ❌ installing or removing a panel (prepared for the user to review and apply), API keys and tokens |
-| Pad create / repair | | ✅ current editor draft | ✅ review-first authoring; optional automatic saves with Undo; activation stays manual | |
-| Behavior Tree create / edit | | ✅ current editor draft | ✅ review-first authoring; optional automatic saves with Undo; execution stays manual | |
+| Pad create / repair | | ✅ current editor draft | ✅ editor approval required; activation stays manual | |
+| Behavior Tree create / edit | | ✅ current editor draft | ✅ explicit approval required; execution stays manual | |
 | Topic publish / service call / action goal | | | ✅ **review-only** — shown as a card, never run | |
 | External panel JSON / internals | | | | ❌ (the assistant sees an installed panel's name, version and whether it is offered, never its contents; it generates Pads, not external panels) |
 | ROS 2 lifecycle state | | | | ❌ (see [Known limitations](#known-limitations)) |
@@ -321,7 +337,7 @@ A mounted `BehaviorTreePanel` registers a `BehaviorTreeAssistantBridge` (`getCur
 
 A Pad proposal is handed to `MainControlView`, which opens the existing Pad editor in create or edit mode against the proposed layout. Nothing is written to the Pad library until the user saves there.
 
-Native authoring saves also notify the Pad catalog, so a newly saved document immediately appears
+Operator-approved saves also notify the Pad catalog, so a newly saved document immediately appears
 in panel pickers. Workspace tools resolve Pad IDs from current storage, including a save followed
 by selection in the same task, rather than from a cached menu snapshot. Explicit unknown IDs are
 reported as failures, never silently replaced with the first template. Updating an existing Pad

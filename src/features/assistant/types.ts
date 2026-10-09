@@ -9,14 +9,11 @@ import type { WorkspaceEditOperation, WorkspaceEditResult } from './tools/worksp
 export type { AssistantProviderId };
 
 export interface AssistantSettings {
-  mode?: 'agent' | 'ask' | 'plan';
-  /** Preview Pad/BT authoring by default; automatic library saves require an operator preference. */
-  authoringMode?: 'review' | 'automatic';
+  mode?: 'edit' | 'goal' | 'ask' | 'plan';
   monitorEnabled?: boolean;
   monitorBackground?: boolean;
   monitorDurationMinutes?: number;
   monitorInferenceLimit?: number;
-  contextWindowTokens?: number;
   agentProfileId?: string;
   provider: AssistantProviderId;
   authMode?: import('../../runtime/assistantSubscription').AssistantAuthMode;
@@ -150,7 +147,13 @@ export interface WorkspaceSnapshot {
   /** Every robot connection tab in this window; only the current one's robot is in the rest of the context. */
   connections?: {
     current: string | null;
-    tabs: Array<{ id: string; label: string; description: string; status: 'disconnected' | 'connecting' | 'connected'; current: boolean }>;
+    tabs: Array<{
+      id: string;
+      label: string;
+      description: string;
+      status: 'disconnected' | 'connecting' | 'connected';
+      current: boolean;
+    }>;
   };
   /** App-level settings and installed panels. Nothing here is secret: credentials never enter it. */
   app?: {
@@ -201,7 +204,13 @@ export interface AssistantAutoContext {
   rosCatalog?: { nodes: string[]; parameters: string[] };
   padLibrary: Array<{ id: string; name: string; isDefault: boolean; layout: CustomGamepadLayout }>;
   behaviorTreeLibrary: Array<{ id: string; name: string; tree: BehaviorTree }>;
-  pendingDocuments?: Array<{ id: string; documentId: string; kind: 'pad' | 'behaviorTree'; name: string; needsRevalidation: boolean }>;
+  pendingDocuments?: Array<{
+    id: string;
+    documentId: string;
+    kind: 'pad' | 'behaviorTree';
+    name: string;
+    needsRevalidation: boolean;
+  }>;
   interfaceSchemas?: {
     topics: Record<string, unknown>;
     services: Record<string, unknown>;

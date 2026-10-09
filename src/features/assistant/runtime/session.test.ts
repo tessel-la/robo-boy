@@ -2,6 +2,22 @@ import { describe, expect, it, vi } from 'vitest';
 import { AgentLimit, AgentRun, AgentYield, InputQueue } from './session';
 
 describe('agent run ownership', () => {
+  it('updates a stable checklist with truthful waiting and completion states', () => {
+    const run = new AgentRun(vi.fn());
+    run.updatePlan([
+      { id: 'open', label: 'Open panel', status: 'done' },
+      { id: 'approve', label: 'Operator review', status: 'waiting' },
+    ]);
+    const snapshot = run.events[0];
+    expect(snapshot.status).toBe('paused');
+    run.updatePlan([
+      { id: 'open', label: 'Open panel', status: 'done' },
+      { id: 'approve', label: 'Operator review', status: 'done', evidence: 'Accepted in editor' },
+    ]);
+    expect(run.events).toHaveLength(1);
+    expect(run.events[0]).toMatchObject({ id: snapshot.id, status: 'done' });
+    expect(snapshot.tasks?.[1].status).toBe('waiting');
+  });
   it('shares step and tool allowances and yields before another effect', () => {
     const run = new AgentRun(vi.fn(), 2, 2);
     run.beforeStep();
@@ -62,7 +78,13 @@ describe('agent run ownership', () => {
     queue.enqueue('Yes, current pose as Home', 'steer');
     queue.enqueue('First interrupt', 'interrupt');
     queue.enqueue('Second interrupt', 'interrupt');
-    expect(queue.items.map(item => item.text)).toEqual(['First interrupt', 'Second interrupt', 'X first, Y second', 'Yes, current pose as Home', 'Later']);
+    expect(queue.items.map(item => item.text)).toEqual([
+      'First interrupt',
+      'Second interrupt',
+      'X first, Y second',
+      'Yes, current pose as Home',
+      'Later',
+    ]);
   });
   it('does not start a child after immediate parent cancellation', async () => {
     const run = new AgentRun(vi.fn());
@@ -77,7 +99,13 @@ describe('agent run ownership', () => {
   it('settles cancellation even if a child transport ignores the signal, discarding late output', async () => {
     const run = new AgentRun(vi.fn());
     let finish!: (value: string) => void;
-    const id = await run.spawn('Read logs', () => new Promise(resolve => { finish = resolve; }));
+    const id = await run.spawn(
+      'Read logs',
+      () =>
+        new Promise(resolve => {
+          finish = resolve;
+        })
+    );
     await Promise.resolve();
     run.cancelChild(id);
     await expect(run.children.get(id)!.result).resolves.toMatchObject({ ok: false });

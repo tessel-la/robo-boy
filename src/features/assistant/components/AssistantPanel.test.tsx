@@ -35,7 +35,6 @@ const props = (patch: Partial<AssistantPanelProps> = {}): AssistantPanelProps =>
   onAttachFiles: vi.fn(),
   onRemoveAttachment: vi.fn(),
   onTranscribeAudio: vi.fn(),
-  onSketchAttach: vi.fn(),
   settings: getDefaultAssistantSettings(),
   resolvedBaseUrl: 'http://localhost:11434/v1',
   onProviderChange: vi.fn(),
@@ -82,7 +81,26 @@ describe('assistant panel hierarchy', () => {
     expect(screen.getByRole('button', { name: 'Repair Pad Chat' })).toBeVisible();
   });
   it('renders live and completed answers and thinking with the same Markdown pipeline', async () => {
-    const { container } = render(<AssistantPanel {...props({ isGenerating: true, thinking: '**Verify** the interface.', streamedAnswer: '**Ready**\n\n| Axis | Speed |\n| --- | --- |\n| X | 0.05 |', messages: [{ id: 'completed', role: 'assistant', content: '**Saved** `pad`.', createdAt: 1, attachments: [], contextChipIds: [], checkpoint: null }] })} />);
+    const { container } = render(
+      <AssistantPanel
+        {...props({
+          isGenerating: true,
+          thinking: '**Verify** the interface.',
+          streamedAnswer: '**Ready**\n\n| Axis | Speed |\n| --- | --- |\n| X | 0.05 |',
+          messages: [
+            {
+              id: 'completed',
+              role: 'assistant',
+              content: '**Saved** `pad`.',
+              createdAt: 1,
+              attachments: [],
+              contextChipIds: [],
+              checkpoint: null,
+            },
+          ],
+        })}
+      />
+    );
     expect((await screen.findByText('Ready')).tagName).toBe('STRONG');
     expect(screen.getByRole('table')).toBeInTheDocument();
     expect(screen.getByText('Saved').tagName).toBe('STRONG');
@@ -135,17 +153,105 @@ describe('assistant panel hierarchy', () => {
     fireEvent.click(screen.getByRole('button', { name: /^Stop generating$/ }));
     expect(input.onStop).toHaveBeenCalledOnce();
   });
-  it('keeps optional controls out of the resting composer, with Escape returning focus', async () => {
-    render(<AssistantPanel {...props()} />);
-    expect(screen.queryByLabelText('Agent mode')).not.toBeInTheDocument();
+  it('offers the four modes, model and reasoning directly without drawing or policy controls', () => {
+    const input = props({ settings: { ...getDefaultAssistantSettings(), provider: 'openai', model: 'gpt-6.1-sol' } });
+    render(<AssistantPanel {...input} />);
+    expect(
+      Array.from(screen.getByLabelText('Agent mode').querySelectorAll('option')).map(option => option.textContent)
+    ).toEqual(['Edit', 'Goal', 'Plan', 'Ask']);
+    expect(screen.getByLabelText('Chat model')).toBeVisible();
+    expect(screen.getByLabelText('Thinking effort')).toBeVisible();
+    fireEvent.change(screen.getByLabelText('Agent mode'), { target: { value: 'goal' } });
+    expect(input.onUpdateSettings).toHaveBeenCalledWith({ mode: 'goal' });
     expect(screen.queryByRole('button', { name: 'Create sketch attachment' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Message options' })).not.toBeInTheDocument();
+  });
+  it('returns focus after closing running-task delivery options', async () => {
+    render(<AssistantPanel {...props({ isGenerating: true })} />);
     fireEvent.click(screen.getByRole('button', { name: 'Message options' }));
     expect(screen.getByRole('dialog', { name: 'Composer options' })).toBeVisible();
-    expect(screen.getByLabelText('Agent mode')).toHaveFocus();
+    expect(screen.getByLabelText('Message delivery')).toHaveFocus();
     fireEvent.keyDown(window, { key: 'Escape' });
     expect(screen.queryByRole('dialog', { name: 'Composer options' })).not.toBeInTheDocument();
     await waitFor(() => expect(screen.getByRole('button', { name: 'Message options' })).toHaveFocus());
     expect(screen.getByLabelText('Ask the assistant')).toBeVisible();
+  });
+  it('keeps closed context and tool lists out of copied chat text', () => {
+    const { container } = render(
+      <AssistantPanel
+        {...props({
+          messages: [
+            {
+              id: 'done',
+              role: 'assistant',
+              content: 'Done',
+              attachments: [],
+              contextChipIds: [],
+              checkpoint: null,
+              createdAt: 1,
+              events: [event],
+              contextUsed: [{ label: 'ROS graph', source: 'ros', ageSeconds: 1 }],
+            },
+          ],
+        })}
+      />
+    );
+    expect(container.querySelector('.assistant-context-used ul')).toBeNull();
+    expect(container.querySelector('.assistant-tool-events ol')).toBeNull();
+    fireEvent.click(screen.getByText('Context used (1)'));
+    expect(screen.getByText('ROS graph')).toBeVisible();
+  });
+  it('shows a live checklist and retains the agent question after its answer', () => {
+    const question = {
+      id: 'q',
+      role: 'assistant' as const,
+      content: 'Which home pose?',
+      attachments: [],
+      contextChipIds: [],
+      checkpoint: null,
+      createdAt: 1,
+    };
+    const events: AgentEvent[] = [
+      {
+        ...event,
+        id: 'plan',
+        type: 'task',
+        label: 'Task checklist',
+        status: 'paused',
+        tasks: [
+          { id: 'open', label: 'Open BT panel', status: 'done' },
+          { id: 'review', label: 'Accept or reject', status: 'waiting' },
+        ],
+      },
+      { ...event, id: 'q', type: 'question', label: question.content, status: 'running' },
+    ];
+    const { rerender } = render(<AssistantPanel {...props({ isGenerating: true, messages: [question], events })} />);
+    expect(screen.getByLabelText('Task checklist')).toBeVisible();
+    expect(screen.getByText('Waiting for approval/input')).toBeVisible();
+    expect(screen.getByText('Waiting for your answer. Reply below to continue this task.')).toBeVisible();
+    rerender(
+      <AssistantPanel
+        {...props({
+          messages: [question, { ...question, id: 'answer', role: 'user', content: 'Current measured pose' }],
+          events: [],
+        })}
+      />
+    );
+    expect(screen.getByText('Which home pose?')).toBeVisible();
+    expect(screen.getByText('Current measured pose')).toBeVisible();
+  });
+  it('renames chats and requires confirmation before permanent deletion', () => {
+    const input = props({ onRenameSession: vi.fn(), onDeleteSession: vi.fn() });
+    render(<AssistantPanel {...input} />);
+    fireEvent.click(screen.getByRole('button', { name: /^Chats$/ }));
+    fireEvent.click(screen.getByLabelText('Rename chat Repair Pad'));
+    fireEvent.change(screen.getByLabelText('Chat name'), { target: { value: 'Pad review' } });
+    fireEvent.click(screen.getByText('Save name'));
+    expect(input.onRenameSession).toHaveBeenCalledWith('other', 'Pad review');
+    fireEvent.click(screen.getByLabelText('Delete chat Repair Pad'));
+    expect(input.onDeleteSession).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByText('Delete permanently'));
+    expect(input.onDeleteSession).toHaveBeenCalledWith('other');
   });
   it('does not duplicate completed activity in the live-task footer', () => {
     render(
@@ -173,7 +279,17 @@ describe('assistant panel hierarchy', () => {
     expect(screen.queryByText('Old duplicate progress')).not.toBeInTheDocument();
   });
   it('keeps token accounting separate from the tool timeline', () => {
-    render(<AssistantPanel {...props({ isGenerating: true, events: [event, { ...event, id: 'usage', type: 'usage', label: 'Model usage', detail: '100 input · 20 output tokens' }] })} />);
+    render(
+      <AssistantPanel
+        {...props({
+          isGenerating: true,
+          events: [
+            event,
+            { ...event, id: 'usage', type: 'usage', label: 'Model usage', detail: '100 input · 20 output tokens' },
+          ],
+        })}
+      />
+    );
     expect(screen.getByText('Agent activity (1)')).toBeInTheDocument();
     expect(screen.getByText('Model usage (1 request)')).toBeInTheDocument();
     fireEvent.click(screen.getByText('Model usage (1 request)'));

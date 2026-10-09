@@ -37,7 +37,7 @@ import { normalizePadLayout } from '../tools/padGeneration';
 import type { BehaviorTree } from '../../behaviorTree/types';
 import type { PadDraftReader } from '../types';
 import { loadSkills } from '../runtime/skills';
-import { loadAgentSessions, newAgentSession, storeAgentSessions } from '../storage/sessionStorage';
+import { loadAgentSessions, newAgentSession, snapshotAgentSession, storeAgentSessions } from '../storage/sessionStorage';
 import { TopicMonitor, type MonitorStatus } from '../runtime/monitors';
 import { getDesktopBridge } from '../../../runtime/desktopBridge';
 import { loadAgentProfiles } from '../runtime/profiles';
@@ -303,7 +303,7 @@ const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
       if (loadedConversationScope !== conversationScope) return;
       saveAssistantConversation(messages.map(message => ({ role: message.role, content: message.content, createdAt: message.createdAt })), conversationScope);
       try {
-        storeAgentSessions(conversationScope, { ...sessions, sessions: sessions.sessions.map(session => session.id === sessions.activeId ? { ...session, updatedAt: Date.now(), title: messages.find(message => message.role === 'user')?.content.slice(0, 80) || session.title, messages } : session) });
+        storeAgentSessions(conversationScope, { ...sessions, sessions: sessions.sessions.map(session => session.id === sessions.activeId ? snapshotAgentSession(session, messages) : session) });
       } catch (cause) { setError(String(cause)); }
     }, [messages, conversationScope, loadedConversationScope, sessions]);
 
@@ -975,7 +975,7 @@ const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
         const profiles = loadAgentProfiles();
         const profile = profiles.find(item => item.id === settings.agentProfileId) ?? profiles[settings.agentProfileId ? 1 : 0];
         const loadedSkills = new Map<string, string>();
-        const skillContext = () => `\n## Enabled workflow catalog\n${JSON.stringify(skills.map(({ id, name, description }) => ({ id, name, description })))}\n## Agent profile catalog\n${JSON.stringify(profiles.map(({ id, name, description }) => ({ id, name, description })))}\n${profile.instructions}\n${[...loadedSkills.entries()].map(([id, instructions]) => `## Trusted loaded workflow ${id}\n${instructions}`).join('\n')}\nMode: ${settings.mode ?? 'agent'}. ${settings.mode === 'plan' ? 'Investigate and produce a plan; do not change app state.' : settings.mode === 'ask' || profile.readOnly ? 'Answer with evidence; do not change app state.' : settings.authoringMode === 'automatic' ? 'Apply validated authoring changes with checkpoints, not robot operations.' : 'Stage validated Pad and Behavior Tree changes for operator review. Awaiting review is not saved. Local workspace edits remain available; robot operations are forbidden.'}`;
+        const skillContext = () => `\n## Enabled workflow catalog\n${JSON.stringify(skills.map(({ id, name, description }) => ({ id, name, description })))}\n## Agent profile catalog\n${JSON.stringify(profiles.map(({ id, name, description }) => ({ id, name, description })))}\n${profile.instructions}\n${[...loadedSkills.entries()].map(([id, instructions]) => `## Trusted loaded workflow ${id}\n${instructions}`).join('\n')}\nMode: ${settings.mode ?? 'edit'}. ${settings.mode === 'plan' ? 'Investigate and produce a plan; do not change app state.' : settings.mode === 'ask' || profile.readOnly ? 'Answer with evidence; do not change app state.' : 'Stage validated Pad and Behavior Tree changes for operator review. Awaiting review is not saved. Local workspace edits remain available; robot operations are forbidden.'}`;
         const readSkill = (id: string) => { const skill = skills.find(item => item.id === id); if (!skill) throw new Error('No enabled skill with this id.'); loadedSkills.set(id, skill.instructions); return { name: skill.name, instructions: skill.instructions, scriptsExecuted: false }; };
         const integrationTool = async (name: string, input: Record<string, unknown>, signal: AbortSignal, readOnly: boolean) => {
           const integration = await import('../runtime/integrations');
@@ -984,19 +984,21 @@ const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
           if (!result.ok) throw new Error('The integration returned an error. Inspect its health and retry only if appropriate.');
           return result.value;
         };
+        const initialChipIds = new Set(turnChips.map(chip => chip.id));
         const request = () => {
             let thinkingInRound = false;
             const systemPrompt = composeNativeSystemPrompt({ settings, autoContext: buildAutoContext(discovery, interfaceSchemas), pinnedChips: turnChips, needs });
             return sendAssistantChat({
               settings: resolvedSettings, systemPrompt: systemPrompt + skillContext(), messages: chatMessages, signal: controller.signal, tools: hostTools,
-              contextWindowTokens: settings.contextWindowTokens,
               sessionId: `${sessions.activeId}:${generationAtSend}:${historyBranchRef.current}`,
               shouldYield: () => run.isSteering,
               beforeStep: run.beforeStep,
               onUsage: usage => run.emit('usage', 'Model usage', 'done', `${usage.inputTokens} input · ${usage.outputTokens} output tokens`),
               nativeHistory: nativeHistoryRef.current?.provider === `${resolvedSettings.provider}:${resolvedSettings.model}:${resolvedSettings.authMode}` ? nativeHistoryRef.current.messages : undefined,
               onNativeMessages: messages => { if (!controller.signal.aborted) nativeHistoryRef.current = JSON.stringify(messages).length <= 320_000 ? { provider: `${resolvedSettings.provider}:${resolvedSettings.model}:${resolvedSettings.authMode}`, messages } : undefined; },
-              refreshSystemPrompt: () => composeNativeSystemPrompt({ settings, autoContext: buildAutoContext(discovery, interfaceSchemas), pinnedChips: turnChips, needs }) + skillContext(),
+              // Native history already carries paired tool observations. Repeating every sample
+              // and schema in the checkpoint grows both inference context and the IPC envelope.
+              refreshSystemPrompt: () => composeNativeSystemPrompt({ settings, autoContext: buildAutoContext(discovery), pinnedChips: turnChips.filter(chip => !chip.id.startsWith('tool:') || initialChipIds.has(chip.id)), needs }) + skillContext(),
               onToken: text => { if (abortRef.current === controller && !controller.signal.aborted) { turnAnswer = (turnAnswer + text).slice(-256 * 1024); scheduleStreamUpdate(); } },
               onThinking: text => {
                 if (abortRef.current !== controller || controller.signal.aborted) return;
@@ -1091,22 +1093,9 @@ const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
               if (issues.length) throw new Error(issues.join(' '));
             }
             checkCurrent();
-            if (settings.authoringMode !== 'automatic') {
-              if (kind === 'pad') presentResponse({ kind: 'padProposal', layout: document as CustomGamepadLayout, issues: [], ...(baseRevision ? { baseRevision } : {}) });
-              else presentResponse({ kind: 'behaviorTree', tree: document as BehaviorTree });
-              return { status: 'awaiting-review', saved: false, reviewDocumentId: `proposal:${id}`, document, robotExecuted: false, controlsActivated: false };
-            }
-            const saved = readSavedDocument(kind, id);
-            const draftSnapshot = JSON.stringify(current ?? null);
-            const hasDraft = kind === 'pad' ? padDraftReaderRef.current?.()?.id === id : [...bridgesRef.current.values()].some(bridge => bridge.getCurrentTree()?.id === id);
-            const checkDraft = () => { checkCurrent(); if (hasDraft && JSON.stringify(readDocument(kind, id) ?? null) !== draftSnapshot) throw new Error('The editor draft changed during validation. Read it again before saving.'); };
-            const checkpoint = await documentJournal().save(kind, document, saved ? await documentRevision(saved) : undefined, checkDraft);
-            checkCurrent();
-            const draftUnchanged = JSON.stringify(readDocument(kind, id) ?? null) === JSON.stringify(current ?? null);
-            if (draftUnchanged && kind === 'pad') padDraftReaderRef.current?.replaceDraft?.(document as CustomGamepadLayout);
-            if (draftUnchanged && kind === 'behaviorTree') [...bridgesRef.current.values()].find(bridge => bridge.getCurrentTree()?.id === id)?.applyDocument?.(document as BehaviorTree);
-            setDocumentChanges(previous => [...previous, { id: checkpoint.id, label: `${kind === 'pad' ? 'Pad' : 'Behavior Tree'}: ${document.name}`, diff: documentDiff(checkpoint.before, document) }].slice(-20));
-            return { status: 'saved', checkpointId: checkpoint.id, document: readSavedDocument(kind, id), robotExecuted: false, controlsActivated: false };
+            if (kind === 'pad') presentResponse({ kind: 'padProposal', layout: document as CustomGamepadLayout, issues: [], ...(baseRevision ? { baseRevision } : {}) });
+            else presentResponse({ kind: 'behaviorTree', tree: document as BehaviorTree });
+            return { status: 'awaiting-review', saved: false, reviewDocumentId: `proposal:${id}`, document, robotExecuted: false, controlsActivated: false };
           },
           undoDocument: id => restoreDocument(id, checkCurrent),
           progress: reportActivity,
@@ -1159,8 +1148,13 @@ const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
               return { id: await run.spawn(String(input.task), (task, signal, id) => runChild(task, signal, id, selected)) };
             }
             if (name === 'inspect_agent') return run.events.filter(event => event.type === 'child');
-            if (name === 'update_plan') { run.tasks = input.tasks as typeof run.tasks; run.emit('task', 'Task checklist', 'running', JSON.stringify(run.tasks)); return run.tasks; }
-            if (name === 'ask_user') return { answer: await run.ask(String(input.question)) };
+            if (name === 'update_plan') { run.updatePlan(input.tasks as typeof run.tasks); return run.tasks; }
+            if (name === 'ask_user') {
+              const id = uuidv4();
+              const question = String(input.question);
+              pushMessage({ id, role: 'assistant', content: question, attachments: [], contextChipIds: [], checkpoint: null, createdAt: Date.now() });
+              return { answer: await run.ask(question, id) };
+            }
             const child = run.children.get(String(input.id));
             if (!child) throw new Error('No child with this id exists in the current task.');
             if (name === 'cancel_agent') { run.cancelChild(String(input.id)); return { cancelled: true }; }
@@ -1189,7 +1183,7 @@ const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
         observationsRef.current = [...turnChips.filter(chip => chip.automatic)].slice(-48);
 
         presentResponse({ kind: 'explanation', message: answer });
-        if (turnThinking || turnActivity.length) setMessages(previous => previous.map((message, index) => index === previous.length - 1 && message.role === 'assistant' ? { ...message, thinking: turnThinking, activity: [...turnActivity], events: [...run.events] } : message));
+        if (turnThinking || turnActivity.length || run.events.length) setMessages(previous => previous.map((message, index) => index === previous.length - 1 && message.role === 'assistant' ? { ...message, thinking: turnThinking, activity: [...turnActivity], events: [...run.events] } : message));
         setProgress([]);
       } catch (cause) {
         if (abortRef.current !== controller) return;
@@ -1202,7 +1196,7 @@ const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
             : isAbortError(cause) ? 'The model request was interrupted before completion.' : cause instanceof Error ? cause.message : 'The assistant request failed.';
           run.cancel();
           pushMessage({ id: uuidv4(), role: 'assistant', content: `${reason}\nCompleted changes and proposals are preserved; no edits were automatically retried.${turnAnswer ? `\n\nPartial response (not completed):\n${turnAnswer}` : ''}`, attachments: [], contextChipIds: [], checkpoint: null, createdAt: Date.now(), thinking: turnThinking, events: run.events.map(event => event.status === 'running' ? { ...event, status: 'cancelled' as const } : { ...event }) });
-          if (!wasCancelled) setError(reason);
+          // The failure is already an assistant message; do not repeat it in a second alert.
         }
       } finally {
         clearTimeout(streamUpdateTimer);
@@ -1251,7 +1245,7 @@ const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
       setAttachmentError('');
       saveAssistantConversation([], conversationScope);
       const created = newAgentSession();
-      setSessions(previous => ({ ...previous, activeId: created.id, sessions: [...previous.sessions.map(session => session.id === previous.activeId ? { ...session, messages: previousMessages } : session), created].slice(-20) }));
+      setSessions(previous => ({ ...previous, activeId: created.id, sessions: [...previous.sessions.map(session => session.id === previous.activeId ? snapshotAgentSession(session, previousMessages) : session), created].slice(-20) }));
     };
     const switchSession = (id: string) => {
       const next = sessions.sessions.find(item => item.id === id);
@@ -1261,9 +1255,21 @@ const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
       nativeHistoryRef.current = undefined;
       historyBranchRef.current = uuidv4();
       observationsRef.current = []; updatePinnedChips(() => []); setEvents([]); setProgress([]); setError('');
-      setSessions(previous => ({ ...previous, activeId: id, sessions: previous.sessions.map(session => session.id === previous.activeId ? { ...session, messages: previousMessages } : session) }));
+      setSessions(previous => ({ ...previous, activeId: id, sessions: previous.sessions.map(session => session.id === previous.activeId ? snapshotAgentSession(session, previousMessages) : session) }));
       const loaded = next.messages.map(message => ({ ...message, id: uuidv4(), attachments: [], contextChipIds: [], checkpoint: null, ...(message.response ? { proposedAtGeneration: -1 } : {}) }));
       historyRef.current = loaded; setMessages(loaded);
+    };
+    const deleteSession = (id: string) => {
+      if (!sessions.sessions.some(session => session.id === id)) return;
+      const remaining = sessions.sessions.filter(session => session.id !== id);
+      if (id !== sessions.activeId) { setSessions(previous => ({ ...previous, sessions: previous.sessions.filter(session => session.id !== id) })); return; }
+      const next = remaining[0] ?? newAgentSession();
+      abandonTurn(); abortContextWork();
+      nativeHistoryRef.current = undefined; historyBranchRef.current = uuidv4(); observationsRef.current = [];
+      updatePinnedChips(() => []); setClarificationSuggestions(undefined); setError(''); setPrompt(''); setAttachments([]);
+      const loaded = next.messages.map(message => ({ ...message, id: uuidv4(), attachments: [], contextChipIds: [], checkpoint: null, ...(message.response ? { proposedAtGeneration: -1 } : {}) }));
+      historyRef.current = loaded; setMessages(loaded);
+      setSessions({ ...sessions, activeId: next.id, sessions: remaining.length ? remaining : [next] });
     };
     const handleEditMessage = (messageIndex: number, nextText: string) => {
       const message = messages[messageIndex];
@@ -1303,15 +1309,6 @@ const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
       } catch (cause) {
         setAttachmentError(cause instanceof Error ? cause.message : 'Could not attach that file.');
       }
-    };
-    const handleSketchAttach = (dataUrl: string) => {
-      const content = dataUrl.slice(dataUrl.indexOf(',') + 1);
-      const size = Math.ceil((content.length * 3) / 4);
-      setAttachmentError('');
-      if (attachments.length >= MAX_ATTACHMENTS) { setAttachmentError(`Attach up to ${MAX_ATTACHMENTS} files per message.`); return; }
-      if (size > MAX_ATTACHMENT_SIZE) { setAttachmentError('The sketch is larger than 5 MB. Clear some detail and try again.'); return; }
-      const timestamp = Date.now();
-      setAttachments(previous => [...previous, { id: `sketch:${timestamp}`, name: `sketch-${timestamp}.png`, mimeType: 'image/png', size, kind: 'image', content }]);
     };
     const handleReviewPad = async (messageId: string) => {
       const message = messages.find(item => item.id === messageId);
@@ -1365,11 +1362,13 @@ const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
         onMovePendingInput={(id, direction) => { inputQueueRef.current.move(id, direction); setPendingInputs([...inputQueueRef.current.items]); }}
         monitors={monitors}
         onStopMonitor={id => monitorsRef.current.get(id)?.stop()}
-        sessions={sessions.sessions.map(session => ({ id: session.id, archived: session.archived, title: session.id === sessions.activeId ? messages.find(message => message.role === 'user')?.content.slice(0, 80) || session.title : session.title }))}
+        sessions={sessions.sessions.map(session => session.id === sessions.activeId ? snapshotAgentSession(session, messages) : session)}
         activeSessionId={sessions.activeId}
         onSwitchSession={switchSession}
+        onRenameSession={(id, title) => { const name = title.trim().replace(/\s+/g, ' ').slice(0, 80); if (name) setSessions(previous => ({ ...previous, sessions: previous.sessions.map(session => session.id === id ? { ...session, title: name, titleEdited: true } : session) })); }}
+        onDeleteSession={deleteSession}
         onArchiveSession={id => setSessions(previous => ({ ...previous, sessions: previous.sessions.map(session => session.id === id ? { ...session, archived: !session.archived } : session) }))}
-        onForkSession={() => { abandonTurn(); nativeHistoryRef.current = undefined; historyBranchRef.current = uuidv4(); const created = newAgentSession(historyRef.current); setSessions(previous => ({ ...previous, activeId: created.id, sessions: [...previous.sessions.map(session => session.id === previous.activeId ? { ...session, messages: historyRef.current } : session), created].slice(-20) })); }}
+        onForkSession={() => { abandonTurn(); nativeHistoryRef.current = undefined; historyBranchRef.current = uuidv4(); const created = newAgentSession(historyRef.current); setSessions(previous => ({ ...previous, activeId: created.id, sessions: [...previous.sessions.map(session => session.id === previous.activeId ? snapshotAgentSession(session, historyRef.current) : session), created].slice(-20) })); }}
         documentChanges={documentChanges}
         onUndoDocument={id => { void restoreDocument(id).catch(cause => setError(String(cause))); }}
         onPendingInputChange={(id, text) => { inputQueueRef.current.update(id, text); setPendingInputs([...inputQueueRef.current.items]); }}
@@ -1392,7 +1391,6 @@ const GlobalAssistant = forwardRef<GlobalAssistantHandle, GlobalAssistantProps>(
         onAttachFiles={handleAttachFiles}
         onTranscribeAudio={audio => transcribeAssistantAudio(audio, resolvedSettings)}
         onRemoveAttachment={id => setAttachments(previous => previous.filter(item => item.id !== id))}
-        onSketchAttach={handleSketchAttach}
         settings={settings}
         resolvedBaseUrl={resolvedSettings.baseUrl}
         onProviderChange={(provider: AssistantProviderId) => updateSettings({ provider, authMode: 'api-key', apiKey: '', thinkingEffort: undefined, ...getProviderDefaults(provider), ...(provider === 'ollama' ? { ollamaUseBackendHost: true } : {}) })}

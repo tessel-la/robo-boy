@@ -104,27 +104,35 @@ export class SubscriptionTools implements HostTools {
   reply(id: string, value: unknown): void {
     const pending = this.pending.get(id);
     if (!pending) throw new Error('Unknown or expired tool reply.');
-    if (
-      !value ||
-      typeof value !== 'object' ||
-      typeof (value as HostToolResult).ok !== 'boolean' ||
-      JSON.stringify(value).length > 20 * 1024 * 1024
-    )
-      throw new Error('Invalid tool result.');
-    const result = value as HostToolResult;
-    if (JSON.stringify({ ...result, image: undefined }).length > 128 * 1024)
-      throw new Error('Tool text result is too large.');
-    if (
-      result.image &&
-      (!['image/png', 'image/jpeg', 'image/webp', 'image/gif'].includes(result.image.mimeType) ||
-        typeof result.image.data !== 'string' ||
-        result.image.data.length > 16 * 1024 * 1024 ||
-        !/^[A-Za-z0-9+/]*={0,2}$/.test(result.image.data))
-    )
-      throw new Error('Invalid tool image.');
-    this.signal.throwIfAborted();
-    pending.cleanup();
-    pending.resolve(result);
+    try {
+      if (
+        !value ||
+        typeof value !== 'object' ||
+        typeof (value as HostToolResult).ok !== 'boolean' ||
+        JSON.stringify(value).length > 20 * 1024 * 1024
+      )
+        throw new Error('Invalid tool result.');
+      const result = value as HostToolResult;
+      if (JSON.stringify({ ...result, image: undefined }).length > 128 * 1024)
+        throw new Error('Tool text result is too large.');
+      if (
+        result.image &&
+        (!['image/png', 'image/jpeg', 'image/webp', 'image/gif'].includes(result.image.mimeType) ||
+          typeof result.image.data !== 'string' ||
+          result.image.data.length > 16 * 1024 * 1024 ||
+          !/^[A-Za-z0-9+/]*={0,2}$/.test(result.image.data))
+      )
+        throw new Error('Invalid tool image.');
+      this.signal.throwIfAborted();
+      pending.cleanup();
+      pending.resolve(result);
+    } catch (cause) {
+      // IPC rejects malformed/oversized replies. Do not leave their owning call alive until
+      // its deadline merely because the renderer's invoke rejection was handled locally.
+      pending.cleanup();
+      pending.reject(cause instanceof Error ? cause : new Error('Invalid host reply.'));
+      throw cause;
+    }
   }
 
   dispose(): void {

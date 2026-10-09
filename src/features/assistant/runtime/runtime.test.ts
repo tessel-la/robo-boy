@@ -345,7 +345,7 @@ describe('trusted extension configuration and context', () => {
     expect(JSON.stringify(compacted)).toContain('save_document');
     expect(JSON.stringify(compacted)).toContain('checkpointId');
     expect(compacted.some(message => message.role === 'tool')).toBe(false);
-    expect(() => compactSessionHistory([{ role: 'user', content: 'x'.repeat(2000) }], 100)).toThrow(/allowance/);
+    expect(() => compactSessionHistory([{ role: 'user', content: 'x'.repeat(2000) }], 100)).toThrow(/automatic context compaction/);
   });
   it('applies declarative tool blocks/reminders without granting capabilities or scripts', async () => {
     storeAgentHooks([

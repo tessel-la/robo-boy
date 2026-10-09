@@ -257,48 +257,71 @@ const AssistantSettingsPopover: React.FC<AssistantSettingsPopoverProps> = ({
           />
         </div>
       </section>
-      <section className="assistant-settings-section is-single"><AgentWorkflows /></section>
       <section className="assistant-settings-section is-single">
-        <label>Pad and Behavior Tree changes
-          <select value={settings.authoringMode ?? 'review'} onChange={event => onUpdate({ authoringMode: event.target.value as 'review' | 'automatic' })}>
-            <option value="review">Review before saving</option>
-            <option value="automatic">Automatic authoring with Undo</option>
-          </select>
-        </label>
-        <small>Review is the default. Robot motion and updated control activation always remain manual.</small>
+        <AgentWorkflows />
       </section>
-      <section className="assistant-settings-section is-single"><AgentProfiles selected={settings.agentProfileId} onSelect={(agentProfileId, model) => onUpdate({ agentProfileId, ...(model ? { model, thinkingEffort: undefined } : {}) })} /></section>
       <section className="assistant-settings-section is-single">
-        <details>
-          <summary>Model context budget</summary>
-          <label>Verified model context window (tokens)<input type="number" min={4096} max={2000000} step={1024} value={settings.contextWindowTokens ?? 32768} onChange={event => { const value = Number(event.target.value); if (Number.isInteger(value) && value >= 4096 && value <= 2000000) onUpdate({ contextWindowTokens: value }); }} /></label>
-          <p>Conservative token estimates reserve output space and compact complete native tool exchanges. Set this to the limit supported by your configured model/runtime.</p>
-        </details>
+        <AgentProfiles
+          selected={settings.agentProfileId}
+          onSelect={(agentProfileId, model) =>
+            onUpdate({ agentProfileId, ...(model ? { model, thinkingEffort: undefined } : {}) })
+          }
+        />
       </section>
-      <section className="assistant-settings-section is-single"><AgentIntegrations /></section>
-      <section className="assistant-settings-section is-single"><AgentHooks /></section>
+      <section className="assistant-settings-section is-single">
+        <AgentIntegrations />
+      </section>
+      <section className="assistant-settings-section is-single">
+        <AgentHooks />
+      </section>
       <section className="assistant-settings-section is-single">
         <details>
           <summary>Monitoring</summary>
           <label>
-            <input type="checkbox" checked={settings.monitorEnabled ?? false} onChange={event => onUpdate({ monitorEnabled: event.target.checked })} />
+            <input
+              type="checkbox"
+              checked={settings.monitorEnabled ?? false}
+              onChange={event => onUpdate({ monitorEnabled: event.target.checked })}
+            />
             Enable explicitly requested read-only topic watches
           </label>
-          <label>Watch expiry
-            <select value={settings.monitorDurationMinutes ?? 60} onChange={event => onUpdate({ monitorDurationMinutes: Number(event.target.value) })}>
-              <option value={15}>15 minutes</option><option value={60}>1 hour</option><option value={240}>4 hours</option><option value={1440}>24 hours</option>
-            </select>
-          </label>
-          <label>Maximum model analyses per watch
-            <select value={settings.monitorInferenceLimit ?? 1} onChange={event => onUpdate({ monitorInferenceLimit: Number(event.target.value) })}>
-              <option value={1}>1</option><option value={5}>5</option><option value={10}>10</option><option value={20}>20</option>
+          <label>
+            Watch expiry
+            <select
+              value={settings.monitorDurationMinutes ?? 60}
+              onChange={event => onUpdate({ monitorDurationMinutes: Number(event.target.value) })}
+            >
+              <option value={15}>15 minutes</option>
+              <option value={60}>1 hour</option>
+              <option value={240}>4 hours</option>
+              <option value={1440}>24 hours</option>
             </select>
           </label>
           <label>
-            <input type="checkbox" disabled={!getDesktopBridge()?.assistant?.setBackgroundActive} checked={settings.monitorBackground ?? false} onChange={event => onUpdate({ monitorBackground: event.target.checked })} />
+            Maximum model analyses per watch
+            <select
+              value={settings.monitorInferenceLimit ?? 1}
+              onChange={event => onUpdate({ monitorInferenceLimit: Number(event.target.value) })}
+            >
+              <option value={1}>1</option>
+              <option value={5}>5</option>
+              <option value={10}>10</option>
+              <option value={20}>20</option>
+            </select>
+          </label>
+          <label>
+            <input
+              type="checkbox"
+              disabled={!getDesktopBridge()?.assistant?.setBackgroundActive}
+              checked={settings.monitorBackground ?? false}
+              onChange={event => onUpdate({ monitorBackground: event.target.checked })}
+            />
             Keep Electron running in the tray for active watches
           </label>
-          <p>Analyses use the selected model/account. No inference on unchanged data. Watches stop on reconnect, expiry, allowance exhaustion or Quit; browser/mobile execution remains foreground-only.</p>
+          <p>
+            Analyses use the selected model/account. No inference on unchanged data. Watches stop on reconnect, expiry,
+            allowance exhaustion or Quit; browser/mobile execution remains foreground-only.
+          </p>
         </details>
       </section>
       <p className="assistant-key-note">
