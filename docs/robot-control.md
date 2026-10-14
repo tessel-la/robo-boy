@@ -11,7 +11,7 @@ every web, Tauri, and Electron client using that gateway; they have no UI toggle
 | --- | --- | --- |
 | `ROBOBOY_CONTROL_LOCKING_ENABLED` | `true` | Require one session to acquire exclusive control. Set `false` for shared control without acquisition, transfer, or ownership heartbeats. |
 | `ROBOBOY_CONTROL_IDLE_SECONDS` | `120` | Release an idle owner after this many seconds without accepted commands and with no outstanding work. Set `0` for no idle expiry. Applies only when locking is enabled. |
-| `ROBOBOY_CONTROL_OBSERVER_SERVICES` | empty | Comma-separated services that cannot change robot state and that every session may call without control, such as a panel backend's status or catalog. `*` matches one name segment and `**` any number. See [Observer services](#observer-services). |
+| `ROBOBOY_CONTROL_OBSERVER_SERVICES` | empty | Comma-separated services that cannot change robot state and that every session may call without control, such as status queries or sensor reads. `*` matches one name segment and `**` any number. See [Observer services](#observer-services). |
 
 For exclusive control with a 60 s idle timeout:
 
@@ -93,11 +93,11 @@ sessions with the same name, or grant control automatically.
 
 ## Observer services
 
-Some services only read or compute: a panel backend's status, a catalog, or a camera frame. List
-them on the robot host so every session can call them without control:
+Some services only read or compute, such as a status query, a configuration listing, or a sensor
+read. List them on the robot host so every session can call them without control:
 
 ```dotenv
-ROBOBOY_CONTROL_OBSERVER_SERVICES=/camera_capture/status,/camera_capture/snapshot,/calibration/catalog
+ROBOBOY_CONTROL_OBSERVER_SERVICES=/battery/get_state,/gripper/get_status,/camera/get_frame
 ```
 
 The gateway treats these calls like rosapi discovery: no lease, no pending-work tracking, and
