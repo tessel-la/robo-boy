@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.19.0-alpha](https://github.com/tessel-la/robo-boy/compare/robo-boy-v0.18.0-alpha...robo-boy-v0.19.0-alpha) (2026-10-14)
+
+
+### Features
+
+* control observer services ([#226](https://github.com/tessel-la/robo-boy/issues/226)) ([fa14430](https://github.com/tessel-la/robo-boy/commit/fa14430d1cfb146a055b204dc83c50411becfab1))
+* robot control ownership ([#222](https://github.com/tessel-la/robo-boy/issues/222)) ([50be40a](https://github.com/tessel-la/robo-boy/commit/50be40a8a4b3e1b041622599f6b0e707dce78c03))
+* robot control ownership and observer services, plus camera and assistant launcher fixes ([7b10a3b](https://github.com/tessel-la/robo-boy/commit/7b10a3b7614e32b8444fbd6ce72d5f1ef5456068))
+
+
+### Bug Fixes
+
+* camera topic refresh ([#223](https://github.com/tessel-la/robo-boy/issues/223)) ([f23f8fc](https://github.com/tessel-la/robo-boy/commit/f23f8fc34823a2cd508bf2016b6b7760c05d04ed))
+* keep assistant launcher anchored and settings header accessible ([#224](https://github.com/tessel-la/robo-boy/issues/224)) ([2b9ff43](https://github.com/tessel-la/robo-boy/commit/2b9ff4302b105cda7b30e18188541d7f7487e387))
+
 ## [0.18.0-alpha](https://github.com/tessel-la/robo-boy/compare/robo-boy-v0.17.0-alpha...robo-boy-v0.18.0-alpha) (2026-10-05)
 
 
