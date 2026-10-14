@@ -1,6 +1,14 @@
 mod updater;
 mod robot_resources;
 
+/// Display name only. Mobile apps do not have a useful operator account name.
+#[tauri::command]
+fn session_username(window: tauri::WebviewWindow) -> Option<String> {
+  if window.label() != "main" || cfg!(mobile) { return None; }
+  std::env::var(if cfg!(target_os = "windows") { "USERNAME" } else { "USER" })
+    .ok().filter(|name| !name.trim().is_empty())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   configure_linux_webkit_runtime();
@@ -25,6 +33,7 @@ pub fn run() {
     .plugin(tauri_plugin_http::init())
     .manage(updater::UpdateState::default())
     .invoke_handler(tauri::generate_handler![
+      session_username,
       updater::update_target,
       updater::update_download,
       updater::update_cancel,

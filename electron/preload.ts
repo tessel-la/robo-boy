@@ -45,6 +45,7 @@ const nativeWindowControls = process.platform === 'darwin';
 
 const desktopBridge = {
   shell: 'electron' as const,
+  getUsername: () => ipcRenderer.invoke('roboboy:session-username') as Promise<string | undefined>,
   robotResourceProtocol: true,
   nativeWindowControls,
 

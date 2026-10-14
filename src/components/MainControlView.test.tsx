@@ -160,8 +160,9 @@ vi.mock('../features/customGamepad/gamepadStorage', () => ({
 }));
 
 vi.mock('./CameraView', () => ({
-  default: ({ cameraTopic, availableTopics, onTopicChange, selectId }: any) => (
+  default: ({ cameraTopic, availableTopics, onTopicChange, selectId, onRefreshTopics, refreshingTopics }: any) => (
     <div data-testid="camera-view">
+      <button type="button" disabled={refreshingTopics} onClick={() => void onRefreshTopics?.()}>Refresh camera topics</button>
       <span>{cameraTopic}</span>
       <select
         aria-label="Camera topic"
@@ -850,6 +851,20 @@ describe('MainControlView desktop workspace', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Camera' }));
 
     expect(await screen.findByLabelText('Camera topic')).toHaveValue('/camera/ros2_image');
+  });
+
+  it('refreshes an empty camera panel when a publisher appears without reopening it', async () => {
+    getTopics.mockImplementation((success: any) => success({ topics: [], types: [] }));
+    localStorage.setItem(workspacePanelsKey, JSON.stringify([{ id: 'late-camera', type: 'camera', title: 'Camera' }]));
+    localStorage.setItem(workspaceTileOrderKey, JSON.stringify(['late-camera']));
+    renderMainControlView();
+    const refresh = await screen.findByRole('button', { name: 'Refresh camera topics' });
+    await waitFor(() => expect(refresh).toBeEnabled());
+    expect(screen.getByLabelText('Camera topic').querySelectorAll('option')).toHaveLength(0);
+    getTopics.mockImplementation((success: any) => success({ topics: ['/camera/late'], types: ['sensor_msgs/msg/Image'] }));
+    fireEvent.click(refresh);
+    await waitFor(() => expect(screen.getByLabelText('Camera topic')).toHaveValue('/camera/late'));
+    expect(screen.getAllByTestId('camera-view')).toHaveLength(1);
   });
 
   it('resizes vertically stacked mobile workspace tiles by vertical drag', async () => {

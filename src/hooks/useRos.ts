@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import ROSLIB from 'roslib';
 import type { Ros } from 'roslib';
+import { ControlSession } from '../features/robotControl/ControlSession';
 import type { ConnectionParams, ConnectionStatus } from '../runtime/connections';
 import { resolveRuntimeEndpoints } from '../runtime/runtimeConfig';
 
@@ -26,6 +27,7 @@ export const useRos = (): UseRosReturn => {
   const isConnectedRef = useRef(false);
   // Use a single ref to hold the current ROS instance. Simpler state management.
   const rosInstanceRef = useRef<Ros | null>(null);
+  const controlSessionRef = useRef<ControlSession | null>(null);
   const rosListenerCleanupRef = useRef<(() => void) | null>(null);
   // Ref to track if a connection attempt is in progress to avoid overlaps
   const isConnectingRef = useRef<boolean>(false);
@@ -37,6 +39,8 @@ export const useRos = (): UseRosReturn => {
   const closeCurrentRos = useCallback(() => {
     const currentRos = rosInstanceRef.current;
     rosInstanceRef.current = null;
+    controlSessionRef.current?.dispose();
+    controlSessionRef.current = null;
     rosListenerCleanupRef.current?.();
     rosListenerCleanupRef.current = null;
     currentRos?.close();
@@ -92,6 +96,7 @@ export const useRos = (): UseRosReturn => {
       console.log(`[connect] Using ${mode} ROS bridge URL: ${url}`);
 
       const newRos = new ROSLIB.Ros({ url });
+      controlSessionRef.current = new ControlSession(newRos);
 
       // 5. Assign Ref *before* adding listeners
       console.log('[connect] Assigning new ROS instance to ref.');
@@ -104,6 +109,7 @@ export const useRos = (): UseRosReturn => {
         // Critical check: Only update state if this is still the current attempt
         if (newRos === rosInstanceRef.current) {
           console.log('[on.connection] Current instance matched. Setting connected state.');
+          controlSessionRef.current?.connected();
           setRos(newRos);
           setIsConnected(true);
           isConnectedRef.current = true;
@@ -154,16 +160,16 @@ export const useRos = (): UseRosReturn => {
     [closeCurrentRos, disconnect]
   ); // connect should be stable
 
-  // Mobile browsers commonly suspend a WebSocket while the screen is off. Recreate the
-  // connection when the page becomes visible again (and when the network comes back) using the
-  // same endpoint the user originally selected. This is deliberately owned by useRos so every
-  // ROS consumer gets identical recovery behavior.
+  // Tab switches must preserve healthy connections and their control lease. After standby,
+  // reconnect only if the connection closed or gateway status is stale: the browser may have
+  // suspended its socket without delivering the close event yet.
   useEffect(() => {
     if (typeof document === 'undefined' || typeof window === 'undefined') return;
 
     const reconnect = () => {
       const params = lastConnectionParamsRef.current;
       if (!params || isConnectingRef.current) return;
+      if (isConnectedRef.current && controlSessionRef.current?.hasRecentStatus()) return;
       disconnect();
       connect(params);
     };

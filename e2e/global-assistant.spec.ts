@@ -36,7 +36,7 @@ test('uses a bottom-right launcher and opens a floating panel docked on the same
   );
   expect(launcherBox!.y + launcherBox!.height).toBeGreaterThan((await page.evaluate(() => window.innerHeight)) - 30);
   await launcher.click();
-  // The open toggle moves beside the frame; measure idle corners with the pointer outside it.
+  // Measure idle corners with the pointer outside the frame.
   await page.mouse.move(20, 20);
 
   const panel = page.getByTestId('assistant-panel');
@@ -98,9 +98,11 @@ test('uses a bottom-right launcher and opens a floating panel docked on the same
   await expect(panel).toHaveCount(0);
 });
 
-test('keeps the launcher visible and reverses the panel animation when toggled', async ({ page }) => {
+test('keeps the launcher anchored beneath the panel and reverses the animation when toggled', async ({ page }) => {
   await connectWithMockRos(page);
-  await page.getByLabel('Open Robo-Boy assistant').click();
+  const launcher = page.locator('.assistant-launcher');
+  const closedBox = (await launcher.boundingBox())!;
+  await launcher.click();
 
   const panel = page.getByTestId('assistant-panel');
   const closeLauncher = page.getByLabel('Close Robo-Boy assistant', { exact: true });
@@ -113,6 +115,22 @@ test('keeps the launcher visible and reverses the panel animation when toggled',
   });
   expect(entrance.name).toBe('assistant-panel-enter');
   expect(entrance.duration).toBe('0.26s');
+  await expect(panel).toHaveClass(/is-open/);
+  await expect(async () => {
+    const openBox = (await launcher.boundingBox())!;
+    expect(Math.abs(openBox.x + openBox.width / 2 - closedBox.x - closedBox.width / 2)).toBeLessThan(1);
+    expect(Math.abs(openBox.y + openBox.height / 2 - closedBox.y - closedBox.height / 2)).toBeLessThan(1);
+  }).toPass();
+  // It yields to panel controls while docked, and becomes clickable again when the frame moves.
+  expect(await launcher.evaluate(element => {
+    const box = element.getBoundingClientRect();
+    return element.contains(document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2));
+  })).toBe(false);
+  const headerBox = (await panel.locator('.assistant-header').boundingBox())!;
+  await page.mouse.move(headerBox.x + 180, headerBox.y + 25);
+  await page.mouse.down();
+  await page.mouse.move(headerBox.x - 20, headerBox.y + 25, { steps: 5 });
+  await page.mouse.up();
   await closeLauncher.click();
   await expect(panel).toHaveClass(/is-closing/);
   const exit = await panel.evaluate(element => {
@@ -124,6 +142,53 @@ test('keeps the launcher visible and reverses the panel animation when toggled',
   await expect(panel).toHaveCount(0);
   await expect(page.getByLabel('Open Robo-Boy assistant')).toBeVisible();
 });
+
+for (const viewport of [{ width: 900, height: 700 }, { width: 1440, height: 900 }, { width: 390, height: 844 }]) {
+  test(`settings keep the full header reachable at ${viewport.width}px`, async ({ page }) => {
+    await page.setViewportSize(viewport);
+    await connectWithMockRos(page);
+    await page.getByLabel('Open Robo-Boy assistant').click();
+    const panel = page.getByTestId('assistant-panel');
+    await expect(panel).toHaveClass(/is-open/);
+
+    if (viewport.width >= 768) {
+      // Shrink the desktop frame to its minimum width before opening settings.
+      const handle = (await page.locator('.assistant-resize-handle.w').boundingBox())!;
+      await page.mouse.move(handle.x + handle.width / 2, handle.y + 150);
+      await page.mouse.down();
+      await page.mouse.move(handle.x + 65, handle.y + 150, { steps: 5 });
+      await page.mouse.up();
+    }
+
+    await panel.getByRole('button', { name: 'Assistant settings' }).click();
+    const settings = panel.getByRole('dialog', { name: 'Assistant settings' });
+    const header = panel.locator('.assistant-header');
+    const headerBox = (await header.boundingBox())!;
+    const settingsBox = (await settings.boundingBox())!;
+    expect(settingsBox.y).toBeGreaterThanOrEqual(headerBox.y + headerBox.height);
+
+    // Visibility alone misses partial occlusion. Check the buttons' complete hit areas,
+    // including their lower corners where the settings overlay used to cover them.
+    for (const name of ['Back to assistant', 'Close assistant']) {
+      const button = panel.getByRole('button', { name, exact: true });
+      expect(await button.evaluate(element => {
+        const box = element.getBoundingClientRect();
+        return [
+          [box.left + 4, box.top + 4],
+          [box.right - 4, box.bottom - 4],
+        ].every(([x, y]) => element.contains(document.elementFromPoint(x, y)));
+      })).toBe(true);
+    }
+
+    await settings.evaluate(element => { element.scrollTop = element.scrollHeight; });
+    expect((await header.boundingBox())!.y).toBe(headerBox.y);
+    await panel.getByRole('button', { name: 'Back to assistant' }).click();
+    await expect(settings).toHaveCount(0);
+    await panel.getByRole('button', { name: 'Assistant settings' }).click();
+    await panel.getByRole('button', { name: 'Close assistant', exact: true }).click();
+    await expect(panel).toHaveCount(0);
+  });
+}
 
 test('adds a Behavior Tree panel to the workspace when asked to edit the layout', async ({ page }) => {
   await connectWithMockRos(page);

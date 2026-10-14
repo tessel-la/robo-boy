@@ -2,6 +2,7 @@ const DEFAULT_VIDEO_STREAM_BASE_URL = '/video_stream';
 const RELATIVE_URL_ORIGIN = 'http://camera.local';
 const ROS_TOPIC_NAME_PATTERN = /^\/(?:[A-Za-z_][A-Za-z0-9_]*)(?:\/[A-Za-z_][A-Za-z0-9_]*)*$/;
 const CAMERA_STREAM_TYPE_PATTERN = /^[A-Za-z][A-Za-z0-9_-]{0,63}$/;
+const REFRESH_TOKEN_PATTERN = /^[A-Za-z0-9-]{1,64}$/;
 
 function normalizeVideoStreamBaseUrl(baseUrl: string): string {
   const trimmedBaseUrl = baseUrl.trim();
@@ -105,7 +106,7 @@ export function getSafeCameraStreamUrl(
       return null;
     }
 
-    const allowedParams = new Set(['topic', 'type', 'width', 'height', 'quality']);
+    const allowedParams = new Set(['topic', 'type', 'width', 'height', 'quality', '_refresh']);
     for (const key of url.searchParams.keys()) {
       if (!allowedParams.has(key)) return null;
     }
@@ -122,6 +123,8 @@ export function getSafeCameraStreamUrl(
     }
     const quality = url.searchParams.get('quality');
     if (quality && !isJpegQuality(quality)) return null;
+    const refresh = url.searchParams.get('_refresh');
+    if (refresh !== null && !REFRESH_TOKEN_PATTERN.test(refresh)) return null;
 
     const topicParams: string[] = [];
     appendTopicParam(topicParams, topic);
@@ -133,6 +136,7 @@ export function getSafeCameraStreamUrl(
       if (value) params.set(dimension, value);
     }
     if (quality) params.set('quality', quality);
+    if (refresh) params.set('_refresh', refresh);
 
     const encodedParams = params.toString();
     const query = encodedParams ? `${topicParams.join('&')}&${encodedParams}` : topicParams.join('&');
@@ -150,6 +154,7 @@ export function buildCameraStreamUrl({
   width,
   height,
   quality,
+  refresh,
   baseUrl = DEFAULT_VIDEO_STREAM_BASE_URL,
 }: {
   topic: string;
@@ -158,6 +163,8 @@ export function buildCameraStreamUrl({
   height?: number;
   /** JPEG quality, 1–100; omitted keeps web_video_server's default. */
   quality?: number;
+  /** A unique token forces a new request when refreshing an active MJPEG response. */
+  refresh?: string;
   baseUrl?: string;
 }): string {
   const params = new URLSearchParams();
@@ -167,6 +174,10 @@ export function buildCameraStreamUrl({
   appendPositiveNumber(params, 'width', width);
   appendPositiveNumber(params, 'height', height);
   appendJpegQuality(params, quality);
+  if (refresh !== undefined) {
+    if (!REFRESH_TOKEN_PATTERN.test(refresh)) throw new Error('Invalid camera refresh token.');
+    params.set('_refresh', refresh);
+  }
 
   const encodedParams = params.toString();
   const query = encodedParams ? `${topicParams.join('&')}&${encodedParams}` : topicParams.join('&');

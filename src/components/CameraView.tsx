@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { FiCamera, FiChevronDown, FiRefreshCw } from 'react-icons/fi';
 import type { Ros } from 'roslib';
-import './CameraView.css'; // We'll create this CSS file next
+import './CameraView.css';
 import { useRuntimeConfig } from '../runtime/runtimeConfig';
 import { buildCameraStreamUrl } from '../utils/cameraStreamUrl';
+import { createUuid } from '../utils/uuid';
 import {
   CAMERA_STREAM_PRESETS,
   CAMERA_STREAM_QUALITIES,
@@ -38,42 +40,43 @@ function useSettledSize(element: HTMLElement | null): FrameSize | null {
   return size;
 }
 
-// Remove hardcoded URL
-// const DEFAULT_ROSBRIDGE_URL = 'ws://localhost:9090';
-
 interface CameraViewProps {
   ros: Ros;
   cameraTopic: string; // e.g., /camera/image_raw
-  // webVideoServerPort?: number; // Default 8080
   streamType?: string; // Default mjpeg
   streamWidth?: number; // Optional
   streamHeight?: number; // Optional
-  // Add new props for topic selection
   availableTopics: string[];
   onTopicChange: (newTopic: string) => void;
   selectId?: string;
   /** Stream preset; uncontrolled (starting at Auto) when no change handler is given. */
   streamQuality?: CameraStreamQuality;
   onStreamQualityChange?: (quality: CameraStreamQuality) => void;
+  onRefreshTopics?: () => Promise<boolean>;
+  refreshingTopics?: boolean;
+  topicsError?: string;
 }
 
 const CameraView: React.FC<CameraViewProps> = ({
   ros,
   cameraTopic,
-  // webVideoServerPort = 8080, // Port is now handled by proxy
   streamType = 'mjpeg',
   streamWidth,
   streamHeight,
-  // Destructure new props
   availableTopics,
   onTopicChange,
   selectId = 'camera-topic-select',
   streamQuality,
   onStreamQualityChange,
+  onRefreshTopics,
+  refreshingTopics = false,
+  topicsError = '',
 }) => {
   const { videoStreamBaseUrl } = useRuntimeConfig();
   const [streamUrl, setStreamUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [streamRevision, setStreamRevision] = useState<string>();
+  const refreshGeneration = useRef(0);
   const [localQuality, setLocalQuality] = useState<CameraStreamQuality>(streamQuality ?? DEFAULT_CAMERA_STREAM_QUALITY);
   const quality = onStreamQualityChange ? (streamQuality ?? DEFAULT_CAMERA_STREAM_QUALITY) : localQuality;
   const [container, setContainer] = useState<HTMLDivElement | null>(null);
@@ -87,6 +90,18 @@ const CameraView: React.FC<CameraViewProps> = ({
   const sourceSize = source?.key === sourceKey ? source.size : undefined;
   const latestSourceKey = useRef(sourceKey);
   latestSourceKey.current = sourceKey;
+  useEffect(
+    () => () => {
+      ++refreshGeneration.current;
+    },
+    [ros, sourceKey]
+  );
+
+  const refreshCamera = async () => {
+    const generation = ++refreshGeneration.current;
+    const refreshed = onRefreshTopics ? await onRefreshTopics() : true;
+    if (refreshed && generation === refreshGeneration.current) setStreamRevision(createUuid());
+  };
 
   useEffect(() => {
     if (!isTopicLive || !needsSourceSize || sourceSize !== undefined) return;
@@ -135,6 +150,7 @@ const CameraView: React.FC<CameraViewProps> = ({
           streamType,
           ...params,
           baseUrl: videoStreamBaseUrl,
+          refresh: streamRevision,
         });
         setStreamUrl(url);
         setError(null);
@@ -146,7 +162,12 @@ const CameraView: React.FC<CameraViewProps> = ({
       }
     } else {
       setStreamUrl(null);
-      if (!cameraTopic) setError('No camera topic selected.');
+      if (!cameraTopic)
+        setError(
+          availableTopics.length
+            ? 'No camera topic selected.'
+            : 'No camera topics found. Start a camera publisher, then refresh.'
+        );
       else if (!ros?.isConnected) setError('Connecting...');
       else setError('Camera topic is not being published.');
     }
@@ -154,6 +175,7 @@ const CameraView: React.FC<CameraViewProps> = ({
     ros,
     ros?.isConnected,
     cameraTopic,
+    availableTopics.length,
     isTopicLive,
     streamType,
     streamWidth,
@@ -164,48 +186,72 @@ const CameraView: React.FC<CameraViewProps> = ({
     panelSize,
     quality,
     videoStreamBaseUrl,
+    streamRevision,
   ]);
 
   return (
     <div className="camera-view">
-      {/* Container now needs position relative for absolute positioning of dropdown */}
+      <div className="camera-toolbar" aria-label="Camera controls">
+        <div className="camera-field camera-topic-field">
+          <FiCamera className="camera-topic-icon" aria-hidden="true" />
+          <select
+            id={selectId}
+            aria-label="Camera topic"
+            value={cameraTopic}
+            disabled={!availableTopics.length}
+            title={cameraTopic || 'Choose a camera topic'}
+            onChange={event => onTopicChange(event.target.value)}
+          >
+            {!availableTopics.includes(cameraTopic) && (
+              <option value={cameraTopic} disabled>
+                {cameraTopic ? `${cameraTopic} (unavailable)` : 'No topic selected'}
+              </option>
+            )}
+            {availableTopics.map(topic => (
+              <option key={topic} value={topic}>
+                {topic}
+              </option>
+            ))}
+          </select>
+          <FiChevronDown className="camera-select-chevron" aria-hidden="true" />
+        </div>
+        <div className="camera-field camera-quality-field">
+          <select
+            id={`${selectId}-quality`}
+            aria-label="Stream quality"
+            title="Auto fits this panel. Original uses full-size frames and more bandwidth."
+            value={quality}
+            onChange={event => setQuality(event.target.value as CameraStreamQuality)}
+          >
+            {CAMERA_STREAM_QUALITIES.map(option => (
+              <option key={option} value={option}>
+                {CAMERA_STREAM_PRESETS[option].label}
+              </option>
+            ))}
+          </select>
+          <FiChevronDown className="camera-select-chevron" aria-hidden="true" />
+        </div>
+        <button
+          type="button"
+          className="camera-refresh"
+          aria-label="Refresh camera topics and stream"
+          title={refreshingTopics ? 'Refreshing camera topics…' : 'Refresh camera topics and retry the stream'}
+          disabled={!ros?.isConnected || refreshingTopics}
+          aria-busy={refreshingTopics}
+          onClick={() => void refreshCamera()}
+        >
+          <FiRefreshCw aria-hidden="true" />
+        </button>
+      </div>
+      {topicsError && (
+        <p className="camera-discovery-error" role="alert">
+          {topicsError}
+        </p>
+      )}
       <div className="camera-stream-container" ref={setContainer}>
-        {/* Add the dropdown selector inside the container */}
-        {availableTopics.length > 0 && (
-          <div className="camera-topic-selector overlay">
-            {/* <label htmlFor="camera-topic-select">Topic:</label> */}
-            <select
-              id={selectId}
-              aria-label="Camera topic"
-              value={cameraTopic} // Use current cameraTopic prop
-              onChange={e => onTopicChange(e.target.value)} // Use handler prop
-            >
-              {availableTopics.map(topic => (
-                <option key={topic} value={topic}>
-                  {topic}
-                </option>
-              ))}
-            </select>
-            <select
-              id={`${selectId}-quality`}
-              aria-label="Stream quality"
-              title="Auto sizes the stream to this panel. Original sends the camera's full frames, which can need tens of Mbit/s."
-              value={quality}
-              onChange={e => setQuality(e.target.value as CameraStreamQuality)}
-            >
-              {CAMERA_STREAM_QUALITIES.map(option => (
-                <option key={option} value={option}>
-                  {CAMERA_STREAM_PRESETS[option].label}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
-
-        {/* Existing error/image/placeholder rendering */}
         {error ? (
           <div className="error-message">{error}</div>
-        ) : streamUrl ? (
+        ) : streamUrl && isTopicLive ? (
           <SafeCameraImage
             src={streamUrl}
             allowedStreamBaseUrl={videoStreamBaseUrl}
@@ -214,7 +260,7 @@ const CameraView: React.FC<CameraViewProps> = ({
               console.error('Error loading video stream:', e);
               setError(
                 // Update error message to reflect proxy
-                `Failed to load stream via proxy (${streamUrl}). Check Caddyfile, web_video_server, topic (${cameraTopic}), and type (${streamType}).`
+                'Could not load this camera stream. Refresh to retry.'
               );
             }}
           />
@@ -224,8 +270,6 @@ const CameraView: React.FC<CameraViewProps> = ({
           </div>
         )}
       </div>
-      {/* Optional: Keep the title separate or remove it */}
-      {/* <h4>Camera Feed ({cameraTopic})</h4> */}
     </div>
   );
 };

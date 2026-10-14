@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { McapWriter, TempBuffer } from '@mcap/core';
-import { installRosMock } from './helpers/rosMock';
+import { getPublishedRosMessages, installRosMock } from './helpers/rosMock';
 
 for (const secureContext of [true, false]) {
   test(`starts and stops recording ${secureContext ? 'with' : 'without'} crypto.randomUUID`, async ({ page }) => {
@@ -28,7 +28,8 @@ for (const secureContext of [true, false]) {
       window.WebSocket = class extends Socket {
         send(data: string) {
           super.send(data);
-          const message = JSON.parse(data);
+          const frame = JSON.parse(data);
+          const message = frame.op === 'roboboy_frame' ? frame.message : frame;
           if (message.op !== 'publish' || message.topic !== '/roboboy/recorder/command') return;
           const command = JSON.parse(message.msg.data);
           status.requestId = command.id;
@@ -61,6 +62,12 @@ for (const secureContext of [true, false]) {
     await expect(panel.getByText(/12 messages/)).toBeVisible();
     await panel.getByRole('button', { name: 'Stop & save', exact: true }).click();
     await expect(panel.getByText('Ready to record')).toBeVisible();
+    const commands = await getPublishedRosMessages(page, '/roboboy/recorder/command');
+    expect(
+      commands
+        .map(message => JSON.parse((message as { data: string }).data).action)
+        .filter(action => action === 'start' || action === 'stop')
+    ).toEqual(['start', 'stop']);
     expect(errors).toEqual([]);
   });
 }

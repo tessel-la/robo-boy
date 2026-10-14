@@ -2,6 +2,9 @@
 .panel-stage
 node_modules
 dist
+dist-electron
+release
+src-tauri/target
 dev-dist
 playwright-report
 test-results

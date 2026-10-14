@@ -14,11 +14,27 @@ Successful Host or IP connections are saved on the landing page as recent machin
 
 After rosbridge connects, the main control view discovers available ROS resources and enables the camera, 3D, behavior-tree, and control-pad interfaces.
 
+## Shared Control
+
+Connections start read-only. Open **Read-only** in the top bar and select **Request control** before
+using pads or running a tree. One session controls the whole robot endpoint; other sessions retain
+telemetry and editing. The menu shows the owner, blocked-command reasons, release, and transfer.
+A persistent tree keeps its reservation across disconnects; reconnect and select **Manage running tree**
+to pause, resume, or stop it before sending other commands.
+See [Shared robot control](robot-control.md) for leases, recovery, and deployment requirements.
+An optional robot-side ROS switch can enable or disable control globally. When configured,
+the control menu shows its status; only the robot's native ROS operator can enable access.
+Once enabled, sessions use the normal Request control workflow.
+
 ## Main Views
 
 ### Camera
 
 Robo-Boy discovers image topics and displays the selected stream through `web_video_server`. Camera requests use the active runtime endpoint, either the `/video_stream` proxy route or the selected backend host.
+
+Use **Refresh** in the camera toolbar when a camera publisher starts after connecting, or to retry a failed stream. It updates the topic list for all camera panels without reopening them and reconnects the refreshed panel's stream. The button remains available when the topic list is empty. Your topic and quality choices are preserved; a selected topic that disappears is marked unavailable instead of silently switching cameras. Refresh failures keep the previous list and display a retry message.
+
+**Auto** fits stream resolution to the panel. **Low**, **Medium**, and **High** trade detail for bandwidth; **Original** requests full-size frames. Camera topic discovery and refresh are read-only operations. Topic and quality controls sit above the image and wrap within narrow panels.
 
 ### 3D Visualization
 

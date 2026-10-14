@@ -1025,11 +1025,10 @@
   transform: rotate(8deg) scale(0.94);
 }
 
-/* Keep the desktop toggle beside the docked frame, clear of Send and settings controls.
-   A dragged frame may cover it; its own close button remains available. */
+/* Keep the desktop toggle anchored in its corner, beneath the floating panel so it cannot
+   cover Send or settings controls. The panel's own close button remains available. */
 @media (min-width: 768px) {
   .assistant-launcher.is-open {
-    right: calc(clamp(420px, 32vw, 480px) + var(--floating-action-inset));
     z-index: 1399;
   }
 }
@@ -1284,7 +1283,10 @@
 .assistant-settings-popover {
   position: absolute;
   z-index: 30;
-  inset: 50px 0 0;
+  /* The grid's first row owns the header height, including padding and its border. */
+  grid-column: 1;
+  grid-row: 2 / -1;
+  inset: 0;
   overflow-y: auto;
   background: var(--card-bg, #fff);
   color: var(--text-color, #1f2937);
@@ -1662,10 +1664,6 @@
 
   .assistant-enter-hint {
     display: none;
-  }
-
-  .assistant-settings-popover {
-    inset-block-start: 44px;
   }
 
   .assistant-settings-popover-header {
