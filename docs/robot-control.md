@@ -11,6 +11,7 @@ every web, Tauri, and Electron client using that gateway; they have no UI toggle
 | --- | --- | --- |
 | `ROBOBOY_CONTROL_LOCKING_ENABLED` | `true` | Require one session to acquire exclusive control. Set `false` for shared control without acquisition, transfer, or ownership heartbeats. |
 | `ROBOBOY_CONTROL_IDLE_SECONDS` | `120` | Release an idle owner after this many seconds without accepted commands and with no outstanding work. Set `0` for no idle expiry. Applies only when locking is enabled. |
+| `ROBOBOY_CONTROL_OBSERVER_SERVICES` | empty | Comma-separated services that cannot change robot state and that every session may call without control, such as a panel backend's status or catalog. `*` matches one name segment and `**` any number. See [Observer services](#observer-services). |
 
 For exclusive control with a 60 s idle timeout:
 
@@ -89,6 +90,24 @@ prevent naming a connected session. A delayed native lookup never overwrites a m
 
 Names identify a display label only. They do not authenticate the person, distinguish two
 sessions with the same name, or grant control automatically.
+
+## Observer services
+
+Some services only read or compute: a panel backend's status, a catalog, or a camera frame. List
+them on the robot host so every session can call them without control:
+
+```dotenv
+ROBOBOY_CONTROL_OBSERVER_SERVICES=/camera_capture/status,/camera_capture/snapshot,/calibration/catalog
+```
+
+The gateway treats these calls like rosapi discovery: no lease, no pending-work tracking, and
+they stay available while the robot-side switch is closed or the runner is not ready. List only
+services that cannot move the robot or change its configuration, because the gateway takes the
+deployment's word for it. Prefer exact names to patterns, so a command service added later under
+the same prefix does not become callable by observers. `/rosapi/set_param`,
+`/rosapi/delete_param`, and `/_action/` services keep their own policy whatever the patterns match.
+The setting is read on the robot because the gateway is the only enforcer; a panel manifest
+cannot declare its own services observer-safe.
 
 ## Optional robot-side control switch
 
@@ -218,7 +237,7 @@ The `control-journal` named volume survives container replacement. A marker is f
 - Use the `Ros` instance owned by `useRos`, or the existing permission-checked panel SDK operations. `ControlSession` attaches each lease token and wraps outgoing ROSLIB operations in `roboboy_frame`. Panels should not create an independent command socket, acquire control automatically, queue rejected writes, or store tokens. Subscriptions continue independently of ownership.
 - Use absolute canonical ROS names. Relative, private, duplicate-slash, and deprecated `#` action aliases are rejected so reserved names have one meaning.
 - Use ROS 2 `send_action_goal` / `cancel_action_goal` for actions. Direct calls to `/_action/` services are rejected because a send-goal service response does not establish action completion.
-- Only a positive allowlist of rosapi discovery/read services is available to observers. `set_param`, `delete_param`, and arbitrary robot services require ownership when session locking is enabled. The read-only inspection request topic and persistent-tree `status` requests remain available to observers. Recorder status and folder listings remain readable; start, stop, pause, resume, and split require ownership when session locking is enabled.
+- Only a positive allowlist of rosapi discovery/read services, plus the deployment's [observer services](#observer-services), is available to observers. `set_param`, `delete_param`, and arbitrary robot services require ownership when session locking is enabled. The read-only inspection request topic and persistent-tree `status` requests remain available to observers. Recorder status and folder listings remain readable; start, stop, pause, resume, and split require ownership when session locking is enabled.
 - Publisher advertisement can occur while observing; actual publishes require ownership when session locking is enabled. Status-topic publishing, latched command publishers, service/action server advertisement, and unknown rosbridge operations are rejected. Cleanup, unsubscription, and unadvertisement remain allowed.
 - The reserved `/roboboy/control/status` topic is synthesized per connection by the gateway, including `enabled` (session locking, defaults to `true` when absent), `idleMs` (`0` means no idle expiry, defaults to `120000` when absent), `selfId`, owner label, state, readiness, pending count, adoption availability, and that connection's token when appropriate. It is never forwarded from ROS. `roboboy_control` supports `identify`, `status`, `acquire`, `heartbeat`, `release`, `transfer`, `adopt`, `request`, `cancel_request`, `approve`, and `deny`. Only the owner with a valid token can release, transfer, renew, approve, or deny. `cancel_request`, `approve`, and `deny` require the exact `requestId`. Version-1 status adds optional `requests` entries (`id`, `clientId`, `label`) for the owner and a connection-specific `request` result (`id`, `state`, `message`), with states `pending`, `accepted`, `granted`, `denied`, `expired`, or `cancelled`.
 - Topic publishing is fire-and-forget. A FIFO barrier proves admission to ROS, not physical stopping. Robot controllers **must provide their own command watchdog/deadman and emergency-stop behavior**; no generic UI can infer a safe neutral message for every topic. Integrations that start asynchronous work through opaque topic messages or services that return before physical completion need a tracked ROS action or the persistent runner. Do not use a quick service response as proof that a background actuator job finished.

@@ -60,6 +60,7 @@ The default ports are defined in the copied `.env` file. The main knobs are:
 | `ROSBRIDGE_PORT`                | `9090`                   | rosbridge and Caddy `/websocket` upstream                  |
 | `ROBOBOY_CONTROL_LOCKING_ENABLED` | `true` | Gateway session ownership; `false` permits shared control |
 | `ROBOBOY_CONTROL_IDLE_SECONDS` | `120` | Idle ownership timeout in seconds; `0` disables idle expiry |
+| `ROBOBOY_CONTROL_OBSERVER_SERVICES` | empty | Read-only services callable without control (`*`/`**` patterns) |
 | `ROSBRIDGE_USE_EVENTS_EXECUTOR` | `true`                   | rosbridge on rclpy's events executor (less CPU)            |
 | `ROSBRIDGE_USE_COMPRESSION`     | `true`                   | permessage-deflate for clients that offer it               |
 | `ROBOBOY_TF_RELAY_HZ`           | `60`                     | `/tf` coalesced into `/roboboy/tf`; `0` disables it        |
