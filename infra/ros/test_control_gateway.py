@@ -30,10 +30,18 @@ class ConfigurationTests(unittest.TestCase):
             args = parse_args(['--control-locking', 'true', '--idle-seconds', '60'])
             self.assertEqual((args.control_locking, args.idle_seconds), ('true', 60))
 
+    def test_observer_services_from_environment_and_cli(self):
+        with patch.dict(os.environ, {}, clear=True):
+            self.assertEqual(parse_args([]).observer_services, '')
+        with patch.dict(os.environ, dict(ROBOBOY_CONTROL_OBSERVER_SERVICES='/camera/status, /calibration/*')):
+            self.assertEqual(parse_args([]).observer_services, '/camera/status, /calibration/*')
+            self.assertEqual(parse_args(['--observer-services', '/**/status']).observer_services, '/**/status')
+
     def test_invalid_configuration_fails_startup(self):
         for variable, values in (
             ('ROBOBOY_CONTROL_LOCKING_ENABLED', ('yes', '0', '')),
             ('ROBOBOY_CONTROL_IDLE_SECONDS', ('-1', 'NaN', 'inf', '1e308', 'forever', '')),
+            ('ROBOBOY_CONTROL_OBSERVER_SERVICES', ('camera/status', '/camera/stat*', '/camera//status', '/camera/~status', '/', '/a b')),
         ):
             for value in values:
                 with self.subTest(variable=variable, value=value), patch.dict(os.environ, {variable: value}, clear=True):
@@ -533,6 +541,26 @@ class AuthorityTests(unittest.TestCase):
         self.command(self.a, topic=BT_COMMAND, msg=dict(data=json.dumps(dict(protocolVersion=1, command='start', sessionId='tree', tree=dict(nodes=[])))))
         self.assertFalse(self.forwarded[self.a])
 
+    def test_observer_services_are_reads_for_every_session(self):
+        self.reset(observer_services='/camera/status,/calibration/*,/**/preview')
+        self.control(self.a, 'acquire')
+        for request, service in enumerate(('/camera/status', '/calibration/catalog', '/cell/camera/preview',
+                                           '/calibration/run/start', '/camera/capture')):
+            self.command(self.b, 'call_service', id=str(request), service=service)
+        self.assertEqual([m['service'] for m in self.forwarded[self.b]], ['/camera/status', '/calibration/catalog', '/cell/camera/preview'])
+        self.assertTrue(all('controlToken' not in m for m in self.forwarded[self.b]))
+        self.command(self.a, 'call_service', id='owner', service='/camera/status')
+        self.assertFalse(self.authority.pending)  # Observer-safe calls never reserve handover.
+        self.authority.runner_ready = False
+        self.command(self.b, 'call_service', id='unready', service='/camera/status')
+        self.assertEqual(self.forwarded[self.b][-1]['id'], 'unready')
+
+    def test_observer_patterns_cannot_open_parameter_writes_or_action_internals(self):
+        self.reset(observer_services='/**')
+        for request, service in enumerate(('/rosapi/set_param', '/rosapi/delete_param', '/move/_action/send_goal', '/camera/status')):
+            self.command(self.b, 'call_service', id=str(request), service=service)
+        self.assertEqual([m['service'] for m in self.forwarded[self.b]], ['/camera/status'])
+
     def test_unknown_runner_and_legacy_runner_fail_closed_but_reads_work(self):
         self.authority.runner_ready = False
         self.authority.runner_status(dict(protocolVersion=1, state='idle'))
@@ -652,6 +680,10 @@ class ExternalAuthorityTests(unittest.TestCase):
         self.command(self.a, 'subscribe', topic='/image')
         self.command(self.a, 'call_service', id='discovery', service='/rosapi/topics')
         self.assertEqual(len(self.forwarded[self.a]), 2)
+        self.reset(observer_services='/camera/status')
+        self.command(self.a, 'call_service', id='observer', service='/camera/status')
+        self.command(self.a, 'call_service', id='command', service='/camera/capture')
+        self.assertEqual([m['id'] for m in self.forwarded[self.a]], ['observer'])
         self.policy()
         self.assertIsNone(self.authority.owner)  # No retry or automatic acquisition.
         self.control(self.a, 'acquire')

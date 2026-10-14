@@ -139,7 +139,7 @@ export async function installRosMock(page: Page, resources: MockRosResources = {
           return;
         }
         const read = ['subscribe', 'unsubscribe', 'advertise', 'unadvertise'].includes(message.op)
-          || (message.op === 'call_service' && message.service.startsWith('/rosapi/'))
+          || (message.op === 'call_service' && message.service.startsWith('/rosapi/') && !['/rosapi/set_param', '/rosapi/delete_param'].includes(message.service))
           || (message.op === 'publish' && message.topic === '/roboboy/inspection/request')
           || (message.op === 'publish' && message.topic === '/robo_boy/behavior_tree/command' && JSON.parse(message.msg.data).command === 'status');
         if (initResources.controlMode !== 'shared' && !read && ['publish', 'call_service', 'send_action_goal'].includes(message.op) && (!this.controlOwner || message.controlToken !== 'test-lease')) {

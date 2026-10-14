@@ -10,6 +10,7 @@ import json
 import math
 import os
 from pathlib import Path
+import re
 import time
 import uuid
 
@@ -31,6 +32,8 @@ READ_SERVICES = frozenset('/rosapi/' + name for name in (
     'node_details', 'publishers', 'subscribers', 'get_param', 'has_param',
     'get_param_names', 'get_time', 'topics_and_raw_types',
 ))
+# Never widened by deployment patterns: parameter writes and action internals keep their own policy.
+NEVER_OBSERVER_SERVICES = frozenset(('/rosapi/set_param', '/rosapi/delete_param'))
 
 
 def canonical_name(value):
@@ -39,6 +42,20 @@ def canonical_name(value):
     return (isinstance(value, str) and value.startswith('/') and len(value) <= 512
             and '//' not in value and not any(c in value for c in '#~ ')
             and all(part and part.replace('_', '').isalnum() for part in value[1:].split('/')))
+
+
+def service_patterns(value):
+    # Deployment-chosen services that cannot change robot state, with the panel manifest's
+    # pattern syntax: '*' matches one name segment and '**' any number of them.
+    patterns = []
+    for pattern in (item.strip() for item in value.split(',')):
+        if not pattern:
+            continue
+        parts = pattern[1:].split('/') if pattern.startswith('/') else []
+        if not parts or not all(part in ('*', '**') or (part and part.replace('_', '').isalnum()) for part in parts):
+            raise ValueError(f'Observer services must be absolute ROS names or */** patterns: {pattern!r}')
+        patterns.append(re.compile('^/' + '/'.join('.*' if part == '**' else '[^/]+' if part == '*' else re.escape(part) for part in parts) + '$'))
+    return tuple(patterns)
 
 
 def topic_command(message):
@@ -50,9 +67,10 @@ def topic_command(message):
 
 
 class Authority:
-    def __init__(self, marker=None, clock=time.monotonic, external_lock=False, locking_enabled=True, idle_seconds=IDLE_SECONDS):
+    def __init__(self, marker=None, clock=time.monotonic, external_lock=False, locking_enabled=True, idle_seconds=IDLE_SECONDS, observer_services=''):
         if not math.isfinite(idle_seconds * 1000) or idle_seconds < 0:
             raise ValueError('Control idle timeout must be finite and nonnegative; 0 disables idle expiry.')
+        self.observer_services = service_patterns(observer_services)
         self.locking_enabled = locking_enabled
         self.idle_seconds = idle_seconds
         self.clock = clock
@@ -396,6 +414,11 @@ class Authority:
         else:
             self.clients[client_id]['send'](dict(op='status', level='error', msg=reason, **common))
 
+    def read_service(self, service):
+        return service in READ_SERVICES or (
+            service not in NEVER_OBSERVER_SERVICES and '/_action/' not in service
+            and any(pattern.match(service) for pattern in self.observer_services))
+
     def receive(self, client_id, message):
         if client_id not in self.clients or not self.clients[client_id]['connected']:
             return
@@ -436,7 +459,7 @@ class Authority:
                     if isinstance(name, str) and name.lstrip('/').startswith(EXTERNAL_PREFIX.lstrip('/')):
                         raise ValueError('Robot-side control policy can only be changed through native ROS.')
             read = op in ('subscribe', 'unsubscribe', 'advertise', 'unadvertise', 'set_level')
-            read = read or (op == 'call_service' and message.get('service') in READ_SERVICES)
+            read = read or (op == 'call_service' and self.read_service(message['service']))
             read = read or (op == 'publish' and message.get('topic') == '/roboboy/inspection/request')
             command = topic_command(message) if op == 'publish' else {}
             read = read or (op == 'publish' and message.get('topic') == BT_COMMAND and command.get('protocolVersion') == 1 and command.get('command') == 'status')
@@ -705,6 +728,14 @@ def idle_timeout(value):
     return seconds
 
 
+def observer_services(value):
+    try:
+        service_patterns(value)
+    except ValueError as error:
+        raise argparse.ArgumentTypeError(str(error)) from None
+    return value
+
+
 def parse_args(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--port', type=int, default=9090)
@@ -721,6 +752,9 @@ def parse_args(argv=None):
     parser.add_argument('--idle-seconds', type=idle_timeout,
                         default=os.environ.get('ROBOBOY_CONTROL_IDLE_SECONDS', str(IDLE_SECONDS)),
                         help='Release idle ownership after this many seconds; 0 keeps it until release or connection loss (default: 120).')
+    parser.add_argument('--observer-services', type=observer_services,
+                        default=os.environ.get('ROBOBOY_CONTROL_OBSERVER_SERVICES', ''),
+                        help='Comma-separated services that cannot change robot state, callable without control (* and ** patterns).')
     args = parser.parse_args(argv)
     if args.external_lock not in ('true', 'false'):
         parser.error('ROBOBOY_EXTERNAL_CONTROL_LOCK must be true or false.')
@@ -732,7 +766,8 @@ def parse_args(argv=None):
 def main():
     args = parse_args()
     authority = Authority(args.journal, external_lock=args.external_lock == 'true',
-                          locking_enabled=args.control_locking == 'true', idle_seconds=args.idle_seconds)
+                          locking_enabled=args.control_locking == 'true', idle_seconds=args.idle_seconds,
+                          observer_services=args.observer_services)
     url = f'ws://127.0.0.1:{args.upstream_port}'
     allowed_origins = frozenset(origin.strip() for origin in args.allowed_origins.split(',') if origin.strip()) if args.allowed_origins.strip() else None
     application(authority, url, allowed_origins).listen(args.port, address='0.0.0.0')
