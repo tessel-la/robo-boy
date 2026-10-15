@@ -26,6 +26,7 @@ import { componentLibrary } from '../defaultLayouts';
 import { DATA_BINDINGS, isDataComponentType, validateDataComponent, type ConfigIssue } from '../dataComponents';
 import { fieldForNewType, useMessageFields } from '../useMessageFields';
 import { stdScalarType } from '../padValues';
+import CommaListInput from './CommaListInput';
 import { FieldPicker, MessageTypeInput, TopicPicker } from './RosSourceFields';
 import ValueSettings, { VALUE_CONFIG_KEYS, valueConfigFor, type ValueConfig } from './ValueSettings';
 import './ComponentSettingsModal.css';
@@ -940,10 +941,8 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
     });
   };
 
-  const handlePlotFieldTextChange = (value: string) => {
-    const paths = value.split(',').map(path => path.trim()).filter(Boolean);
-    const nextPaths = paths.length > 0 ? paths : [''];
-    setPlotFieldPaths(nextPaths);
+  const handlePlotFieldListChange = (paths: string[]) => {
+    setPlotFieldPaths(paths.length > 0 ? paths : ['']);
   };
 
   if (!isOpen || !component) return null;
@@ -1318,11 +1317,10 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
                   </div>
                 )}
                 <div className="topic-input-group">
-                  <input
+                  <CommaListInput
                     id="plot-field-custom"
-                    type="text"
-                    value={plotFieldPaths.join(', ')}
-                    onChange={(e) => handlePlotFieldTextChange(e.target.value)}
+                    value={plotFieldPaths}
+                    onChange={handlePlotFieldListChange}
                     placeholder="linear.x, angular.z"
                     className="setting-input topic-input"
                   />
@@ -1466,11 +1464,10 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
                         {usePoseStampedCustomAxes && (
                           <div className="custom-axes">
                             <label htmlFor="pose-stamped-custom-axes-input">Custom Pose Axes (comma-separated):</label>
-                            <input
+                            <CommaListInput
                               id="pose-stamped-custom-axes-input"
-                              type="text"
-                              value={poseStampedAxes.join(', ')}
-                              onChange={(e) => setPoseStampedAxes(e.target.value.split(',').map(s => s.trim()).filter(s => s))}
+                              value={poseStampedAxes}
+                              onChange={setPoseStampedAxes}
                               placeholder="position.x, position.y"
                               className="setting-input"
                             />
@@ -1577,11 +1574,10 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
                         {useTwistCustomAxes && (
                           <div className="custom-axes">
                             <label htmlFor="twist-custom-axes-input">Custom Twist Axes (comma-separated):</label>
-                            <input
+                            <CommaListInput
                               id="twist-custom-axes-input"
-                              type="text"
-                              value={twistAxes.join(', ')}
-                              onChange={(e) => setTwistAxes(e.target.value.split(',').map(s => s.trim()).filter(s => s))}
+                              value={twistAxes}
+                              onChange={setTwistAxes}
                               placeholder="linear.x, angular.z"
                               className="setting-input"
                             />
@@ -1629,11 +1625,10 @@ const ComponentSettingsModal: React.FC<ComponentSettingsModalProps> = ({
                         {useCustomAxes && (
                           <div className="custom-axes">
                             <label htmlFor="custom-axes-input">Custom Axes (comma-separated indices):</label>
-                            <input
+                            <CommaListInput
                               id="custom-axes-input"
-                              type="text"
-                              value={customAxes.join(', ')}
-                              onChange={(e) => setCustomAxes(e.target.value.split(',').map(s => s.trim()).filter(s => s))}
+                              value={customAxes}
+                              onChange={setCustomAxes}
                               placeholder="0, 1"
                               className="setting-input"
                             />
