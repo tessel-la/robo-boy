@@ -251,3 +251,7 @@ unauthorized reads and writes, scoped media access, credential stripping and Web
 Browser tests exercise branded login/logout, the native handoff and confirmation flow, and a
 320 px login layout in Chromium and Firefox. The ordinary suite continues to cover login-disabled
 connections and robot ownership. No test requires an employee account or controls real hardware.
+
+Enterprise Electron builds and packages with a custom application name do not use the upstream
+in-app installer. Update them by building and distributing a new company package; a stock release
+cannot preserve their compiled provider/server configuration and branding.
