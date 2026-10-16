@@ -14,6 +14,7 @@ export async function fixture({
   frontend,
   developmentAssets = false,
   port = 0,
+  backendPort = 0,
   nativeOrigins,
   branding,
   robots,
@@ -132,7 +133,7 @@ export async function fixture({
       socket.send(data.toString());
     })
   );
-  backend.listen(0, '127.0.0.1');
+  backend.listen(backendPort, '127.0.0.1');
   await once(backend, 'listening');
   let now = Date.now();
   const origin = publicOrigin || 'https://robot.example';

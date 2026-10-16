@@ -3,8 +3,8 @@ import React, { createContext, useContext, useMemo } from 'react';
 import { parseEmbedPorts } from './embedTarget';
 import type { ConnectionParams } from './connections';
 import { normalizeConnectionHost } from './connectionHost';
-import { enterpriseRobot } from '../features/enterprise/session';
-import { managedGateway, enterpriseOrigin } from '../features/enterprise/config';
+import { enterpriseRobot, hasEnterpriseRobots } from '../features/enterprise/session';
+import { enterpriseOrigin } from '../features/enterprise/config';
 
 export interface RuntimeEndpoints {
   rosbridgeUrl: string;
@@ -193,7 +193,7 @@ export function resolveRuntimeEndpoints(
   location = getBrowserLocation(),
   ports = getRuntimePortConfig()
 ): RuntimeEndpoints {
-  if (managedGateway()) {
+  if (hasEnterpriseRobots()) {
     const robot = enterpriseRobot(params?.enterpriseRobotId);
     const origin = enterpriseOrigin() + (robot ? `/robots/${robot.id}` : '');
     return {
@@ -277,12 +277,12 @@ export const useRuntimeConfig = (): RuntimeEndpoints => useContext(RuntimeConfig
  * rather than naming localhost and offering to connect somewhere nobody asked for.
  */
 export const getDefaultConnectionHost = (): string => {
-  if (managedGateway()) return new URL(enterpriseOrigin()).hostname;
+  if (hasEnterpriseRobots()) return new URL(enterpriseOrigin()).hostname;
   return isDesktopRuntime() ? '' : getBrowserLocation().hostname;
 };
 
 export const getDefaultServicePorts = (): RuntimeServicePorts => {
-  if (managedGateway()) {
+  if (hasEnterpriseRobots()) {
     const origin = new URL(enterpriseOrigin());
     const port = origin.port || (origin.protocol === 'https:' ? '443' : '80');
     return { rosbridgePort: port, videoStreamPort: port, meshResourcesPort: port };

@@ -54,11 +54,12 @@ describe('ControlSession', () => {
   });
   it('authenticates a native connection before subscribing or requesting robot status', () => {
     vi.stubEnv('VITE_ENTERPRISE_LOGIN', 'true');
+    vi.stubEnv('VITE_ENTERPRISE_SERVER_URL', 'https://robot.example');
     (window as any).roboBoyDesktop = {};
     const token = 'a'.repeat(43);
     setEnterpriseSession({ user: { id: 'alice', name: 'Alice' }, expires: Date.now() + 60000, token });
     const { ros, send } = fakeControlRos();
-    const session = new ControlSession(ros);
+    const session = new ControlSession(ros, 'wss://robot.example/websocket');
     session.connected();
     expect(send.mock.calls.map(([message]) => message)).toEqual([
       { op: 'roboboy_auth', token },

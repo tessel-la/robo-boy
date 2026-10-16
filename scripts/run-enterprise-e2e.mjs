@@ -27,6 +27,7 @@ const vite = spawn(
 );
 const app = await fixture({
   port: 5280,
+  backendPort: 5282,
   publicOrigin: origin,
   frontend: 'http://127.0.0.1:5281',
   developmentAssets: true,

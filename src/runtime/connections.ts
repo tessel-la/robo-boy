@@ -5,8 +5,7 @@ import {
   normalizeRuntimeServicePorts,
   resolveRuntimeEndpoints,
 } from './runtimeConfig';
-import { enterpriseRobot } from '../features/enterprise/session';
-import { managedGateway } from '../features/enterprise/config';
+import { enterpriseRobot, hasEnterpriseRobots } from '../features/enterprise/session';
 
 export interface ConnectionParams {
   offline?: boolean;
@@ -37,8 +36,8 @@ export const describeConnectionTarget = (params: ConnectionParams): ConnectionTa
       description: 'Local MCAP recordings',
       params,
     };
-  const robot = managedGateway() ? enterpriseRobot(params.enterpriseRobotId) : undefined;
-  if (managedGateway())
+  const robot = hasEnterpriseRobots() ? enterpriseRobot(params.enterpriseRobotId) : undefined;
+  if (hasEnterpriseRobots())
     params = {
       ros2Option: 'ip',
       ros2Value: getDefaultConnectionHost(),

@@ -162,7 +162,17 @@ gateway. Each entry has a unique `id`, a display `name` and a private loopback H
 The upstream is that robot's private proxy, with the same routes as the existing private Caddy
 listener. Provision additional private robot proxies in deployment configuration. The registry
 is never compiled into public frontend assets; only IDs and names are returned to signed-in users.
-An empty list preserves the existing single-robot workflow.
+An empty list keeps the classic landing page, host/IP and service-port fields, recent connections,
+and the existing connection/loading flow. Company login gates the application; it does not select
+or authenticate an arbitrary robot. A browser's Quick Connect still uses its same-origin backend.
+A packaged app asks for a robot host on first launch, then offers the last successful connection.
+Manual connections use the ordinary direct/proxy rules and send no enterprise credential to a
+separate host or port. Robots reached directly need their own network access policy and control
+gateway; company sign-in cannot protect a separately exposed rosbridge. HTTPS web installations
+need HTTPS/WSS and suitable CORS on any directly selected remote backend.
+
+For a managed fleet, configure a nonempty registry. Its selector replaces manual host selection;
+saved raw addresses cannot bypass registry routing.
 
 The connection screen keeps a **Robot** selector after sign-in. Open additional robots through
 **Open another connection**; workspaces, sockets and control ownership remain independent.

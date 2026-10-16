@@ -62,6 +62,22 @@ describe('EntrySection connection target', () => {
     );
   });
 
+  it('keeps manual host/IP configuration after company login without a robot list', () => {
+    runPackaged();
+    vi.stubEnv('VITE_ENTERPRISE_LOGIN', 'true');
+    vi.stubEnv('VITE_ENTERPRISE_SERVER_URL', 'https://fleet.example');
+    setEnterpriseSession({ user: { id: 'alice', name: 'Alice' }, expires: Date.now() + 60000, robots: [] });
+    const onConnect = vi.fn();
+    render(<EntrySection onConnect={onConnect} />);
+    expect(screen.queryByRole('combobox', { name: 'Robot' })).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Host or IP:'), { target: { value: '192.168.1.42' } });
+    fireEvent.change(screen.getByLabelText('ROS'), { target: { value: '19090' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Connect' }));
+    expect(onConnect).toHaveBeenCalledWith(
+      expect.objectContaining({ ros2Value: '192.168.1.42', rosbridgePort: '19090' })
+    );
+  });
+
   it('asks the packaged app for a host rather than offering localhost', () => {
     runPackaged();
 

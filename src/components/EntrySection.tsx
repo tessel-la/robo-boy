@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import type { ConnectionParams } from '../runtime/connections';
 import './EntrySection.css';
-import { brand, managedGateway } from '../features/enterprise/config';
-import { getEnterpriseSession } from '../features/enterprise/session';
+import { brand } from '../features/enterprise/config';
+import { getEnterpriseSession, hasEnterpriseRobots } from '../features/enterprise/session';
 import BrandMark from '../features/enterprise/BrandMark';
 import anime from 'animejs';
 import { animateLandingPage, animateAdvancedForm, animateButtonPress } from '../utils/animations';
@@ -78,7 +78,7 @@ const _CaretIcon = ({ isOpen }: { isOpen: boolean }) => (
 );
 
 const EntrySection: React.FC<EntrySectionProps> = ({ onConnect, embedded = false }) => {
-  const fleet = managedGateway() ? (getEnterpriseSession()?.robots ?? []) : [];
+  const fleet = hasEnterpriseRobots() ? (getEnterpriseSession()?.robots ?? []) : [];
   const [robotId, setRobotId] = useState(fleet[0]?.id ?? '');
   const [ros2Option, setRos2Option] = useState<'domain' | 'ip'>('ip');
   const [ros2Value, setRos2Value] = useState<string>('');
@@ -410,7 +410,7 @@ const EntrySection: React.FC<EntrySectionProps> = ({ onConnect, embedded = false
               </button>
 
               {/* Nothing to collapse back to while the form is the only way to connect. */}
-              {!managedGateway() && (
+              {!hasEnterpriseRobots() && (
                 <button
                   type="button"
                   className="advanced-toggle"
@@ -514,7 +514,7 @@ const EntrySection: React.FC<EntrySectionProps> = ({ onConnect, embedded = false
             </button>
           </form>
 
-          {!managedGateway() && recentConnections.length > 0 && (
+          {!hasEnterpriseRobots() && recentConnections.length > 0 && (
             <div className="recent-connections" aria-label="Recent connections">
               <div className="recent-connections-title">Recent</div>
               <div className="recent-connections-list">

@@ -14,6 +14,17 @@ export interface EnterpriseSession {
 }
 let session: EnterpriseSession | null = null;
 export const getEnterpriseSession = () => session;
+/** A login without a robot registry keeps the ordinary host/IP connection workflow. */
+export const hasEnterpriseRobots = () => managedGateway() && Boolean(session?.robots?.length);
+export function isEnterpriseEndpoint(value: string): boolean {
+  if (!managedGateway()) return false;
+  const url = new URL(value, enterpriseOrigin());
+  if (url.protocol === 'wss:') url.protocol = 'https:';
+  if (url.protocol === 'ws:') url.protocol = 'http:';
+  return url.origin === enterpriseOrigin();
+}
+export const enterpriseSocketToken = (url?: string) =>
+  url && isEnterpriseEndpoint(url) ? nativeAuthToken() : undefined;
 export const setEnterpriseSession = (value: EnterpriseSession | null) => {
   session = value;
 };

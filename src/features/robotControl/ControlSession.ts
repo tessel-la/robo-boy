@@ -1,6 +1,6 @@
 import type { Ros } from 'roslib';
 import { defaultSessionName, rememberSessionName } from './sessionName';
-import { nativeAuthToken } from '../enterprise/session';
+import { enterpriseSocketToken } from '../enterprise/session';
 
 export const CONTROL_STATUS_TOPIC = '/roboboy/control/status';
 export interface ControlStatus {
@@ -48,7 +48,10 @@ export class ControlSession {
   private nameRevision = 0;
   private pendingName?: { label: string; persist: boolean };
 
-  constructor(ros: Ros) {
+  constructor(
+    ros: Ros,
+    private readonly url?: string
+  ) {
     this.ros = ros;
     this.original = this.ros.callOnConnection;
     this.send = this.original?.bind(ros);
@@ -68,7 +71,7 @@ export class ControlSession {
   }
 
   connected = () => {
-    const authentication = nativeAuthToken();
+    const authentication = enterpriseSocketToken(this.url);
     if (authentication) this.send?.({ op: 'roboboy_auth', token: authentication });
     this.send?.({ op: 'subscribe', topic: CONTROL_STATUS_TOPIC });
     this.send?.({ op: 'roboboy_control', action: 'status' });

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   enterpriseFetch,
+  enterpriseSocketToken,
   enterpriseMediaUrl,
   nativeAuthToken,
   nativeSignIn,
@@ -8,7 +9,7 @@ import {
   setEnterpriseSession,
 } from './session';
 import { enterpriseOrigin } from './config';
-import { getDefaultServicePorts, resolveRuntimeEndpoints } from '../../runtime/runtimeConfig';
+import { getDefaultConnectionHost, getDefaultServicePorts, resolveRuntimeEndpoints } from '../../runtime/runtimeConfig';
 import { describeConnectionTarget } from '../../runtime/connections';
 import { createRobotResourceManager } from '../../runtime/robotResources';
 import { fetchListing, remoteBag } from '../recordReplay/remoteRecordings';
@@ -78,39 +79,45 @@ describe('Enterprise transport', () => {
     expect(enterpriseMediaUrl('/api/panels/config')).toBe('/api/panels/config');
   });
 
-  it('pins enterprise endpoints to the configured gateway rather than a saved raw robot address', () => {
+  it('preserves manual host and port selection after login without a registry', async () => {
     enable();
-    setEnterpriseSession(identity);
-    const endpoints = resolveRuntimeEndpoints({ ros2Option: 'ip', ros2Value: '192.168.1.77' }, true);
-    expect(endpoints.rosbridgeUrl).toBe('wss://robot.example/websocket');
-    expect(endpoints.videoStreamBaseUrl).toBe('https://robot.example/video_stream');
-    expect(endpoints.recordingsBaseUrl).toBe('https://robot.example/recordings');
-    expect(endpoints.meshResourcesBaseUrl).toBe('https://robot.example/mesh_resources');
-    expect(endpoints.embedDirectPorts).toEqual([]);
-    expect(endpoints.host).toBe('robot.example');
-  });
-
-  it('keeps managed workspace identity credential-free and stable across sign-ins', () => {
-    enable();
-    setEnterpriseSession(identity);
-    const first = describeConnectionTarget({ ros2Option: 'ip', ros2Value: 'old-robot', rosbridgePort: '9090' });
-    setEnterpriseSession({ ...identity, token: 'c'.repeat(43), media: 'd'.repeat(43) });
-    const second = describeConnectionTarget({ ros2Option: 'domain', ros2Value: 7 });
-    expect(first).toEqual(second);
-    expect(first.label).toBe('robot.example');
-    expect(first.params).toEqual({
-      ros2Option: 'ip',
-      ros2Value: 'robot.example',
-      rosbridgePort: '443',
-      videoStreamPort: '443',
-      meshResourcesPort: '443',
+    setEnterpriseSession({ ...identity, robots: [] });
+    expect(getDefaultConnectionHost()).toBe('');
+    expect(getDefaultServicePorts().rosbridgePort).toBe('9090');
+    const params = { ros2Option: 'ip' as const, ros2Value: '192.168.1.77', rosbridgePort: '19090' };
+    const target = describeConnectionTarget(params);
+    expect(target.params).toMatchObject(params);
+    expect(target.label).toBe('192.168.1.77');
+    expect(resolveRuntimeEndpoints(target.params, true)).toMatchObject({
+      rosbridgeUrl: 'ws://192.168.1.77:19090',
+      videoStreamBaseUrl: 'http://192.168.1.77:8080',
+      recordingsBaseUrl: 'http://192.168.1.77:9091',
     });
-    expect(JSON.stringify(first)).not.toContain(identity.media);
-    expect(JSON.stringify(first)).not.toContain(identity.token);
-    expect(JSON.stringify(first)).not.toContain('/auth/');
-    vi.stubEnv('VITE_ENTERPRISE_SERVER_URL', 'https://robot.example:8443');
-    expect(getDefaultServicePorts().rosbridgePort).toBe('8443');
-    expect(describeConnectionTarget({ offline: true, ros2Option: 'ip', ros2Value: '' }).key).toBe('local-replay');
+    expect(enterpriseSocketToken('ws://192.168.1.77:19090')).toBeUndefined();
+    expect(enterpriseSocketToken('wss://robot.example.evil/websocket')).toBeUndefined();
+    expect(enterpriseSocketToken('wss://robot.example:8443/websocket')).toBeUndefined();
+    expect(enterpriseSocketToken()).toBeUndefined();
+    expect(enterpriseSocketToken('wss://robot.example/websocket')).toBe(identity.token);
+    const fetch = vi.fn().mockResolvedValue(new Response('{}'));
+    vi.stubGlobal('fetch', fetch);
+    await enterpriseFetch('http://192.168.1.77:8080/status');
+    expect(fetch).toHaveBeenCalledExactlyOnceWith('http://192.168.1.77:8080/status', undefined);
+    expect(enterpriseMediaUrl('http://192.168.1.77:8080/video_stream/stream')).toBe(
+      'http://192.168.1.77:8080/video_stream/stream'
+    );
+    const manager = createRobotResourceManager('http://192.168.1.77:8000/mesh_resources');
+    expect(manager.resolveURL('http://192.168.1.77:8000/mesh_resources/arm.obj')).not.toContain(identity.media);
+    delete carrier.roboBoyDesktop;
+    expect(resolveRuntimeEndpoints(params, false, { protocol: 'https:', hostname: 'robot.example' }).rosbridgeUrl).toBe(
+      'wss://192.168.1.77:19090'
+    );
+    expect(
+      resolveRuntimeEndpoints({ ros2Option: 'ip', ros2Value: 'robot.example' }, false, {
+        protocol: 'https:',
+        hostname: 'robot.example',
+        host: 'robot.example:8443',
+      }).rosbridgeUrl
+    ).toBe('wss://robot.example:8443/websocket');
   });
 
   it('authenticates final mesh requests without changing canonical relative-resource bases', () => {
@@ -179,6 +186,7 @@ describe('Enterprise transport', () => {
       { id: 'inspection', name: 'Inspection' },
     ];
     setEnterpriseSession({ ...identity, robots });
+    expect(getDefaultServicePorts().rosbridgePort).toBe('443');
     const a = describeConnectionTarget({ ros2Option: 'ip', ros2Value: 'ignored', enterpriseRobotId: 'assembly' });
     const b = describeConnectionTarget({ ros2Option: 'ip', ros2Value: 'ignored', enterpriseRobotId: 'inspection' });
     expect(a.key).not.toBe(b.key);
