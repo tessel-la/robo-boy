@@ -7,6 +7,7 @@ import { fixture } from './test/provider.mjs';
 import { branding, enabled, secureOrigin } from './config.mjs';
 import { createEnterpriseGateway } from './gateway.mjs';
 import { providersFromEnvironment } from './providers.mjs';
+import { readFileSync } from 'node:fs';
 
 describe('Enterprise configuration', () => {
   it('has no login or custom branding by default and rejects unsafe settings', () => {
@@ -609,4 +610,13 @@ describe('Multiple sign-in providers', () => {
       ]
     );
   });
+});
+
+it('ships every local module the gateway imports in its container image', () => {
+  const local = source =>
+    [...readFileSync(new URL(source, import.meta.url), 'utf8').matchAll(/from '\.\/([a-z-]+\.mjs)'/g)].map(m => m[1]);
+  const modules = new Set(['gateway.mjs']);
+  for (const module of modules) for (const dependency of local(module)) modules.add(dependency);
+  const dockerfile = readFileSync(new URL('../docker/Dockerfile.enterprise', import.meta.url), 'utf8');
+  for (const module of modules) assert.match(dockerfile, new RegExp(`infra/enterprise/${module.replace('.', '\\.')}`));
 });
