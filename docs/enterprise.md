@@ -214,10 +214,22 @@ the broker's session cookies. Credentials are stripped before forwarding to robo
 Feature-owned Authorization headers, such as a media gateway credential or the Panel Manager's
 admin token, retain their existing transport; they do not authenticate a Robo-Boy access session.
 
-`ROBOBOY_AUTH_SESSION_SECONDS` defaults to **3600** and accepts **60–86400**. Sessions expire at
-the earlier of that duration and the verified ID token expiry. There is no silent refresh.
+`ROBOBOY_AUTH_SESSION_SECONDS` defaults to **3600** and accepts **60–86400**. Sessions expire
+after that duration, independent of the provider's ID-token lifetime. There is no silent refresh
+and the client holds no refresh token.
 Logout or expiry immediately revokes the broker session and closes its WebSockets and active
 HTTP streams; closing the robot socket triggers the existing ownership-recovery behavior.
+
+Five minutes before expiry the workspace shows a non-blocking notice with **Sign in again**. The
+web app opens the provider sign-in in a new tab (`/auth/login?renew=1`, which ends on a completion
+page instead of loading a second workspace) and picks up the new cookie at its next session check;
+if pop-ups are blocked it falls back to the ordinary sign-in redirect. The packaged app runs the
+normal browser handoff and identifies its current session when starting it. When the fresh sign-in
+is the same provider subject, the broker moves that session's live robot WebSockets and HTTP
+streams to the new session, so control and its ownership lease continue uninterrupted under the
+new expiry. A different account closes them, and the app asks you to confirm the new account
+before mounting the workspace again. A renewed packaged-app credential replaces the old one in
+memory; the old one stays valid only until its original expiry, without any connections.
 The frontend rechecks server state every 10 seconds and unmounts robot components on loss of
 access. Persistent trees retain the robot control model's documented disconnect behavior.
 

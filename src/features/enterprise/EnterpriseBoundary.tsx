@@ -13,6 +13,7 @@ import {
 import { isDesktopRuntime } from '../../runtime/runtimeConfig';
 import { getDesktopBridge } from '../../runtime/desktopBridge';
 import BrandMark from './BrandMark';
+import SessionRenewal from './SessionRenewal';
 import './enterprise.css';
 
 const AccountContext = createContext<{ user: EnterpriseSession['user']; logout: () => Promise<void> } | null>(null);
@@ -35,6 +36,8 @@ export default function EnterpriseBoundary({ children }: { children: ReactNode }
   const [working, setWorking] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const [error, setError] = useState('');
+  // Keyed by the session expiry it renews, so it lapses on its own once a new session arrives.
+  const [renewal, setRenewal] = useState<{ expires: number; waiting: boolean; error: string } | null>(null);
   const attempt = useRef<AbortController>();
   const revision = useRef(0);
   const signedOut = useRef(false);
@@ -81,8 +84,11 @@ export default function EnterpriseBoundary({ children }: { children: ReactNode }
             if (!previous?.token || previous.user.id !== next.user.id) throw new Error('Sign in again to continue.');
             apply({ ...previous, ...next });
           } else {
+            // A web renewal in another tab arrives here. A different employee must confirm before use.
+            const previous = getEnterpriseSession();
             apply(next);
-            setConfirmed(true);
+            if (!previous) setConfirmed(true);
+            else if (previous.user.id !== next.user.id) setConfirmed(false);
           }
           setError('');
         }
@@ -144,6 +150,43 @@ export default function EnterpriseBoundary({ children }: { children: ReactNode }
       if (attempt.current === controller) setWorking(false);
     }
   };
+  const renew = async () => {
+    const expires = getEnterpriseSession()?.expires;
+    if (!expires) return;
+    if (!isDesktopRuntime()) {
+      // A second tab keeps this workspace and its robot sockets running; the session check picks up the cookie.
+      const tab = window.open(enterpriseOrigin() + '/auth/login?renew=1', '_blank');
+      if (tab) {
+        tab.opener = null;
+        setRenewal({ expires, waiting: true, error: '' });
+        return;
+      }
+      window.location.assign(enterpriseOrigin() + '/auth/login');
+      return;
+    }
+    attempt.current?.abort();
+    const controller = new AbortController();
+    attempt.current = controller;
+    setRenewal({ expires, waiting: true, error: '' });
+    try {
+      const next = await nativeSignIn(controller.signal, openSignInBrowser);
+      if (controller.signal.aborted) return;
+      const previous = getEnterpriseSession();
+      apply(next);
+      if (previous?.user.id !== next.user.id) setConfirmed(false);
+    } catch (failure) {
+      if (attempt.current === controller && !controller.signal.aborted)
+        setRenewal({
+          expires,
+          waiting: false,
+          error: failure instanceof Error ? failure.message : 'Sign-in failed. Try again.',
+        });
+    }
+  };
+  const cancelRenewal = () => {
+    if (isDesktopRuntime()) attempt.current?.abort();
+    setRenewal(null);
+  };
   const logout = async () => {
     signedOut.current = true;
     attempt.current?.abort();
@@ -166,8 +209,23 @@ export default function EnterpriseBoundary({ children }: { children: ReactNode }
       setLoggingOut(false);
     }
   };
-  if (current && confirmed)
-    return <AccountContext.Provider value={{ user: current.user, logout }}>{children}</AccountContext.Provider>;
+  if (current && confirmed) {
+    const pending = renewal?.expires === current.expires ? renewal : null;
+    return (
+      <AccountContext.Provider value={{ user: current.user, logout }}>
+        {children}
+        <SessionRenewal
+          key={current.expires}
+          expires={current.expires}
+          waiting={Boolean(pending?.waiting)}
+          error={pending?.error ?? ''}
+          native={isDesktopRuntime()}
+          onRenew={() => void renew()}
+          onCancel={cancelRenewal}
+        />
+      </AccountContext.Provider>
+    );
+  }
   return (
     <main className="enterprise-login">
       <header className="enterprise-login-header">

@@ -195,6 +195,64 @@
   width: 230px;
   height: 58px;
 }
+.enterprise-renewal {
+  position: fixed;
+  top: calc(var(--title-bar-height, 0px) + var(--safe-area-top, 0px) + 12px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10020;
+  width: min(calc(100% - 32px), 460px);
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  background: var(--card-bg);
+  color: var(--text-color);
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.24);
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+.enterprise-renewal p {
+  margin: 0;
+  color: var(--text-secondary);
+}
+.enterprise-renewal strong {
+  color: var(--text-color);
+}
+.enterprise-renewal p.enterprise-error {
+  color: var(--error-color);
+}
+.enterprise-renewal div {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.enterprise-renewal button {
+  min-height: 36px;
+  font: inherit;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--background-secondary);
+  color: var(--text-color);
+  padding: 6px 14px;
+  cursor: pointer;
+}
+.enterprise-renewal .enterprise-primary {
+  background: var(--primary-color);
+  color: var(--button-text-color);
+  border-color: var(--primary-color);
+  font-weight: 650;
+}
+.enterprise-renewal .enterprise-primary:hover {
+  background: var(--primary-hover-color);
+}
+.enterprise-renewal :focus-visible {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 2px;
+}
 @media (max-width: 480px) {
   .enterprise-login-header {
     padding: 20px;

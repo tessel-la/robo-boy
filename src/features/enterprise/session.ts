@@ -22,6 +22,8 @@ export const unreachable = () =>
     `Cannot reach ${enterpriseOrigin()}. Check your network or VPN, and that this computer trusts the server certificate.`
   );
 export const getEnterpriseSession = () => session;
+/** Operators are warned this long before the gateway ends their session. */
+export const RENEWAL_NOTICE_MS = 5 * 60000;
 /** A login without a robot registry keeps the ordinary host/IP connection workflow. */
 export const hasEnterpriseRobots = () => managedGateway() && Boolean(session?.robots?.length);
 export function isEnterpriseEndpoint(value: string): boolean {
@@ -109,11 +111,16 @@ export async function nativeSignIn(
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(secret));
   const challenge = [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, '0')).join('');
   const origin = enterpriseOrigin();
+  // Renewing from a live workspace lets the gateway move its robot sockets to the new session.
+  const current = nativeAuthToken();
   const post = async (path: string, value: unknown) => {
     try {
       return await fetch(origin + path, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(current && path === '/auth/native/start' ? { 'X-RoboBoy-Session': current } : {}),
+        },
         credentials: 'omit',
         redirect: 'error',
         body: JSON.stringify(value),

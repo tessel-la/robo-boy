@@ -224,16 +224,42 @@ export async function createEnterpriseGateway(options) {
       `<!doctype html><meta name="viewport" content="width=device-width, initial-scale=1"><title>${escape(brand.name)}</title><main style="font:18px system-ui;max-width:35rem;margin:15vh auto;padding:24px"><h1>${escape(title)}</h1><p>${escape(message)}</p><p>${native ? `Return to ${escape(brand.name)} and start again. You can close this browser tab.` : `<a href="/">Return to ${escape(brand.name)}</a>`}</p></main>`
     );
   };
+  const complete = (response, session, next, cookies) => {
+    response.writeHead(200, {
+      'Content-Type': 'text/html; charset=utf-8',
+      'Cache-Control': 'no-store',
+      'Set-Cookie': cookies,
+      'Content-Security-Policy':
+        "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'",
+    });
+    response.end(
+      `<!doctype html><meta name="viewport" content="width=device-width, initial-scale=1"><title>${escape(brand.name)}</title><main style="font:18px system-ui;max-width:35rem;margin:15vh auto;padding:24px"><h1>Sign-in complete</h1><p>Signed in as ${escape(session.user.name)}. Return to ${escape(brand.name)} ${next}.</p><p>You can close this browser tab.</p></main>`
+    );
+  };
   const remove = session => {
     sessions.delete(session.key);
     media.delete(session.media);
-    for (const close of session.connections) close();
+    for (const connection of session.connections) connection.close();
     session.connections.clear();
   };
-  const track = (session, resource) => {
-    const close = () => (resource.terminate ? resource.terminate() : resource.destroy());
-    session.connections.add(close);
-    resource.once('close', () => session.connections.delete(close));
+  const track = (session, resource, rebind) => {
+    const connection = {
+      owner: session,
+      close: () => (resource.terminate ? resource.terminate() : resource.destroy()),
+      rebind,
+    };
+    session.connections.add(connection);
+    resource.once('close', () => connection.owner.connections.delete(connection));
+  };
+  /** A fresh sign-in by the same subject keeps live robot sockets and streams under the new expiry. */
+  const migrate = (previous, next) => {
+    if (previous === next || !valid(previous) || previous.user.id !== next.user.id) return;
+    for (const connection of previous.connections) {
+      connection.owner = next;
+      next.connections.add(connection);
+      connection.rebind?.(next);
+    }
+    previous.connections.clear();
   };
   const sweep = () => {
     for (const session of sessions.values()) if (!valid(session)) remove(session);
@@ -292,7 +318,14 @@ export async function createEnterpriseGateway(options) {
         if (typeof challenge !== 'string' || !/^[a-f0-9]{64}$/.test(challenge))
           return reply(response, 400, { error: 'Invalid sign-in challenge.' });
         const id = random();
-        pending.set(id, { challenge, origin: requestOrigin, expires: clock() + 300000 });
+        // A signed-in app renewing before expiry identifies its current session for migrate().
+        const previous = identify(request);
+        pending.set(id, {
+          challenge,
+          origin: requestOrigin,
+          expires: clock() + 300000,
+          previous: valid(previous) ? previous : undefined,
+        });
         return reply(response, 200, { id, browserUrl: `${origin}/auth/login?native=${id}` });
       }
       if (url.pathname === '/auth/native/poll' && request.method === 'POST') {
@@ -313,6 +346,8 @@ export async function createEnterpriseGateway(options) {
         }
         if (!attempt.session) return reply(response, 202, { pending: true });
         pending.delete(id);
+        // The previous credential stays valid until its own expiry in case this response is lost.
+        if (attempt.previous) migrate(attempt.previous, attempt.session);
         return reply(response, 200, {
           user: attempt.session.user,
           expires: attempt.session.expires,
@@ -324,6 +359,8 @@ export async function createEnterpriseGateway(options) {
       if (url.pathname === '/auth/login' && request.method === 'GET') {
         browserPage = true;
         const nativeId = url.searchParams.get('native');
+        // A web workspace renews in a second tab and keeps running; that tab must not load another workspace.
+        const renew = !nativeId && url.searchParams.get('renew') === '1';
         nativeCallback = nativeId;
         if (transactions.size >= 128)
           return page(
@@ -339,7 +376,14 @@ export async function createEnterpriseGateway(options) {
         const state = oidc.randomState();
         const nonce = oidc.randomNonce();
         const browser = random();
-        transactions.set(state, { verifier, nonce, browser: hash(browser), nativeId, expires: clock() + 300000 });
+        transactions.set(state, {
+          verifier,
+          nonce,
+          browser: hash(browser),
+          nativeId,
+          renew,
+          expires: clock() + 300000,
+        });
         if (nativeId) pending.get(nativeId).started = true;
         const target = oidc.buildAuthorizationUrl(config, {
           redirect_uri: `${origin}/auth/callback`,
@@ -429,27 +473,18 @@ export async function createEnterpriseGateway(options) {
           handoff.token = token;
         } else {
           const previous = identify(request);
-          if (previous) remove(previous);
+          if (previous) {
+            migrate(previous, session);
+            remove(previous);
+          }
         }
         sessions.set(session.key, session);
         media.set(session.media, session);
-        if (attempt.nativeId) {
-          response.writeHead(200, {
-            'Content-Type': 'text/html; charset=utf-8',
-            'Cache-Control': 'no-store',
-            'Set-Cookie': setCookie(loginCookie, '', 0),
-            'Content-Security-Policy':
-              "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'",
-          });
-          return response.end(
-            `<!doctype html><meta name="viewport" content="width=device-width, initial-scale=1"><title>${escape(brand.name)}</title><main style="font:18px system-ui;max-width:35rem;margin:15vh auto;padding:24px"><h1>Sign-in complete</h1><p>Signed in as ${escape(session.user.name)}. Return to ${escape(brand.name)} and confirm this account.</p><p>You can close this browser tab.</p></main>`
-          );
-        }
-        response.writeHead(303, {
-          Location: '/',
-          'Cache-Control': 'no-store',
-          'Set-Cookie': [setCookie(sessionCookie, token, ttl), setCookie(loginCookie, '', 0)],
-        });
+        if (attempt.nativeId)
+          return complete(response, session, 'and confirm this account', setCookie(loginCookie, '', 0));
+        const cookies = [setCookie(sessionCookie, token, ttl), setCookie(loginCookie, '', 0)];
+        if (attempt.renew) return complete(response, session, 'to continue', cookies);
+        response.writeHead(303, { Location: '/', 'Cache-Control': 'no-store', 'Set-Cookie': cookies });
         return response.end();
       }
       const session = identify(request);
@@ -543,17 +578,19 @@ export async function createEnterpriseGateway(options) {
         authorized = true;
         activeSession = session;
         clearTimeout(deadline);
-        track(session, client);
+        track(session, client, next => {
+          activeSession = next;
+        });
         upstreamSocket = new WebSocket(new URL('/websocket', route.target).href.replace('http:', 'ws:'), {
           maxPayload: 10000000,
         });
         upstreamSocket.on('open', () => {
-          if (!valid(session) || client.readyState !== WebSocket.OPEN) return upstreamSocket.close();
+          if (!valid(activeSession) || client.readyState !== WebSocket.OPEN) return upstreamSocket.close();
           for (const [data, binary] of queued) upstreamSocket.send(data, { binary });
           queued.length = 0;
         });
         upstreamSocket.on('message', (data, binary) => {
-          if (!valid(session) || client.bufferedAmount > 20000000) return client.terminate();
+          if (!valid(activeSession) || client.bufferedAmount > 20000000) return client.terminate();
           if (client.readyState === WebSocket.OPEN) client.send(data, { binary });
         });
         upstreamSocket.on('error', () => client.close(1011, 'Robot backend unavailable'));

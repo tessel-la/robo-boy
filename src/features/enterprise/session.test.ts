@@ -234,6 +234,25 @@ describe('Enterprise transport', () => {
     expect(browser).not.toHaveBeenCalled();
   });
 
+  it('identifies the current native session only when starting a renewal handoff', async () => {
+    enable();
+    const id = 'x'.repeat(43);
+    const fetch = vi.fn(async (url: string, _init?: RequestInit) =>
+      url.endsWith('/auth/native/start')
+        ? new Response(JSON.stringify({ id, browserUrl: 'https://robot.example/auth/login?native=' + id }))
+        : new Response(JSON.stringify({ ...identity, token: 'c'.repeat(43) }))
+    );
+    vi.stubGlobal('fetch', fetch);
+    await nativeSignIn(new AbortController().signal, async () => {});
+    expect(fetch.mock.calls[0][1]?.headers).not.toHaveProperty('X-RoboBoy-Session');
+    setEnterpriseSession(identity);
+    await expect(nativeSignIn(new AbortController().signal, async () => {})).resolves.toMatchObject({
+      token: 'c'.repeat(43),
+    });
+    expect(fetch.mock.calls[2][1]?.headers).toMatchObject({ 'X-RoboBoy-Session': identity.token });
+    expect(fetch.mock.calls[3][1]?.headers).not.toHaveProperty('X-RoboBoy-Session');
+  });
+
   it('keeps polling a native sign-in through a brief outage and explains an unreachable server', async () => {
     enable();
     vi.useFakeTimers();

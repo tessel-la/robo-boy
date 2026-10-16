@@ -54,6 +54,11 @@ describe('Enterprise gateway using a signed OIDC issuer', () => {
     assert.equal(response.status, 200);
     return { ...(await response.json()), secret };
   };
+  const stillForwarding = async socket => {
+    if (socket.readyState !== WebSocket.OPEN) return false;
+    socket.send(JSON.stringify({ op: 'subscribe', topic: '/image' }));
+    return Promise.race([once(socket, 'message').then(() => true), once(socket, 'close').then(() => false)]);
+  };
   const nativeSession = async app => {
     const start = await nativeStart(app);
     const login = await app.login(start.id);
@@ -263,6 +268,64 @@ describe('Enterprise gateway using a signed OIDC issuer', () => {
     app.advance(3600001);
     await closed;
     assert.equal((await fetch(app.url + '/auth/session', { headers: { Cookie: cookie } })).status, 401);
+  });
+
+  it('moves a live native robot socket to a renewed session of the same employee', async () => {
+    const first = await nativeSession(app);
+    const socket = new WebSocket(app.url.replace('http:', 'ws:') + '/websocket', { origin: 'tauri://localhost' });
+    await once(socket, 'open');
+    socket.send(JSON.stringify({ op: 'roboboy_auth', token: first.token }));
+    socket.send(JSON.stringify({ op: 'subscribe', topic: '/image' }));
+    await once(socket, 'message');
+    app.advance(3300000);
+    const secret = randomBytes(32).toString('base64url');
+    const challenge = createHash('sha256').update(secret).digest('hex');
+    const started = await post(app, '/auth/native/start', { challenge }, { 'X-RoboBoy-Session': first.token });
+    const renewal = { ...(await started.json()), secret };
+    assert.equal((await app.login(renewal.id)).result.status, 200);
+    const renewed = await (await post(app, '/auth/native/poll', renewal)).json();
+    assert.ok(renewed.expires > first.expires);
+    assert.notEqual(renewed.token, first.token);
+    app.advance(300001);
+    assert.equal(
+      (await fetch(app.url + '/auth/session', { headers: { 'X-RoboBoy-Session': first.token } })).status,
+      401
+    );
+    assert.equal(await stillForwarding(socket), true);
+    const closed = once(socket, 'close');
+    app.advance(3600000);
+    await closed;
+  });
+
+  it('renews a web session in a second tab without loading another workspace', async () => {
+    const { cookie } = await app.login();
+    const socket = new WebSocket(app.url.replace('http:', 'ws:') + '/websocket', {
+      origin: app.origin,
+      headers: { Cookie: cookie },
+    });
+    await once(socket, 'open');
+    app.advance(3300000);
+    const renewed = await app.login(undefined, { session: cookie, renew: true });
+    assert.equal(renewed.result.status, 200);
+    assert.match(await renewed.result.text(), /Sign-in complete/);
+    assert.equal((await fetch(app.url + '/auth/session', { headers: { Cookie: cookie } })).status, 401);
+    const body = await (await fetch(app.url + '/auth/session', { headers: { Cookie: renewed.cookie } })).json();
+    assert.equal(body.user.id, 'employee-1');
+    app.advance(300001);
+    assert.equal(await stillForwarding(socket), true);
+  });
+
+  it('closes robot sockets when a different employee signs in on the same browser', async () => {
+    const { cookie } = await app.login();
+    const socket = new WebSocket(app.url.replace('http:', 'ws:') + '/websocket', {
+      origin: app.origin,
+      headers: { Cookie: cookie },
+    });
+    await once(socket, 'open');
+    const closed = once(socket, 'close');
+    app.overrideClaims({ sub: 'employee-2', name: 'Bob Employee' });
+    assert.equal((await app.login(undefined, { session: cookie, renew: true })).result.status, 200);
+    await closed;
   });
 
   it('cleans up expired browser transactions and rejects malformed requests', async () => {
