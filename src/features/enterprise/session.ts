@@ -54,7 +54,9 @@ export async function enterpriseFetch(input: RequestInfo | URL, init?: RequestIn
   return fetch(input instanceof Request ? new Request(url, input) : url.href, {
     ...init,
     headers,
-    credentials: token ? 'omit' : 'include',
+    // Packaged apps authenticate only with their bearer. Their app:// origin is cross-site, and the
+    // gateway never allows credentialed CORS, so asking for cookies fails every request before sign-in.
+    credentials: token || isDesktopRuntime() ? 'omit' : 'include',
     redirect: 'error',
   });
 }

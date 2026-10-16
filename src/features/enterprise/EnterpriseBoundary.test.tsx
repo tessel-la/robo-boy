@@ -218,6 +218,26 @@ describe('EnterpriseBoundary', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Sign in with Google' }));
     expect(assign).toHaveBeenCalledWith('https://robot.example/auth/login?provider=google');
   });
+  it('clears an outage message once the server answers again', async () => {
+    enable();
+    vi.useFakeTimers();
+    const fetch = vi.fn().mockRejectedValue(new TypeError('Failed to fetch'));
+    vi.stubGlobal('fetch', fetch);
+    render(
+      <EnterpriseBoundary>
+        <div>Robot workspace</div>
+      </EnterpriseBoundary>
+    );
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(screen.getByRole('alert')).toHaveTextContent('Cannot reach');
+    fetch.mockResolvedValue(new Response('{}', { status: 401 }));
+    await act(async () => {
+      vi.advanceTimersByTime(10000);
+    });
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
   it('does not restore a signed-out workspace from a delayed session response', async () => {
     enable();
     vi.useFakeTimers();

@@ -1,8 +1,9 @@
 .enterprise-login {
   height: var(--app-height, 100dvh);
-  overflow: auto;
-  display: flex;
-  flex-direction: column;
+  /* Only the middle scrolls, and only on short windows; the footer always stays visible. */
+  overflow: hidden;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
   box-sizing: border-box;
   background: var(--background-color);
   color: var(--text-color);
@@ -10,30 +11,31 @@
 :root[data-desktop] .enterprise-login {
   padding-top: var(--title-bar-height);
 }
-.enterprise-login-header,
 .enterprise-login-footer {
-  flex-shrink: 0;
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
-  gap: 16px;
-  padding: 24px clamp(20px, 5vw, 64px);
+  gap: 8px 24px;
+  padding: 14px clamp(20px, 5vw, 64px);
+  border-top: 1px solid var(--border-color);
   color: var(--text-secondary);
   font-size: 0.75rem;
   letter-spacing: 0.035em;
 }
-.enterprise-login-header {
-  border-bottom: 1px solid var(--border-color);
+.enterprise-powered {
+  color: var(--text-color);
+  font-size: 0.8rem;
 }
-.enterprise-login-footer {
-  justify-content: center;
-  text-align: center;
+.enterprise-powered strong {
+  font-weight: 700;
 }
 .enterprise-login-content {
-  flex: 1 0 auto;
+  min-height: 0;
+  overflow: auto;
   display: grid;
   place-items: center;
-  padding: 40px 20px;
+  padding: 32px 20px;
 }
 .enterprise-login-card {
   width: min(100%, 480px);
@@ -257,10 +259,22 @@
   outline: 2px solid var(--primary-color);
   outline-offset: 2px;
 }
+@media (max-height: 760px) {
+  .enterprise-login-content {
+    padding: 16px 20px;
+  }
+  .enterprise-login-card {
+    gap: 16px;
+    padding: 28px clamp(24px, 5vw, 40px);
+  }
+  .enterprise-login-card .enterprise-brand {
+    margin-bottom: 4px;
+  }
+}
 @media (max-width: 480px) {
-  .enterprise-login-header {
-    padding: 20px;
-    font-size: 0.65rem;
+  .enterprise-login-footer {
+    justify-content: center;
+    text-align: center;
   }
   .enterprise-login-content {
     padding: 28px 16px;

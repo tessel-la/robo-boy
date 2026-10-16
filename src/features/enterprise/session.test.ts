@@ -305,6 +305,17 @@ describe('Enterprise transport', () => {
     await expect(enterpriseProviders()).resolves.toEqual([]);
   });
 
+  it('never asks for cookies from a packaged app, even before sign-in', async () => {
+    enable();
+    const fetch = vi.fn().mockResolvedValue(new Response('{}', { status: 401 }));
+    vi.stubGlobal('fetch', fetch);
+    await enterpriseFetch('https://robot.example/auth/session');
+    expect(fetch.mock.calls[0][1].credentials).toBe('omit');
+    delete carrier.roboBoyDesktop;
+    await enterpriseFetch('https://robot.example/auth/session');
+    expect(fetch.mock.calls[1][1].credentials).toBe('include');
+  });
+
   it('cancels a pending native sign-in without storing credentials', async () => {
     enable();
     const id = 'x'.repeat(43);

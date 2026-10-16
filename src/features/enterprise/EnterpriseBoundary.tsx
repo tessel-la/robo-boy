@@ -38,6 +38,8 @@ export default function EnterpriseBoundary({ children }: { children: ReactNode }
   const [working, setWorking] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const [error, setError] = useState('');
+  // Separate from action errors so the next successful check clears a stale outage message.
+  const [checkError, setCheckError] = useState('');
   // Keyed by the session expiry it renews, so it lapses on its own once a new session arrives.
   const [renewal, setRenewal] = useState<{ expires: number; waiting: boolean; error: string } | null>(null);
   const [providers, setProviders] = useState<EnterpriseProvider[]>([]);
@@ -78,6 +80,7 @@ export default function EnterpriseBoundary({ children }: { children: ReactNode }
         if (response.status === 401) {
           apply(null);
           setConfirmed(false);
+          setCheckError('');
         } else {
           if (!response.ok) throw new EnterpriseUnavailable('The sign-in service is unavailable. Try again.');
           const next = parseSession(await response.json());
@@ -94,6 +97,7 @@ export default function EnterpriseBoundary({ children }: { children: ReactNode }
             else if (previous.user.id !== next.user.id) setConfirmed(false);
           }
           setError('');
+          setCheckError('');
         }
       } catch (failure) {
         if (controller.signal.aborted || checkedRevision !== revision.current) return;
@@ -103,7 +107,7 @@ export default function EnterpriseBoundary({ children }: { children: ReactNode }
         if ((timedOut || failure instanceof EnterpriseUnavailable) && kept && kept.expires > Date.now()) return;
         apply(null);
         setConfirmed(false);
-        setError(
+        setCheckError(
           timedOut
             ? 'The sign-in service did not respond. Try again.'
             : failure instanceof Error
@@ -237,19 +241,15 @@ export default function EnterpriseBoundary({ children }: { children: ReactNode }
   }
   return (
     <main className="enterprise-login">
-      <header className="enterprise-login-header">
-        <span>Robot operations</span>
-        <span>Powered by Robo-Boy</span>
-      </header>
       <div className="enterprise-login-content">
         <section className="enterprise-login-card" aria-labelledby="enterprise-login-title">
           <BrandMark />
           <span className="enterprise-eyebrow">Your robotics workspace</span>
           <h1 id="enterprise-login-title">{brand.loginTitle}</h1>
           <p>{brand.loginMessage}</p>
-          {error && (
+          {(error || checkError) && (
             <p role="alert" className="enterprise-error">
-              {error}
+              {error || checkError}
             </p>
           )}
           {loading ? (
@@ -315,7 +315,12 @@ export default function EnterpriseBoundary({ children }: { children: ReactNode }
           <small>Secure company access</small>
         </section>
       </div>
-      <footer className="enterprise-login-footer">One sign-in. Your robots, workspaces and tools.</footer>
+      <footer className="enterprise-login-footer">
+        <span>One sign-in. Your robots, workspaces and tools.</span>
+        <span className="enterprise-powered">
+          Powered by <strong>Robo-Boy</strong>
+        </span>
+      </footer>
     </main>
   );
 }
