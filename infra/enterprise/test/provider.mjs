@@ -19,6 +19,9 @@ export async function fixture({
   branding,
   robots,
   requiredGroup = '',
+  groupsClaim,
+  prompt,
+  userinfo,
   sessionSeconds = 3600,
 } = {}) {
   const { publicKey, privateKey } = await generateKeyPair('RS256');
@@ -27,9 +30,11 @@ export async function fixture({
   const received = [];
   let overrides = {};
   let invalidSignature = false;
+  const authorizations = [];
   const provider = http.createServer(async (request, response) => {
     const url = new URL(request.url, issuer);
     if (url.pathname === '/authorize') {
+      authorizations.push(url.searchParams);
       const code = randomBytes(16).toString('hex');
       codes.set(code, {
         nonce: url.searchParams.get('nonce'),
@@ -41,6 +46,10 @@ export async function fixture({
       callback.searchParams.set('state', url.searchParams.get('state'));
       response.writeHead(302, { Location: callback.href });
       return response.end();
+    }
+    if (url.pathname === '/userinfo' && userinfo) {
+      response.writeHead(200, { 'Content-Type': 'application/json' });
+      return response.end(JSON.stringify({ sub: 'employee-1', ...userinfo }));
     }
     if (url.pathname === '/jwks') {
       response.writeHead(200, { 'Content-Type': 'application/json' });
@@ -102,6 +111,7 @@ export async function fixture({
       authorization_endpoint: issuer + '/authorize',
       token_endpoint: issuer + '/token',
       jwks_uri: issuer + '/jwks',
+      ...(userinfo ? { userinfo_endpoint: issuer + '/userinfo' } : {}),
       response_types_supported: ['code'],
       id_token_signing_alg_values_supported: ['RS256'],
     },
@@ -144,6 +154,8 @@ export async function fixture({
     nativeOrigins,
     branding,
     requiredGroup,
+    groupsClaim,
+    prompt,
     robots,
     sessionSeconds,
     developmentAssets,
@@ -157,6 +169,7 @@ export async function fixture({
     url,
     origin,
     received,
+    authorizations,
     provider,
     backend,
     overrideClaims: value => {

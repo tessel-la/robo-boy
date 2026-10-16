@@ -13,6 +13,14 @@ export interface EnterpriseSession {
   media?: string;
 }
 let session: EnterpriseSession | null = null;
+
+/** The gateway could not be reached or answered with a server error; the session may still be valid. */
+export class EnterpriseUnavailable extends Error {}
+/** Browsers report DNS, TLS and refused connections alike as a TypeError without detail. */
+export const unreachable = () =>
+  new EnterpriseUnavailable(
+    `Cannot reach ${enterpriseOrigin()}. Check your network or VPN, and that this computer trusts the server certificate.`
+  );
 export const getEnterpriseSession = () => session;
 /** A login without a robot registry keeps the ordinary host/IP connection workflow. */
 export const hasEnterpriseRobots = () => managedGateway() && Boolean(session?.robots?.length);
@@ -101,15 +109,22 @@ export async function nativeSignIn(
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(secret));
   const challenge = [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, '0')).join('');
   const origin = enterpriseOrigin();
-  const post = (path: string, value: unknown) =>
-    fetch(origin + path, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'omit',
-      redirect: 'error',
-      body: JSON.stringify(value),
-      signal,
-    });
+  const post = async (path: string, value: unknown) => {
+    try {
+      return await fetch(origin + path, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'omit',
+        redirect: 'error',
+        body: JSON.stringify(value),
+        signal,
+      });
+    } catch (error) {
+      signal.throwIfAborted();
+      if (error instanceof TypeError) throw unreachable();
+      throw error;
+    }
+  };
   const started = await post('/auth/native/start', { challenge });
   if (!started.ok) throw new Error('Sign-in could not start. Contact your administrator.');
   const { id, browserUrl } = await started.json();
@@ -125,9 +140,14 @@ export async function nativeSignIn(
   const deadline = Date.now() + 300000;
   while (Date.now() < deadline) {
     signal.throwIfAborted();
-    const response = await post('/auth/native/poll', { id, secret });
-    if (response.status === 200) return parseSession(await response.json(), true);
-    if (response.status !== 202) throw new Error('Sign-in expired or was rejected. Start again.');
+    // Keep waiting through brief outages, for example a laptop switching networks during sign-in.
+    const response = await post('/auth/native/poll', { id, secret }).catch(error => {
+      if (error instanceof EnterpriseUnavailable) return null;
+      throw error;
+    });
+    if (response?.status === 200) return parseSession(await response.json(), true);
+    if (response && response.status !== 202 && response.status < 500)
+      throw new Error('Sign-in expired or was rejected. Start again.');
     await new Promise<void>((resolve, reject) => {
       const done = () => {
         signal.removeEventListener('abort', abort);

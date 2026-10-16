@@ -55,9 +55,20 @@ https://robots.example.com/auth/callback
 
 Enable the authorization code flow and `openid profile email` scopes. Assign the application
 to the employees who should use it. Use a tenant-specific issuer. To restrict access to a group,
-configure the provider to include a `groups` array in its signed ID token and set the exact
-required group value. Entra ID, Okta and Keycloak use the same OIDC boundary; their tenant,
-client registration and claim-mapping settings remain provider-specific.
+set `ROBOBOY_OIDC_REQUIRED_GROUP`. The gateway reads `ROBOBOY_OIDC_GROUPS_CLAIM` (default
+`groups`, a string or array) from the signed ID token, or from userinfo when the ID token omits
+it. Provider notes:
+
+- **Keycloak:** add a _Group Membership_ mapper. Its default full paths (`/robot-operators`) match.
+- **Okta:** add a groups claim and set `ROBOBOY_OIDC_SCOPE="openid profile email groups"`. If Okta
+  rejects `prompt=select_account`, set `ROBOBOY_OIDC_PROMPT=login` or `off`.
+- **Entra ID:** group claims carry object IDs and are omitted above 200 groups. Prefer an app
+  role and set `ROBOBOY_OIDC_GROUPS_CLAIM=roles` with the role value as the required group.
+
+The gateway session lasts `ROBOBOY_AUTH_SESSION_SECONDS`, independent of the provider's ID-token
+lifetime. Revoking an employee in the provider takes effect at the next sign-in; use a short
+session lifetime when revocation must be faster. A cancelled or denied provider sign-in shows
+a browser page and is reported to a waiting packaged app.
 
 Add the settings from [the example environment file](../config/enterprise.example.env) to
 your ignored `.env` file. Store the actual client secret in `.secrets/oidc-client-secret`, with

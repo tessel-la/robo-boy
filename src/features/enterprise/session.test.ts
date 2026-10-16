@@ -234,6 +234,32 @@ describe('Enterprise transport', () => {
     expect(browser).not.toHaveBeenCalled();
   });
 
+  it('keeps polling a native sign-in through a brief outage and explains an unreachable server', async () => {
+    enable();
+    vi.useFakeTimers();
+    const id = 'x'.repeat(43);
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ id, browserUrl: 'https://robot.example/auth/login?native=' + id }))
+      )
+      .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+      .mockResolvedValueOnce(new Response('', { status: 503 }))
+      .mockResolvedValue(new Response(JSON.stringify(identity)));
+    vi.stubGlobal('fetch', fetch);
+    const result = nativeSignIn(new AbortController().signal, async () => {});
+    let settled = false;
+    void result.finally(() => (settled = true)).catch(() => {});
+    // Digesting runs off the timer queue, so advance until the poll loop finishes.
+    for (let step = 0; step < 40 && !settled; step += 1) await vi.advanceTimersByTimeAsync(250);
+    await expect(result).resolves.toMatchObject({ token: identity.token });
+    vi.useRealTimers();
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')));
+    await expect(nativeSignIn(new AbortController().signal, async () => {})).rejects.toThrow(
+      'Cannot reach https://robot.example'
+    );
+  });
+
   it('cancels a pending native sign-in without storing credentials', async () => {
     enable();
     const id = 'x'.repeat(43);

@@ -8,6 +8,7 @@ import { registerRobotResources, robotResourceScheme } from './robotResources';
 import { fetchEmbed, isEmbedHost, registerEmbedProxy } from './embedProxy';
 import { configureCertificates } from './certificates';
 declare const __ROBOBOY_ENTERPRISE_LOGIN__: boolean;
+declare const __ROBOBOY_ENTERPRISE_ORIGIN__: string;
 import { registerPanelFetch } from './panelFetch';
 import { registerAssistantSubscriptions } from './assistant';
 
@@ -229,8 +230,10 @@ const registerWindowControls = (): void => {
     )
       throw new Error('Sign-in caller rejected.');
     const target = new URL(value);
+    const origin = typeof __ROBOBOY_ENTERPRISE_ORIGIN__ === 'undefined' ? '' : __ROBOBOY_ENTERPRISE_ORIGIN__;
     if (
       target.protocol !== 'https:' ||
+      (origin && target.origin !== origin) ||
       target.username ||
       target.password ||
       target.pathname !== '/auth/login' ||

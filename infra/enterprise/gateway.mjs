@@ -63,6 +63,17 @@ export async function createEnterpriseGateway(options) {
   if (!['127.0.0.1', 'localhost', '[::1]'].includes(upstream.hostname) || upstream.protocol !== 'http:')
     throw new Error('Enterprise upstream must be private loopback HTTP.');
   const brand = options.branding ?? loadBranding();
+  const groupsClaim = options.groupsClaim || 'groups';
+  const prompt = options.prompt ?? 'select_account';
+  if (!/^[a-z_]+(?: [a-z_]+)*$/.test(prompt) || prompt.length > 64)
+    throw new Error('OIDC prompt must be off or space-separated prompt values.');
+  // Keycloak's group mapper emits full paths such as "/robot-operators" unless reconfigured.
+  const memberOf = value =>
+    (Array.isArray(value) ? value : typeof value === 'string' ? [value] : []).some(
+      group =>
+        typeof group === 'string' &&
+        (group === options.requiredGroup || group.replace(/^\//, '') === options.requiredGroup)
+    );
   const registry = robots(options.robots, upstream.origin);
   const publicRobots = registry.map(({ id, name }) => ({ id, name }));
   const robotRoute = path => {
@@ -200,6 +211,19 @@ export async function createEnterpriseGateway(options) {
     response.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...headers });
     response.end(JSON.stringify(body));
   };
+  /** Login and callback are top-level browser navigations; show a page, not raw JSON. */
+  const page = (response, status, title, message, native, headers = {}) => {
+    response.writeHead(status, {
+      'Content-Type': 'text/html; charset=utf-8',
+      'Cache-Control': 'no-store',
+      'Content-Security-Policy':
+        "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'",
+      ...headers,
+    });
+    response.end(
+      `<!doctype html><meta name="viewport" content="width=device-width, initial-scale=1"><title>${escape(brand.name)}</title><main style="font:18px system-ui;max-width:35rem;margin:15vh auto;padding:24px"><h1>${escape(title)}</h1><p>${escape(message)}</p><p>${native ? `Return to ${escape(brand.name)} and start again. You can close this browser tab.` : `<a href="/">Return to ${escape(brand.name)}</a>`}</p></main>`
+    );
+  };
   const remove = session => {
     sessions.delete(session.key);
     media.delete(session.media);
@@ -240,6 +264,7 @@ export async function createEnterpriseGateway(options) {
       response.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS');
     }
     let nativeCallback;
+    let browserPage = false;
     try {
       sweep();
       const url = new URL(request.url, origin);
@@ -297,10 +322,19 @@ export async function createEnterpriseGateway(options) {
         });
       }
       if (url.pathname === '/auth/login' && request.method === 'GET') {
-        if (transactions.size >= 128) return reply(response, 429, { error: 'Too many pending sign-ins.' });
+        browserPage = true;
         const nativeId = url.searchParams.get('native');
+        nativeCallback = nativeId;
+        if (transactions.size >= 128)
+          return page(
+            response,
+            429,
+            'Too many sign-ins',
+            'Too many sign-ins are in progress. Try again shortly.',
+            nativeId
+          );
         if (nativeId && (!pending.has(nativeId) || pending.get(nativeId).started))
-          return reply(response, 400, { error: 'Sign-in has expired. Start again in the app.' });
+          return page(response, 400, 'Sign-in expired', 'This sign-in link has expired or was already used.', true);
         const verifier = oidc.randomPKCECodeVerifier();
         const state = oidc.randomState();
         const nonce = oidc.randomNonce();
@@ -309,8 +343,8 @@ export async function createEnterpriseGateway(options) {
         if (nativeId) pending.get(nativeId).started = true;
         const target = oidc.buildAuthorizationUrl(config, {
           redirect_uri: `${origin}/auth/callback`,
-          scope: 'openid profile email',
-          prompt: 'select_account',
+          scope: options.scope || 'openid profile email',
+          ...(prompt === 'off' ? {} : { prompt }),
           code_challenge: await oidc.calculatePKCECodeChallenge(verifier),
           code_challenge_method: 'S256',
           state,
@@ -324,13 +358,32 @@ export async function createEnterpriseGateway(options) {
         return response.end();
       }
       if (url.pathname === '/auth/callback' && request.method === 'GET') {
+        browserPage = true;
         const state = url.searchParams.get('state');
         const attempt = transactions.get(state);
         nativeCallback = attempt?.nativeId;
         transactions.delete(state);
         if (!attempt || !equal(hash(cookie(request, loginCookie) ?? ''), attempt.browser)) {
           failHandoff(nativeCallback);
-          return reply(response, 400, { error: 'Sign-in could not be verified. Start again.' });
+          return page(
+            response,
+            400,
+            'Sign-in could not be verified',
+            'This sign-in was already used, expired, or was started in another browser.',
+            nativeCallback
+          );
+        }
+        // For example access_denied when the employee cancels or the application is not assigned.
+        if (url.searchParams.has('error')) {
+          failHandoff(nativeCallback);
+          return page(
+            response,
+            403,
+            'Sign-in was not completed',
+            'Your identity provider cancelled or denied this sign-in. Contact your administrator if you need access.',
+            nativeCallback,
+            { 'Set-Cookie': setCookie(loginCookie, '', 0) }
+          );
         }
         const tokens = await oidc.authorizationCodeGrant(config, url, {
           pkceCodeVerifier: attempt.verifier,
@@ -339,31 +392,39 @@ export async function createEnterpriseGateway(options) {
           idTokenExpected: true,
         });
         const claims = tokens.claims();
-        if (
-          !claims?.sub ||
-          !Number.isFinite(claims.exp) ||
-          (options.requiredGroup && (!Array.isArray(claims.groups) || !claims.groups.includes(options.requiredGroup)))
-        ) {
+        let groups = claims?.[groupsClaim];
+        // Okta and some Keycloak mappers release groups only from userinfo, verified against the same subject.
+        if (options.requiredGroup && groups === undefined && claims?.sub && config.serverMetadata().userinfo_endpoint)
+          groups = (await oidc.fetchUserInfo(config, tokens.access_token, claims.sub))[groupsClaim];
+        if (!claims?.sub || (options.requiredGroup && !memberOf(groups))) {
           failHandoff(nativeCallback);
-          return reply(response, 403, { error: 'Your account is not assigned access to this deployment.' });
+          return page(
+            response,
+            403,
+            'Access not assigned',
+            'Your account is not assigned access to this deployment. Contact your administrator.',
+            nativeCallback,
+            { 'Set-Cookie': setCookie(loginCookie, '', 0) }
+          );
         }
         if (sessions.size >= 1024) {
           failHandoff(nativeCallback);
-          return reply(response, 503, { error: 'Session capacity reached. Try again later.' });
+          return page(response, 503, 'Service busy', 'Session capacity reached. Try again later.', nativeCallback);
         }
         const token = random();
+        // The ID token only proves this sign-in; openid-client already rejected it if expired.
+        // Provider token lifetimes (Keycloak defaults to 5 minutes) must not end the workspace session.
         const session = {
           key: hash(token),
           media: random(),
           user: { id: claims.sub, name: String(claims.name || claims.preferred_username || claims.sub).slice(0, 128) },
-          expires: Math.min(claims.exp * 1000, clock() + ttl * 1000),
+          expires: clock() + ttl * 1000,
           connections: new Set(),
         };
-        if (!valid(session))
-          return reply(response, 401, { error: 'The identity provider returned an expired sign-in.' });
         if (attempt.nativeId) {
           const handoff = pending.get(attempt.nativeId);
-          if (!handoff || handoff.session) return reply(response, 400, { error: 'Sign-in handoff expired.' });
+          if (!handoff || handoff.session)
+            return page(response, 400, 'Sign-in expired', 'The app stopped waiting for this sign-in.', true);
           handoff.session = session;
           handoff.token = token;
         } else {
@@ -442,9 +503,16 @@ export async function createEnterpriseGateway(options) {
     } catch {
       failHandoff(nativeCallback);
       // Provider errors can contain codes and credentials. Never return or log their raw text.
-      if (!response.headersSent)
-        reply(response, 400, { error: 'Sign-in or request failed. Start again or contact your administrator.' });
-      else response.destroy();
+      if (response.headersSent) response.destroy();
+      else if (browserPage)
+        page(
+          response,
+          400,
+          'Sign-in failed',
+          'The identity provider response could not be verified. Start again or contact your administrator.',
+          nativeCallback
+        );
+      else reply(response, 400, { error: 'Sign-in or request failed. Start again or contact your administrator.' });
     }
   });
 
@@ -557,6 +625,9 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
       clientId: authentication ? required('ROBOBOY_OIDC_CLIENT_ID') : '',
       clientSecret: secret,
       requiredGroup: process.env.ROBOBOY_OIDC_REQUIRED_GROUP || '',
+      groupsClaim: process.env.ROBOBOY_OIDC_GROUPS_CLAIM || 'groups',
+      scope: process.env.ROBOBOY_OIDC_SCOPE || 'openid profile email',
+      prompt: process.env.ROBOBOY_OIDC_PROMPT || 'select_account',
       sessionSeconds: Number(process.env.ROBOBOY_AUTH_SESSION_SECONDS || '3600'),
       branding: loadBranding(process.env.ROBOBOY_BRANDING_FILE),
       ...(process.env.ROBOBOY_AUTH_NATIVE_ORIGINS

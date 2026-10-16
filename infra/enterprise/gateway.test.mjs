@@ -324,3 +324,71 @@ it('applies an explicit employee group allowlist using verified claims', async (
     await app.close();
   }
 });
+
+it('accepts Keycloak group paths, a configured claim and groups released only by userinfo', async () => {
+  for (const [options, claims] of [
+    [{}, { groups: ['/employee-only'] }],
+    [{ groupsClaim: 'roles' }, { groups: undefined, roles: 'employee-only' }],
+    [{ userinfo: { groups: ['employee-only'] } }, { groups: undefined }],
+  ]) {
+    const app = await fixture({ requiredGroup: 'employee-only', ...options });
+    try {
+      app.overrideClaims(claims);
+      assert.equal((await app.login()).result.status, 303);
+    } finally {
+      await app.close();
+    }
+  }
+  const app = await fixture({ requiredGroup: 'employee-only', userinfo: { groups: ['other'] } });
+  try {
+    app.overrideClaims({ groups: undefined });
+    const { result } = await app.login();
+    assert.equal(result.status, 403);
+    assert.match(result.headers.get('content-type'), /text\/html/);
+  } finally {
+    await app.close();
+  }
+});
+
+it('keeps the configured session lifetime when the provider issues short-lived ID tokens', async () => {
+  const app = await fixture({ sessionSeconds: 3600 });
+  try {
+    app.overrideClaims({ exp: Math.floor(Date.now() / 1000) + 300 });
+    const { cookie } = await app.login();
+    app.advance(600000);
+    assert.equal((await fetch(app.url + '/auth/session', { headers: { Cookie: cookie } })).status, 200);
+    app.advance(3000001);
+    assert.equal((await fetch(app.url + '/auth/session', { headers: { Cookie: cookie } })).status, 401);
+  } finally {
+    await app.close();
+  }
+});
+
+it('shows a page for a cancelled provider sign-in and reports it to a waiting app', async () => {
+  const app = await fixture({ prompt: 'off' });
+  try {
+    const secret = randomBytes(32).toString('base64url');
+    const challenge = createHash('sha256').update(secret).digest('hex');
+    const headers = { 'Content-Type': 'application/json', Origin: 'tauri://localhost' };
+    const { id } = await (
+      await fetch(app.url + '/auth/native/start', { method: 'POST', headers, body: JSON.stringify({ challenge }) })
+    ).json();
+    const start = await fetch(`${app.url}/auth/login?native=${id}`, { redirect: 'manual' });
+    const login = start.headers.getSetCookie()[0].split(';')[0];
+    assert.equal(new URL(start.headers.get('location')).searchParams.has('prompt'), false);
+    const state = new URL(start.headers.get('location')).searchParams.get('state');
+    const result = await fetch(`${app.url}/auth/callback?error=access_denied&state=${state}`, {
+      headers: { Cookie: login },
+    });
+    assert.equal(result.status, 403);
+    assert.match(await result.text(), /cancelled or denied/);
+    const poll = await fetch(app.url + '/auth/native/poll', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ id, secret }),
+    });
+    assert.equal(poll.status, 401);
+  } finally {
+    await app.close();
+  }
+});

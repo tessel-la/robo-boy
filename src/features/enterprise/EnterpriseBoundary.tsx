@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState, createContext, useContext, type ReactNode } from 'react';
 import { brand, enterpriseEnabled, enterpriseOrigin } from './config';
 import {
+  EnterpriseUnavailable,
+  unreachable,
   enterpriseFetch,
   getEnterpriseSession,
   nativeSignIn,
@@ -62,13 +64,16 @@ export default function EnterpriseBoundary({ children }: { children: ReactNode }
         const response = await enterpriseFetch(enterpriseOrigin() + '/auth/session', {
           signal: request.signal,
           cache: 'no-store',
+        }).catch(error => {
+          if (error instanceof TypeError) throw unreachable();
+          throw error;
         });
         if (controller.signal.aborted || checkedRevision !== revision.current) return;
         if (response.status === 401) {
           apply(null);
           setConfirmed(false);
         } else {
-          if (!response.ok) throw new Error('The sign-in service is unavailable. Try again.');
+          if (!response.ok) throw new EnterpriseUnavailable('The sign-in service is unavailable. Try again.');
           const next = parseSession(await response.json());
           if (controller.signal.aborted || checkedRevision !== revision.current) return;
           if (isDesktopRuntime()) {
@@ -83,6 +88,10 @@ export default function EnterpriseBoundary({ children }: { children: ReactNode }
         }
       } catch (failure) {
         if (controller.signal.aborted || checkedRevision !== revision.current) return;
+        // A brief outage must not unmount a live workspace or discard a native credential.
+        // The gateway still enforces expiry and revocation on every request and socket.
+        const kept = getEnterpriseSession();
+        if ((timedOut || failure instanceof EnterpriseUnavailable) && kept && kept.expires > Date.now()) return;
         apply(null);
         setConfirmed(false);
         setError(

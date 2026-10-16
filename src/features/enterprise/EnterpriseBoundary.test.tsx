@@ -114,6 +114,47 @@ describe('EnterpriseBoundary', () => {
     });
     expect(screen.queryByText('Robot workspace')).not.toBeInTheDocument();
   });
+  it('keeps a live workspace through brief network and gateway outages', async () => {
+    enable();
+    vi.useFakeTimers();
+    const fetch = vi.fn().mockImplementation(async () => new Response(JSON.stringify(user())));
+    vi.stubGlobal('fetch', fetch);
+    render(
+      <EnterpriseBoundary>
+        <div>Robot workspace</div>
+      </EnterpriseBoundary>
+    );
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(screen.getByText('Robot workspace')).toBeInTheDocument();
+    for (const outage of [
+      () => Promise.reject(new TypeError('Failed to fetch')),
+      async () => new Response('', { status: 502 }),
+    ]) {
+      fetch.mockImplementationOnce(outage);
+      await act(async () => {
+        vi.advanceTimersByTime(10000);
+      });
+      expect(screen.getByText('Robot workspace')).toBeInTheDocument();
+    }
+    fetch.mockResolvedValue(new Response('{}', { status: 401 }));
+    await act(async () => {
+      vi.advanceTimersByTime(10000);
+    });
+    expect(screen.queryByText('Robot workspace')).not.toBeInTheDocument();
+  });
+  it('explains an unreachable server before sign-in', async () => {
+    enable();
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')));
+    render(
+      <EnterpriseBoundary>
+        <div>Robot workspace</div>
+      </EnterpriseBoundary>
+    );
+    expect(await screen.findByRole('alert')).toHaveTextContent('Cannot reach https://robot.example');
+    expect(screen.queryByText('Robot workspace')).not.toBeInTheDocument();
+  });
   it('does not restore a signed-out workspace from a delayed session response', async () => {
     enable();
     vi.useFakeTimers();

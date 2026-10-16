@@ -34,7 +34,13 @@ await build({
   target: 'node20',
   format: 'esm',
   external,
-  define: { __ROBOBOY_ENTERPRISE_LOGIN__: JSON.stringify(enabled(environment.VITE_ENTERPRISE_LOGIN)) },
+  define: {
+    __ROBOBOY_ENTERPRISE_LOGIN__: JSON.stringify(enabled(environment.VITE_ENTERPRISE_LOGIN)),
+    // The system browser may only open this build's own gateway, matching the renderer's origin.
+    __ROBOBOY_ENTERPRISE_ORIGIN__: JSON.stringify(
+      environment.VITE_ENTERPRISE_SERVER_URL ? new URL(environment.VITE_ENTERPRISE_SERVER_URL).origin : ''
+    ),
+  },
   sourcemap: true,
 });
 
