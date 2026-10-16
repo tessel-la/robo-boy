@@ -1,6 +1,7 @@
 services:
   # React App Development Server
   app:
+    restart: unless-stopped
     build:
       context: .
       dockerfile: infra/docker/Dockerfile.dev
