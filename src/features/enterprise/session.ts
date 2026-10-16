@@ -99,9 +99,39 @@ export function parseSession(value: unknown, native = false): EnterpriseSession 
   return result;
 }
 
+export interface EnterpriseProvider {
+  id: string;
+  label: string;
+}
+/** Public list of sign-in methods; an empty list keeps the single company sign-in button. */
+export async function enterpriseProviders(signal?: AbortSignal): Promise<EnterpriseProvider[]> {
+  const response = await fetch(enterpriseOrigin() + '/auth/providers', {
+    credentials: 'omit',
+    redirect: 'error',
+    cache: 'no-store',
+    signal,
+  });
+  if (!response.ok) return [];
+  const { providers } = (await response.json()) as { providers?: unknown };
+  if (
+    !Array.isArray(providers) ||
+    providers.length > 8 ||
+    providers.some(
+      provider =>
+        !/^[a-z][a-z0-9-]{0,31}$/.test(provider?.id) ||
+        typeof provider.label !== 'string' ||
+        !provider.label.trim() ||
+        provider.label.length > 64
+    )
+  )
+    return [];
+  return providers.map(({ id, label }) => ({ id, label }));
+}
+
 export async function nativeSignIn(
   signal: AbortSignal,
-  openBrowser: (url: string) => Promise<void>
+  openBrowser: (url: string) => Promise<void>,
+  provider?: string
 ): Promise<EnterpriseSession> {
   const bytes = crypto.getRandomValues(new Uint8Array(32));
   const secret = btoa(String.fromCharCode(...bytes))
@@ -132,7 +162,7 @@ export async function nativeSignIn(
       throw error;
     }
   };
-  const started = await post('/auth/native/start', { challenge });
+  const started = await post('/auth/native/start', provider ? { challenge, provider } : { challenge });
   if (!started.ok) throw new Error('Sign-in could not start. Contact your administrator.');
   const { id, browserUrl } = await started.json();
   const target = new URL(browserUrl);

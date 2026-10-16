@@ -188,6 +188,36 @@ describe('EnterpriseBoundary', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('Cannot reach https://robot.example');
     expect(screen.queryByText('Robot workspace')).not.toBeInTheDocument();
   });
+  it('offers one button per sign-in provider and starts the chosen one', async () => {
+    enable();
+    const assign = vi.fn();
+    vi.stubGlobal('location', { ...window.location, assign });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) =>
+        url.endsWith('/auth/providers')
+          ? new Response(
+              JSON.stringify({
+                providers: [
+                  { id: 'company', label: 'your company account' },
+                  { id: 'google', label: 'Google' },
+                  { id: 'microsoft', label: 'Microsoft' },
+                ],
+              })
+            )
+          : new Response('{}', { status: 401 })
+      )
+    );
+    render(
+      <EnterpriseBoundary>
+        <div>Robot workspace</div>
+      </EnterpriseBoundary>
+    );
+    await screen.findByRole('button', { name: 'Sign in with Microsoft' });
+    expect(screen.getByRole('button', { name: 'Sign in with your company account' })).toHaveClass('enterprise-primary');
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in with Google' }));
+    expect(assign).toHaveBeenCalledWith('https://robot.example/auth/login?provider=google');
+  });
   it('does not restore a signed-out workspace from a delayed session response', async () => {
     enable();
     vi.useFakeTimers();
@@ -202,7 +232,9 @@ describe('EnterpriseBoundary', () => {
           })
       )
       .mockResolvedValue(new Response('{}'));
-    vi.stubGlobal('fetch', fetch);
+    vi.stubGlobal('fetch', (url: string, init?: RequestInit) =>
+      url.endsWith('/auth/providers') ? Promise.resolve(new Response('', { status: 404 })) : fetch(url, init)
+    );
     render(
       <EnterpriseBoundary>
         <div>

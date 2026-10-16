@@ -22,6 +22,7 @@ export async function fixture({
   groupsClaim,
   prompt,
   userinfo,
+  providers,
   sessionSeconds = 3600,
 } = {}) {
   const { publicKey, privateKey } = await generateKeyPair('RS256');
@@ -151,6 +152,7 @@ export async function fixture({
     origin,
     upstream: upstream || `http://127.0.0.1:${backend.address().port}`,
     oidc: config,
+    providers: providers?.(config),
     nativeOrigins,
     branding,
     requiredGroup,
@@ -182,9 +184,12 @@ export async function fixture({
       now += milliseconds;
       gateway.sweep();
     },
-    async login(nativeId, { session, renew } = {}) {
-      const query = nativeId ? '?native=' + nativeId : renew ? '?renew=1' : '';
-      const start = await fetch(`${url}/auth/login${query}`, { redirect: 'manual' });
+    async login(nativeId, { session, renew, provider } = {}) {
+      const query = new URLSearchParams({
+        ...(nativeId ? { native: nativeId } : renew ? { renew: '1' } : {}),
+        ...(provider ? { provider } : {}),
+      });
+      const start = await fetch(`${url}/auth/login${query.size ? '?' + query : ''}`, { redirect: 'manual' });
       const cookie = start.headers.getSetCookie()[0].split(';')[0];
       const authorize = await fetch(start.headers.get('location'), { redirect: 'manual' });
       const callback = new URL(authorize.headers.get('location'));

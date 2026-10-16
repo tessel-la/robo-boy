@@ -4,10 +4,12 @@ import {
   EnterpriseUnavailable,
   unreachable,
   enterpriseFetch,
+  enterpriseProviders,
   getEnterpriseSession,
   nativeSignIn,
   parseSession,
   setEnterpriseSession,
+  type EnterpriseProvider,
   type EnterpriseSession,
 } from './session';
 import { isDesktopRuntime } from '../../runtime/runtimeConfig';
@@ -38,6 +40,7 @@ export default function EnterpriseBoundary({ children }: { children: ReactNode }
   const [error, setError] = useState('');
   // Keyed by the session expiry it renews, so it lapses on its own once a new session arrives.
   const [renewal, setRenewal] = useState<{ expires: number; waiting: boolean; error: string } | null>(null);
+  const [providers, setProviders] = useState<EnterpriseProvider[]>([]);
   const attempt = useRef<AbortController>();
   const revision = useRef(0);
   const signedOut = useRef(false);
@@ -115,6 +118,10 @@ export default function EnterpriseBoundary({ children }: { children: ReactNode }
       }
     };
     void check();
+    // Failure keeps the single company button; the gateway then offers its own chooser.
+    enterpriseProviders(controller.signal)
+      .then(list => !controller.signal.aborted && setProviders(list))
+      .catch(() => {});
     const timer = setInterval(() => void check(), 10000);
     return () => {
       controller.abort();
@@ -125,7 +132,7 @@ export default function EnterpriseBoundary({ children }: { children: ReactNode }
   }, [enabled]);
 
   if (!enabled) return <>{children}</>;
-  const login = async () => {
+  const login = async (provider?: string) => {
     signedOut.current = false;
     revision.current += 1;
     setError('');
@@ -134,11 +141,13 @@ export default function EnterpriseBoundary({ children }: { children: ReactNode }
     attempt.current = controller;
     try {
       if (!isDesktopRuntime()) {
-        window.location.assign(enterpriseOrigin() + '/auth/login');
+        window.location.assign(
+          enterpriseOrigin() + '/auth/login' + (provider ? '?provider=' + encodeURIComponent(provider) : '')
+        );
         return;
       }
       setWorking(true);
-      const next = await nativeSignIn(controller.signal, openSignInBrowser);
+      const next = await nativeSignIn(controller.signal, openSignInBrowser, provider);
       if (!controller.signal.aborted) {
         apply(next);
         setConfirmed(false);
@@ -257,15 +266,32 @@ export default function EnterpriseBoundary({ children }: { children: ReactNode }
                 Use another account
               </button>
             </>
-          ) : (
+          ) : working || loggingOut || providers.length < 2 ? (
             <button
               className="enterprise-primary"
               type="button"
               disabled={working || loggingOut}
-              onClick={() => void login()}
+              onClick={() => void login(providers[0]?.id)}
             >
-              {loggingOut ? 'Signing out…' : working ? 'Waiting for sign-in…' : 'Sign in with your company account'}
+              {loggingOut
+                ? 'Signing out…'
+                : working
+                  ? 'Waiting for sign-in…'
+                  : `Sign in with ${providers[0]?.label ?? 'your company account'}`}
             </button>
+          ) : (
+            <div className="enterprise-providers">
+              {providers.map((provider, index) => (
+                <button
+                  key={provider.id}
+                  className={index === 0 ? 'enterprise-primary' : undefined}
+                  type="button"
+                  onClick={() => void login(provider.id)}
+                >
+                  Sign in with {provider.label}
+                </button>
+              ))}
+            </div>
           )}
           {working && (
             <>

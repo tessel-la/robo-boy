@@ -65,6 +65,24 @@ it. Provider notes:
 - **Entra ID:** group claims carry object IDs and are omitted above 200 groups. Prefer an app
   role and set `ROBOBOY_OIDC_GROUPS_CLAIM=roles` with the role value as the required group.
 
+### Google and Microsoft sign-in
+
+The gateway can offer company OIDC, Google and Microsoft side by side. Configure any combination;
+the login screen shows one button per provider, and older apps get a chooser page in the browser.
+Register `https://robots.example.com/auth/callback` as the redirect URI with each provider.
+
+- **Google:** create an OAuth web client in Google Cloud and set `ROBOBOY_GOOGLE_CLIENT_ID` and
+  `ROBOBOY_GOOGLE_CLIENT_SECRET_FILE`. The gateway refuses to start without an access policy:
+  `ROBOBOY_GOOGLE_ALLOWED_DOMAINS` admits Google Workspace accounts by their verified `hd` claim,
+  and `ROBOBOY_GOOGLE_ALLOWED_EMAILS` admits individual verified addresses. An email domain alone is
+  not trusted, because a personal Google account can verify any address.
+- **Microsoft:** register a web app in Entra ID and set `ROBOBOY_MICROSOFT_CLIENT_ID`,
+  `ROBOBOY_MICROSOFT_CLIENT_SECRET_FILE` and the directory (tenant) ID in `ROBOBOY_MICROSOFT_TENANT`.
+  Multi-tenant endpoints (`common`, `organizations`) are rejected. To admit only some employees,
+  define an app role and set `ROBOBOY_MICROSOFT_REQUIRED_ROLE`, or require assignment in Entra ID.
+
+Account IDs from Google and Microsoft are namespaced (`google:<sub>`, `microsoft:<sub>`).
+
 The gateway session lasts `ROBOBOY_AUTH_SESSION_SECONDS`, independent of the provider's ID-token
 lifetime. Revoking an employee in the provider takes effect at the next sign-in; use a short
 session lifetime when revocation must be faster. A cancelled or denied provider sign-in shows

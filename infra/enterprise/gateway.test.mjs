@@ -6,6 +6,7 @@ import { WebSocket } from 'ws';
 import { fixture } from './test/provider.mjs';
 import { branding, enabled, secureOrigin } from './config.mjs';
 import { createEnterpriseGateway } from './gateway.mjs';
+import { providersFromEnvironment } from './providers.mjs';
 
 describe('Enterprise configuration', () => {
   it('has no login or custom branding by default and rejects unsafe settings', () => {
@@ -454,4 +455,158 @@ it('shows a page for a cancelled provider sign-in and reports it to a waiting ap
   } finally {
     await app.close();
   }
+});
+
+describe('Multiple sign-in providers', () => {
+  const both = config => [
+    { id: 'company', oidc: config },
+    { id: 'google', oidc: config, allowedDomains: 'example.com', allowedEmails: 'Contractor@Gmail.com' },
+  ];
+  it('lists providers, offers a chooser and namespaces non-company subjects', async () => {
+    const app = await fixture({ providers: both });
+    try {
+      assert.deepEqual((await (await fetch(app.url + '/auth/providers')).json()).providers, [
+        { id: 'company', label: 'your company account' },
+        { id: 'google', label: 'Google' },
+      ]);
+      const chooser = await fetch(app.url + '/auth/login', { redirect: 'manual' });
+      assert.equal(chooser.status, 200);
+      const html = await chooser.text();
+      assert.match(html, /provider=company/);
+      assert.match(html, /Sign in with Google/);
+      assert.equal((await fetch(app.url + '/auth/login?provider=other', { redirect: 'manual' })).status, 400);
+      app.overrideClaims({ hd: 'example.com' });
+      const { result, cookie } = await app.login(undefined, { provider: 'google' });
+      assert.equal(result.status, 303);
+      const session = await (await fetch(app.url + '/auth/session', { headers: { Cookie: cookie } })).json();
+      assert.equal(session.user.id, 'google:employee-1');
+      app.overrideClaims({});
+      const company = await app.login(undefined, { provider: 'company' });
+      const companySession = await (
+        await fetch(app.url + '/auth/session', { headers: { Cookie: company.cookie } })
+      ).json();
+      assert.equal(companySession.user.id, 'employee-1');
+    } finally {
+      await app.close();
+    }
+  });
+  it('renews with the provider of the current session instead of offering the chooser', async () => {
+    const app = await fixture({ providers: both });
+    try {
+      app.overrideClaims({ hd: 'example.com' });
+      const { cookie } = await app.login(undefined, { provider: 'google' });
+      const renewal = await fetch(app.url + '/auth/login?renew=1', { headers: { Cookie: cookie }, redirect: 'manual' });
+      assert.equal(renewal.status, 302);
+      assert.match(renewal.headers.get('location'), /\/authorize\?/);
+      const chooser = await fetch(app.url + '/auth/login?renew=1', { redirect: 'manual' });
+      assert.equal(chooser.status, 200);
+      assert.match(await chooser.text(), /renew=1/);
+    } finally {
+      await app.close();
+    }
+  });
+  it('admits Google accounts only from an allowed Workspace domain or verified email', async () => {
+    const app = await fixture({ providers: both });
+    try {
+      for (const [claims, status] of [
+        [{}, 403],
+        [{ hd: 'other.com', email: 'a@example.com', email_verified: true }, 403],
+        // A personal Google account can verify any address; only hd proves Workspace membership.
+        [{ email: 'mallory@example.com', email_verified: true }, 403],
+        [{ email: 'contractor@gmail.com', email_verified: false }, 403],
+        [{ email: 'contractor@gmail.com', email_verified: true }, 303],
+        [{ hd: 'EXAMPLE.com' }, 303],
+      ]) {
+        app.overrideClaims(claims);
+        assert.equal(
+          (await app.login(undefined, { provider: 'google' })).result.status,
+          status,
+          JSON.stringify(claims)
+        );
+      }
+    } finally {
+      await app.close();
+    }
+  });
+  it('carries the provider chosen in a packaged app through the native handoff', async () => {
+    const app = await fixture({ providers: both });
+    try {
+      const headers = { 'Content-Type': 'application/json', Origin: 'tauri://localhost' };
+      const start = async provider => {
+        const secret = randomBytes(32).toString('base64url');
+        const challenge = createHash('sha256').update(secret).digest('hex');
+        const response = await fetch(app.url + '/auth/native/start', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ challenge, provider }),
+        });
+        return { response, secret };
+      };
+      assert.equal((await start('unknown')).response.status, 400);
+      const { response, secret } = await start('google');
+      const { id, browserUrl } = await response.json();
+      assert.equal(new URL(browserUrl).searchParams.get('provider'), 'google');
+      app.overrideClaims({ hd: 'example.com' });
+      const login = await fetch(`${app.url}/auth/login?native=${id}`, { redirect: 'manual' });
+      assert.equal(login.status, 302);
+      const cookie = login.headers.getSetCookie()[0].split(';')[0];
+      const authorize = await fetch(login.headers.get('location'), { redirect: 'manual' });
+      assert.equal(new URL(login.headers.get('location')).searchParams.get('hd'), null);
+      const callback = new URL(authorize.headers.get('location'));
+      assert.equal(
+        (await fetch(app.url + callback.pathname + callback.search, { headers: { Cookie: cookie } })).status,
+        200
+      );
+      const poll = await fetch(app.url + '/auth/native/poll', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ id, secret }),
+      });
+      assert.equal((await poll.json()).user.id, 'google:employee-1');
+    } finally {
+      await app.close();
+    }
+  });
+  it('requires an access policy for Google and a tenant ID for Microsoft', async () => {
+    const read = () => 'secret';
+    await assert.rejects(
+      () => createEnterpriseGateway({ origin: 'https://robot.example', upstream: 'http://127.0.0.1:1', providers: [] }),
+      /one to eight/
+    );
+    assert.throws(() => providersFromEnvironment({}, read), /Configure a company OIDC, Google or Microsoft/);
+    assert.throws(
+      () =>
+        providersFromEnvironment(
+          {
+            ROBOBOY_MICROSOFT_CLIENT_ID: 'x',
+            ROBOBOY_MICROSOFT_CLIENT_SECRET_FILE: 'f',
+            ROBOBOY_MICROSOFT_TENANT: 'common',
+          },
+          read
+        ),
+      /tenant/
+    );
+    assert.throws(
+      () => providersFromEnvironment({ ROBOBOY_GOOGLE_CLIENT_ID: 'x' }, read),
+      /ROBOBOY_GOOGLE_CLIENT_SECRET_FILE/
+    );
+    const providers = providersFromEnvironment(
+      {
+        ROBOBOY_GOOGLE_CLIENT_ID: 'g',
+        ROBOBOY_GOOGLE_CLIENT_SECRET_FILE: 'f',
+        ROBOBOY_MICROSOFT_CLIENT_ID: 'm',
+        ROBOBOY_MICROSOFT_CLIENT_SECRET_FILE: 'f',
+        ROBOBOY_MICROSOFT_TENANT: '72F988BF-86F1-41AF-91AB-2D7CD011DB47',
+        ROBOBOY_MICROSOFT_REQUIRED_ROLE: 'Robot.Operator',
+      },
+      read
+    );
+    assert.deepEqual(
+      providers.map(provider => [provider.id, provider.issuer]),
+      [
+        ['google', 'https://accounts.google.com'],
+        ['microsoft', 'https://login.microsoftonline.com/72f988bf-86f1-41af-91ab-2d7cd011db47/v2.0'],
+      ]
+    );
+  });
 });

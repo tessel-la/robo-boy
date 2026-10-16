@@ -7,6 +7,7 @@ import * as oidc from 'openid-client';
 import httpProxy from 'http-proxy';
 import { WebSocket, WebSocketServer } from 'ws';
 import { secureOrigin, loadBranding, enabled, robots } from './config.mjs';
+import { allowedAccount, memberOf, normalizeProviders, providersFromEnvironment } from './providers.mjs';
 
 const random = () => randomBytes(32).toString('base64url');
 const hash = value => createHash('sha256').update(value).digest('hex');
@@ -63,17 +64,6 @@ export async function createEnterpriseGateway(options) {
   if (!['127.0.0.1', 'localhost', '[::1]'].includes(upstream.hostname) || upstream.protocol !== 'http:')
     throw new Error('Enterprise upstream must be private loopback HTTP.');
   const brand = options.branding ?? loadBranding();
-  const groupsClaim = options.groupsClaim || 'groups';
-  const prompt = options.prompt ?? 'select_account';
-  if (!/^[a-z_]+(?: [a-z_]+)*$/.test(prompt) || prompt.length > 64)
-    throw new Error('OIDC prompt must be off or space-separated prompt values.');
-  // Keycloak's group mapper emits full paths such as "/robot-operators" unless reconfigured.
-  const memberOf = value =>
-    (Array.isArray(value) ? value : typeof value === 'string' ? [value] : []).some(
-      group =>
-        typeof group === 'string' &&
-        (group === options.requiredGroup || group.replace(/^\//, '') === options.requiredGroup)
-    );
   const registry = robots(options.robots, upstream.origin);
   const publicRobots = registry.map(({ id, name }) => ({ id, name }));
   const robotRoute = path => {
@@ -158,10 +148,19 @@ export async function createEnterpriseGateway(options) {
       },
     };
   }
-  const config =
-    options.oidc ??
-    (await oidc.discovery(new URL(options.issuer), options.clientId, options.clientSecret, undefined, { timeout: 10 }));
-  oidc.enableNonRepudiationChecks(config);
+  const providers = normalizeProviders(options);
+  await Promise.all(
+    providers.map(async provider => {
+      provider.config =
+        provider.oidc ??
+        (await oidc.discovery(new URL(provider.issuer), provider.clientId, provider.clientSecret, undefined, {
+          timeout: 10,
+        }));
+      oidc.enableNonRepudiationChecks(provider.config);
+    })
+  );
+  const providerById = new Map(providers.map(provider => [provider.id, provider]));
+  const publicProviders = providers.map(({ id, label }) => ({ id, label }));
   const sessions = new Map();
   const media = new Map();
   const transactions = new Map();
@@ -234,6 +233,28 @@ export async function createEnterpriseGateway(options) {
     });
     response.end(
       `<!doctype html><meta name="viewport" content="width=device-width, initial-scale=1"><title>${escape(brand.name)}</title><main style="font:18px system-ui;max-width:35rem;margin:15vh auto;padding:24px"><h1>Sign-in complete</h1><p>Signed in as ${escape(session.user.name)}. Return to ${escape(brand.name)} ${next}.</p><p>You can close this browser tab.</p></main>`
+    );
+  };
+  /** Reached when a client did not name a provider, for example an older packaged app. */
+  const chooser = (response, nativeId, renew) => {
+    const links = providers
+      .map(provider => {
+        const target = new URLSearchParams({
+          provider: provider.id,
+          ...(nativeId ? { native: nativeId } : {}),
+          ...(renew ? { renew: '1' } : {}),
+        });
+        return `<p><a style="display:block;padding:14px;border:1px solid #888;border-radius:8px;text-align:center;color:inherit;text-decoration:none" href="/auth/login?${escape(target)}">Sign in with ${escape(provider.label)}</a></p>`;
+      })
+      .join('');
+    response.writeHead(200, {
+      'Content-Type': 'text/html; charset=utf-8',
+      'Cache-Control': 'no-store',
+      'Content-Security-Policy':
+        "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'",
+    });
+    response.end(
+      `<!doctype html><meta name="viewport" content="width=device-width, initial-scale=1"><title>${escape(brand.name)}</title><main style="font:18px system-ui;max-width:35rem;margin:15vh auto;padding:24px"><h1>Sign in to ${escape(brand.name)}</h1>${links}</main>`
     );
   };
   const remove = session => {
@@ -314,19 +335,25 @@ export async function createEnterpriseGateway(options) {
       if (url.pathname === '/auth/native/start' && request.method === 'POST') {
         if (!native) return reply(response, 403, { error: 'Native origin required.' });
         if (pending.size >= 128) return reply(response, 429, { error: 'Too many pending sign-ins.' });
-        const { challenge } = await jsonBody(request);
+        const { challenge, provider } = await jsonBody(request);
         if (typeof challenge !== 'string' || !/^[a-f0-9]{64}$/.test(challenge))
           return reply(response, 400, { error: 'Invalid sign-in challenge.' });
+        if (provider !== undefined && !providerById.has(provider))
+          return reply(response, 400, { error: 'Unknown sign-in provider.' });
         const id = random();
         // A signed-in app renewing before expiry identifies its current session for migrate().
         const previous = identify(request);
         pending.set(id, {
           challenge,
+          provider,
           origin: requestOrigin,
           expires: clock() + 300000,
           previous: valid(previous) ? previous : undefined,
         });
-        return reply(response, 200, { id, browserUrl: `${origin}/auth/login?native=${id}` });
+        const browserUrl = new URL('/auth/login', origin);
+        browserUrl.searchParams.set('native', id);
+        if (provider) browserUrl.searchParams.set('provider', provider);
+        return reply(response, 200, { id, browserUrl: browserUrl.href });
       }
       if (url.pathname === '/auth/native/poll' && request.method === 'POST') {
         const { id, secret } = await jsonBody(request);
@@ -356,6 +383,8 @@ export async function createEnterpriseGateway(options) {
           robots: publicRobots,
         });
       }
+      if (url.pathname === '/auth/providers' && request.method === 'GET')
+        return reply(response, 200, { providers: publicProviders });
       if (url.pathname === '/auth/login' && request.method === 'GET') {
         browserPage = true;
         const nativeId = url.searchParams.get('native');
@@ -372,6 +401,15 @@ export async function createEnterpriseGateway(options) {
           );
         if (nativeId && (!pending.has(nativeId) || pending.get(nativeId).started))
           return page(response, 400, 'Sign-in expired', 'This sign-in link has expired or was already used.', true);
+        // Renewal reuses the provider of the session it replaces.
+        const requested =
+          url.searchParams.get('provider') ??
+          (nativeId ? (pending.get(nativeId).provider ?? pending.get(nativeId).previous?.provider) : undefined) ??
+          (renew ? identify(request)?.provider : undefined) ??
+          (providers.length === 1 ? providers[0].id : undefined);
+        if (requested === undefined) return chooser(response, nativeId, renew);
+        const provider = providerById.get(requested);
+        if (!provider) return page(response, 400, 'Unknown sign-in method', 'Choose a sign-in method again.', nativeId);
         const verifier = oidc.randomPKCECodeVerifier();
         const state = oidc.randomState();
         const nonce = oidc.randomNonce();
@@ -382,13 +420,18 @@ export async function createEnterpriseGateway(options) {
           browser: hash(browser),
           nativeId,
           renew,
+          provider: provider.id,
           expires: clock() + 300000,
         });
         if (nativeId) pending.get(nativeId).started = true;
-        const target = oidc.buildAuthorizationUrl(config, {
+        const target = oidc.buildAuthorizationUrl(provider.config, {
           redirect_uri: `${origin}/auth/callback`,
-          scope: options.scope || 'openid profile email',
-          ...(prompt === 'off' ? {} : { prompt }),
+          scope: provider.scope,
+          ...(provider.prompt === 'off' ? {} : { prompt: provider.prompt }),
+          // A hint only; allowedAccount enforces the Workspace domain on the verified token.
+          ...(provider.allowedDomains.length === 1 && !provider.allowedEmails.length
+            ? { hd: provider.allowedDomains[0] }
+            : {}),
           code_challenge: await oidc.calculatePKCECodeChallenge(verifier),
           code_challenge_method: 'S256',
           state,
@@ -429,6 +472,8 @@ export async function createEnterpriseGateway(options) {
             { 'Set-Cookie': setCookie(loginCookie, '', 0) }
           );
         }
+        const provider = providerById.get(attempt.provider);
+        const config = provider.config;
         const tokens = await oidc.authorizationCodeGrant(config, url, {
           pkceCodeVerifier: attempt.verifier,
           expectedState: state,
@@ -436,11 +481,15 @@ export async function createEnterpriseGateway(options) {
           idTokenExpected: true,
         });
         const claims = tokens.claims();
-        let groups = claims?.[groupsClaim];
+        let groups = claims?.[provider.groupsClaim];
         // Okta and some Keycloak mappers release groups only from userinfo, verified against the same subject.
-        if (options.requiredGroup && groups === undefined && claims?.sub && config.serverMetadata().userinfo_endpoint)
-          groups = (await oidc.fetchUserInfo(config, tokens.access_token, claims.sub))[groupsClaim];
-        if (!claims?.sub || (options.requiredGroup && !memberOf(groups))) {
+        if (provider.requiredGroup && groups === undefined && claims?.sub && config.serverMetadata().userinfo_endpoint)
+          groups = (await oidc.fetchUserInfo(config, tokens.access_token, claims.sub))[provider.groupsClaim];
+        if (
+          !claims?.sub ||
+          (provider.requiredGroup && !memberOf(groups, provider.requiredGroup)) ||
+          !allowedAccount(provider, claims)
+        ) {
           failHandoff(nativeCallback);
           return page(
             response,
@@ -461,7 +510,12 @@ export async function createEnterpriseGateway(options) {
         const session = {
           key: hash(token),
           media: random(),
-          user: { id: claims.sub, name: String(claims.name || claims.preferred_username || claims.sub).slice(0, 128) },
+          // Subjects are only unique per issuer, so non-company providers are namespaced.
+          user: {
+            id: provider.id === 'company' ? claims.sub : `${provider.id}:${claims.sub}`,
+            name: String(claims.name || claims.preferred_username || claims.email || claims.sub).slice(0, 128),
+          },
+          provider: provider.id,
           expires: clock() + ttl * 1000,
           connections: new Set(),
         };
@@ -649,8 +703,6 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
       return process.env[key];
     };
     const authentication = enabled(process.env.ROBOBOY_ENTERPRISE_LOGIN ?? 'true');
-    const secret = authentication ? readFileSync(required('ROBOBOY_OIDC_CLIENT_SECRET_FILE'), 'utf8').trim() : '';
-    if (authentication && !secret) throw new Error('Empty client secret');
     const gateway = await createEnterpriseGateway({
       origin: required('ROBOBOY_ENTERPRISE_ORIGIN'),
       upstream: process.env.ROBOBOY_ENTERPRISE_UPSTREAM || 'http://127.0.0.1:4181',
@@ -658,13 +710,9 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
       robots: process.env.ROBOBOY_ROBOTS_FILE
         ? JSON.parse(readFileSync(process.env.ROBOBOY_ROBOTS_FILE, 'utf8'))
         : undefined,
-      issuer: authentication ? required('ROBOBOY_OIDC_ISSUER') : '',
-      clientId: authentication ? required('ROBOBOY_OIDC_CLIENT_ID') : '',
-      clientSecret: secret,
-      requiredGroup: process.env.ROBOBOY_OIDC_REQUIRED_GROUP || '',
-      groupsClaim: process.env.ROBOBOY_OIDC_GROUPS_CLAIM || 'groups',
-      scope: process.env.ROBOBOY_OIDC_SCOPE || 'openid profile email',
-      prompt: process.env.ROBOBOY_OIDC_PROMPT || 'select_account',
+      ...(authentication
+        ? { providers: providersFromEnvironment(process.env, file => readFileSync(file, 'utf8')) }
+        : {}),
       sessionSeconds: Number(process.env.ROBOBOY_AUTH_SESSION_SECONDS || '3600'),
       branding: loadBranding(process.env.ROBOBOY_BRANDING_FILE),
       ...(process.env.ROBOBOY_AUTH_NATIVE_ORIGINS
@@ -683,9 +731,10 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
         ? 'Enterprise authentication gateway started on loopback.'
         : 'Enterprise gateway started with login explicitly disabled.'
     );
-  } catch {
+  } catch (error) {
+    // Startup handles no employee tokens; the reason names the setting or issuer to fix.
     console.error(
-      'Enterprise authentication could not start. Check the issuer, client registration, secret file and deployment configuration.'
+      `Enterprise authentication could not start: ${error instanceof Error ? error.message : 'unknown error'}. Check the issuer, client registration, secret file and deployment configuration.`
     );
     process.exitCode = 1;
   }

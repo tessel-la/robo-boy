@@ -123,6 +123,10 @@
 .enterprise-login-card .enterprise-primary:hover {
   background: var(--primary-hover-color);
 }
+.enterprise-providers {
+  display: grid;
+  gap: 12px;
+}
 .enterprise-login-card button:disabled {
   opacity: 0.6;
   cursor: wait;

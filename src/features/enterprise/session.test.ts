@@ -3,6 +3,7 @@ import {
   enterpriseFetch,
   enterpriseSocketToken,
   enterpriseMediaUrl,
+  enterpriseProviders,
   nativeAuthToken,
   nativeSignIn,
   parseSession,
@@ -277,6 +278,31 @@ describe('Enterprise transport', () => {
     await expect(nativeSignIn(new AbortController().signal, async () => {})).rejects.toThrow(
       'Cannot reach https://robot.example'
     );
+  });
+
+  it('names the chosen provider in the native handoff and ignores malformed provider lists', async () => {
+    enable();
+    const id = 'x'.repeat(43);
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({ id, browserUrl: 'https://robot.example/auth/login?native=' + id + '&provider=google' })
+        )
+      )
+      .mockResolvedValue(new Response(JSON.stringify(identity)));
+    vi.stubGlobal('fetch', fetch);
+    const browser = vi.fn(async () => {});
+    await expect(nativeSignIn(new AbortController().signal, browser, 'google')).resolves.toMatchObject({
+      token: identity.token,
+    });
+    expect(JSON.parse(fetch.mock.calls[0][1].body)).toMatchObject({ provider: 'google' });
+    expect(browser).toHaveBeenCalledWith('https://robot.example/auth/login?native=' + id + '&provider=google');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(new Response(JSON.stringify({ providers: [{ id: '<x>', label: 'Bad' }] })))
+    );
+    await expect(enterpriseProviders()).resolves.toEqual([]);
   });
 
   it('cancels a pending native sign-in without storing credentials', async () => {

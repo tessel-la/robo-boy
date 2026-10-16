@@ -63,6 +63,15 @@ services:
       ROBOBOY_OIDC_GROUPS_CLAIM: ${ROBOBOY_OIDC_GROUPS_CLAIM:-groups}
       ROBOBOY_OIDC_SCOPE: ${ROBOBOY_OIDC_SCOPE:-openid profile email}
       ROBOBOY_OIDC_PROMPT: ${ROBOBOY_OIDC_PROMPT:-select_account}
+      ROBOBOY_OIDC_LABEL: ${ROBOBOY_OIDC_LABEL:-}
+      ROBOBOY_GOOGLE_CLIENT_ID: ${ROBOBOY_GOOGLE_CLIENT_ID:-}
+      ROBOBOY_GOOGLE_CLIENT_SECRET_FILE: /run/secrets/google-client-secret
+      ROBOBOY_GOOGLE_ALLOWED_DOMAINS: ${ROBOBOY_GOOGLE_ALLOWED_DOMAINS:-}
+      ROBOBOY_GOOGLE_ALLOWED_EMAILS: ${ROBOBOY_GOOGLE_ALLOWED_EMAILS:-}
+      ROBOBOY_MICROSOFT_CLIENT_ID: ${ROBOBOY_MICROSOFT_CLIENT_ID:-}
+      ROBOBOY_MICROSOFT_CLIENT_SECRET_FILE: /run/secrets/microsoft-client-secret
+      ROBOBOY_MICROSOFT_TENANT: ${ROBOBOY_MICROSOFT_TENANT:-}
+      ROBOBOY_MICROSOFT_REQUIRED_ROLE: ${ROBOBOY_MICROSOFT_REQUIRED_ROLE:-}
       ROBOBOY_AUTH_SESSION_SECONDS: ${ROBOBOY_AUTH_SESSION_SECONDS:-3600}
       ROBOBOY_AUTH_NATIVE_ORIGINS: ${ROBOBOY_AUTH_NATIVE_ORIGINS:-}
       ROBOBOY_BRANDING_FILE: /config/branding.json
@@ -73,6 +82,15 @@ services:
         # rejects the empty fallback at startup before opening its listener.
         source: ${ROBOBOY_OIDC_CLIENT_SECRET_FILE:-/dev/null}
         target: /run/secrets/oidc-client-secret
+        read_only: true
+      # Optional additional providers; unused secret mounts stay empty.
+      - type: bind
+        source: ${ROBOBOY_GOOGLE_CLIENT_SECRET_FILE:-/dev/null}
+        target: /run/secrets/google-client-secret
+        read_only: true
+      - type: bind
+        source: ${ROBOBOY_MICROSOFT_CLIENT_SECRET_FILE:-/dev/null}
+        target: /run/secrets/microsoft-client-secret
         read_only: true
       - type: bind
         source: ${ROBOBOY_BRANDING_FILE:-./config/branding.default.json}
