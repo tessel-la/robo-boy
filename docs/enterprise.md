@@ -40,7 +40,7 @@ endpoint selection stays in `src/runtime/runtimeConfig.tsx`.
 Authentication answers **who may access this deployment**. The existing robot gateway still
 answers **which connected session currently owns control**. Signing in does not acquire the
 control lease or change the optional robot-side `allow_control` switch. Two signed-in tabs
-still compete for one lock. The control-session label remains editable; it is not an
+still compete for the selected robot’s lock. The control-session label remains editable; it is not an
 authenticated employee audit trail. Panel installation also retains its separate admin token.
 
 ## Set up the hosted deployment
@@ -138,16 +138,40 @@ configuration supports:
 - Company name in the login screen, connection screen, workspace account bar and native title bar
 - A bundled logo under `public/branding/`
 - Login heading, explanatory text and HTTPS support link
-- An accent color for the login action, with the rest of the UI following Robo-Boy's current theme
+- A default company theme using the existing custom-theme format, plus an optional wordmark logo
+- Account and sign-out controls in the existing connection menu, without a second workspace header
 
 Point `ROBOBOY_BRANDING_FILE` at the file when building. The broker uses the same file for its
 browser completion screen. Invalid colors, remote logo URLs, unknown fields, script URLs and
-unsupported versions fail configuration validation. Copy new logo assets into `public/branding/`
+unsupported versions fail configuration validation. A `theme` object accepts `id`, `name`,
+`fontFamily` and `colors` (the existing custom-theme fields); color values must be six-digit hex.
+Set `logoWordmark=true` for a complete company wordmark; symbol logos display beside the company name.
+The company theme applies before the first paint, remains available in the theme picker and has
+its own saved selection key, so operators can change it without another company replacing their choice. Copy new logo assets into `public/branding/`
 before building. Use assets your company is authorized to distribute; the example is fictional.
 
 This is declarative branding, with no injected HTML, CSS or executable tenant code. Feature
 surfaces belonging to one company should use the existing external Panel SDK. Native application
 identifiers, installer names, OS icons and signing certificates remain platform packaging settings.
+
+## Select robots after sign-in
+
+A company login grants access to every robot in its server-owned registry. Set
+`ROBOBOY_ROBOTS_FILE` to a JSON file shaped like `config/robots.example.json`, then restart the
+gateway. Each entry has a unique `id`, a display `name` and a private loopback HTTP `upstream`.
+The upstream is that robot's private proxy, with the same routes as the existing private Caddy
+listener. Provision additional private robot proxies in deployment configuration. The registry
+is never compiled into public frontend assets; only IDs and names are returned to signed-in users.
+An empty list preserves the existing single-robot workflow.
+
+The connection screen keeps a **Robot** selector after sign-in. Open additional robots through
+**Open another connection**; workspaces, sockets and control ownership remain independent.
+HTTP and WebSocket requests use `/robots/<id>/...` through the same authentication gateway.
+The server strips the namespace and enterprise credentials before forwarding. Unknown IDs and
+administrative paths inside a robot namespace are rejected. Clients cannot choose arbitrary
+upstream URLs, and signing out closes connections to all robots. Native media read credentials
+also support these robot-scoped routes. This selection requires login-enabled deployments;
+login-disabled installations retain their normal connection workflow.
 
 ## Session lifetime and failure behavior
 

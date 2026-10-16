@@ -5,10 +5,12 @@ import {
   normalizeRuntimeServicePorts,
   resolveRuntimeEndpoints,
 } from './runtimeConfig';
+import { enterpriseRobot } from '../features/enterprise/session';
 import { managedGateway } from '../features/enterprise/config';
 
 export interface ConnectionParams {
   offline?: boolean;
+  enterpriseRobotId?: string;
   ros2Option: 'domain' | 'ip';
   ros2Value: string | number;
   rosbridgePort?: string;
@@ -35,8 +37,14 @@ export const describeConnectionTarget = (params: ConnectionParams): ConnectionTa
       description: 'Local MCAP recordings',
       params,
     };
+  const robot = managedGateway() ? enterpriseRobot(params.enterpriseRobotId) : undefined;
   if (managedGateway())
-    params = { ros2Option: 'ip', ros2Value: getDefaultConnectionHost(), ...getDefaultServicePorts() };
+    params = {
+      ros2Option: 'ip',
+      ros2Value: getDefaultConnectionHost(),
+      ...getDefaultServicePorts(),
+      ...(robot ? { enterpriseRobotId: robot.id } : {}),
+    };
   const ports = normalizeRuntimeServicePorts(params, getDefaultServicePorts());
   const isHost = params.ros2Option === 'ip';
   const value = isHost
@@ -46,10 +54,11 @@ export const describeConnectionTarget = (params: ConnectionParams): ConnectionTa
     ros2Option: params.ros2Option,
     ros2Value: isHost ? value : Number(value),
     ...ports,
+    ...(robot ? { enterpriseRobotId: robot.id } : {}),
   };
   const endpoints = resolveRuntimeEndpoints(normalizedParams);
   const key = [endpoints.rosbridgeUrl, endpoints.videoStreamBaseUrl, endpoints.meshResourcesBaseUrl].join('|');
-  const label = isHost ? value : `Domain ${value}`;
+  const label = robot?.name ?? (isHost ? value : `Domain ${value}`);
 
   return {
     key,

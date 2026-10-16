@@ -63,6 +63,7 @@ services:
       ROBOBOY_AUTH_SESSION_SECONDS: ${ROBOBOY_AUTH_SESSION_SECONDS:-3600}
       ROBOBOY_AUTH_NATIVE_ORIGINS: ${ROBOBOY_AUTH_NATIVE_ORIGINS:-}
       ROBOBOY_BRANDING_FILE: /config/branding.json
+      ROBOBOY_ROBOTS_FILE: /config/robots.json
     volumes:
       - type: bind
         # No provider file is needed when login is explicitly disabled. Enabled mode
@@ -73,4 +74,8 @@ services:
       - type: bind
         source: ${ROBOBOY_BRANDING_FILE:-./config/branding.default.json}
         target: /config/branding.json
+        read_only: true
+      - type: bind
+        source: ${ROBOBOY_ROBOTS_FILE:-./config/robots.default.json}
+        target: /config/robots.json
         read_only: true

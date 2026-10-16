@@ -1,7 +1,9 @@
+import { isDesktopRuntime } from './platform';
 import React, { createContext, useContext, useMemo } from 'react';
 import { parseEmbedPorts } from './embedTarget';
 import type { ConnectionParams } from './connections';
 import { normalizeConnectionHost } from './connectionHost';
+import { enterpriseRobot } from '../features/enterprise/session';
 import { managedGateway, enterpriseOrigin } from '../features/enterprise/config';
 
 export interface RuntimeEndpoints {
@@ -114,10 +116,7 @@ const getBrowserLocation = (): BrowserLocation => {
  * bridge its preload script exposes. What follows from it is the same for both: the app reaches
  * the robot's services directly instead of through a reverse proxy, and it owns its window frame.
  */
-export const isDesktopRuntime = (): boolean => {
-  if (typeof window === 'undefined') return false;
-  return '__TAURI_INTERNALS__' in window || 'roboBoyDesktop' in window;
-};
+export { isDesktopRuntime } from './platform';
 
 /** The facts about the device that separate a phone or tablet from a desktop window. */
 export interface BrowserPlatform {
@@ -195,7 +194,8 @@ export function resolveRuntimeEndpoints(
   ports = getRuntimePortConfig()
 ): RuntimeEndpoints {
   if (managedGateway()) {
-    const origin = enterpriseOrigin();
+    const robot = enterpriseRobot(params?.enterpriseRobotId);
+    const origin = enterpriseOrigin() + (robot ? `/robots/${robot.id}` : '');
     return {
       rosbridgeUrl: origin.replace(/^http/, 'ws') + '/websocket',
       videoStreamBaseUrl: origin + '/video_stream',
@@ -208,7 +208,7 @@ export function resolveRuntimeEndpoints(
       embedBaseUrl: origin,
       embedDirectPorts: [],
       mode: desktop ? 'desktop' : 'web',
-      host: new URL(origin).hostname,
+      host: new URL(enterpriseOrigin()).hostname,
     };
   }
   const configuredHost = params?.ros2Option === 'ip' ? String(params.ros2Value) : '';

@@ -6,7 +6,7 @@ import { pathToFileURL } from 'node:url';
 import * as oidc from 'openid-client';
 import httpProxy from 'http-proxy';
 import { WebSocket, WebSocketServer } from 'ws';
-import { secureOrigin, loadBranding, enabled } from './config.mjs';
+import { secureOrigin, loadBranding, enabled, robots } from './config.mjs';
 
 const random = () => randomBytes(32).toString('base64url');
 const hash = value => createHash('sha256').update(value).digest('hex');
@@ -26,7 +26,8 @@ const cookie = (request, name) =>
     .map(v => v.trim())
     .find(v => v.startsWith(name + '='))
     ?.slice(name.length + 1);
-const mediaPath = path => /^\/(video_stream|mesh_resources|recordings)(\/|$)/.test(path);
+const mediaPath = path =>
+  /^\/(?:robots\/[a-z][a-z0-9-]{0,63}\/)?(video_stream|mesh_resources|recordings)(\/|$)/.test(path);
 const publicPath = path =>
   ['/', '/index.html', '/favicon.ico', '/manifest.webmanifest'].includes(path) ||
   /^\/(assets|branding|panels)\//.test(path);
@@ -62,6 +63,20 @@ export async function createEnterpriseGateway(options) {
   if (!['127.0.0.1', 'localhost', '[::1]'].includes(upstream.hostname) || upstream.protocol !== 'http:')
     throw new Error('Enterprise upstream must be private loopback HTTP.');
   const brand = options.branding ?? loadBranding();
+  const registry = robots(options.robots, upstream.origin);
+  const publicRobots = registry.map(({ id, name }) => ({ id, name }));
+  const robotRoute = path => {
+    const match = /^\/robots\/([a-z][a-z0-9-]{0,63})(\/.*)$/.exec(path);
+    if (!match) return path.startsWith('/robots/') ? null : { target: upstream.origin, path };
+    const robot = registry.find(robot => robot.id === match[1]);
+    // Only robot-facing routes can be addressed in a robot namespace.
+    if (
+      !robot ||
+      !/^\/(websocket|video_stream|mesh_resources|recordings|ollama|webrtc|[0-9]{1,5})(\/|$)/.test(match[2])
+    )
+      return null;
+    return { target: robot.upstream, path: match[2] };
+  };
   if (options.enabled === false) {
     const transport = httpProxy.createProxyServer({ target: upstream.origin, ws: true, changeOrigin: true });
     transport.on('proxyRes', (result, request) => {
@@ -96,7 +111,15 @@ export async function createEnterpriseGateway(options) {
       }
       delete request.headers.cookie;
       delete request.headers['x-roboboy-session'];
-      transport.web(request, response);
+      const route = robotRoute(new URL(request.url, origin).pathname);
+      if (!route) {
+        response.writeHead(404);
+        response.end();
+        return;
+      }
+      const url = new URL(request.url, origin);
+      request.url = route.path + url.search;
+      transport.web(request, response, { target: route.target });
     });
     server.on('connection', socket => {
       connections.add(socket);
@@ -105,7 +128,14 @@ export async function createEnterpriseGateway(options) {
     server.on('upgrade', (request, socket, head) => {
       delete request.headers.cookie;
       delete request.headers['x-roboboy-session'];
-      transport.ws(request, socket, head);
+      const url = new URL(request.url, origin);
+      const route = robotRoute(url.pathname);
+      if (!route || !route.path.startsWith('/websocket')) {
+        socket.destroy();
+        return;
+      }
+      request.url = route.path + url.search;
+      transport.ws(request, socket, head, { target: route.target });
     });
     return {
       server,
@@ -142,6 +172,9 @@ export async function createEnterpriseGateway(options) {
     delete upstreamResponse.headers['set-cookie'];
     if (request.enterpriseProtected) upstreamResponse.headers['cache-control'] = 'private, no-store';
     upstreamResponse.headers['referrer-policy'] = 'no-referrer';
+    const location = upstreamResponse.headers.location;
+    if (request.robotPrefix && typeof location === 'string' && location.startsWith('/') && !location.startsWith('//'))
+      upstreamResponse.headers.location = request.robotPrefix + location;
     delete upstreamResponse.headers['access-control-allow-origin'];
     delete upstreamResponse.headers['access-control-allow-credentials'];
     if (nativeOrigins.has(request.headers.origin)) {
@@ -260,6 +293,7 @@ export async function createEnterpriseGateway(options) {
           expires: attempt.session.expires,
           token: attempt.token,
           media: attempt.session.media,
+          robots: publicRobots,
         });
       }
       if (url.pathname === '/auth/login' && request.method === 'GET') {
@@ -362,7 +396,9 @@ export async function createEnterpriseGateway(options) {
         return reply(
           response,
           valid(session) ? 200 : 401,
-          valid(session) ? { user: session.user, expires: session.expires } : { error: 'Sign in to continue.' }
+          valid(session)
+            ? { user: session.user, expires: session.expires, robots: publicRobots }
+            : { error: 'Sign in to continue.' }
         );
       if (url.pathname === '/auth/logout' && request.method === 'POST') {
         if (session) remove(session);
@@ -387,7 +423,10 @@ export async function createEnterpriseGateway(options) {
         !(request.method === 'GET' && !mediaRequest && (publicPath(url.pathname) || developmentAsset))
       )
         return reply(response, 401, { error: 'Sign in to continue.' });
-      request.url = url.pathname + url.search;
+      const route = robotRoute(url.pathname);
+      if (!route) return reply(response, 404, { error: 'Unknown robot or robot route.' });
+      request.robotPrefix = /^\/robots\/[a-z][a-z0-9-]{0,63}/.exec(url.pathname)?.[0];
+      request.url = route.path + url.search;
       // Enterprise credentials never reach backends. Feature-owned Authorization headers
       // (Panel Manager admin token, media-gateway credentials) remain independent.
       delete request.headers.cookie;
@@ -399,7 +438,7 @@ export async function createEnterpriseGateway(options) {
         response.setHeader('Cache-Control', 'private, no-store');
         track(authorization, response);
       }
-      proxy.web(request, response);
+      proxy.web(request, response, { target: route.target });
     } catch {
       failHandoff(nativeCallback);
       // Provider errors can contain codes and credentials. Never return or log their raw text.
@@ -411,8 +450,10 @@ export async function createEnterpriseGateway(options) {
 
   server.on('upgrade', (request, socket, head) => {
     const url = new URL(request.url, origin);
+    const route = robotRoute(url.pathname);
     if (
-      url.pathname !== '/websocket' ||
+      !route ||
+      route.path !== '/websocket' ||
       sockets.size >= 1024 ||
       url.search ||
       (request.headers.origin && request.headers.origin !== origin && !nativeOrigins.has(request.headers.origin))
@@ -435,7 +476,7 @@ export async function createEnterpriseGateway(options) {
         activeSession = session;
         clearTimeout(deadline);
         track(session, client);
-        upstreamSocket = new WebSocket(new URL('/websocket', upstream).href.replace('http:', 'ws:'), {
+        upstreamSocket = new WebSocket(new URL('/websocket', route.target).href.replace('http:', 'ws:'), {
           maxPayload: 10000000,
         });
         upstreamSocket.on('open', () => {
@@ -509,6 +550,9 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
       origin: required('ROBOBOY_ENTERPRISE_ORIGIN'),
       upstream: process.env.ROBOBOY_ENTERPRISE_UPSTREAM || 'http://127.0.0.1:4181',
       enabled: authentication,
+      robots: process.env.ROBOBOY_ROBOTS_FILE
+        ? JSON.parse(readFileSync(process.env.ROBOBOY_ROBOTS_FILE, 'utf8'))
+        : undefined,
       issuer: authentication ? required('ROBOBOY_OIDC_ISSUER') : '',
       clientId: authentication ? required('ROBOBOY_OIDC_CLIENT_ID') : '',
       clientSecret: secret,

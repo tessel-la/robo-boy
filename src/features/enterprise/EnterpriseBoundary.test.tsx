@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import EnterpriseBoundary from './EnterpriseBoundary';
+import EnterpriseAccount from './EnterpriseAccount';
 import { getEnterpriseSession, setEnterpriseSession } from './session';
 
 afterEach(() => {
@@ -21,7 +22,10 @@ describe('EnterpriseBoundary', () => {
     vi.stubGlobal('fetch', fetch);
     render(
       <EnterpriseBoundary>
-        <div>Robot workspace</div>
+        <div>
+          Robot workspace
+          <EnterpriseAccount />
+        </div>
       </EnterpriseBoundary>
     );
     expect(screen.getByText('Robot workspace')).toBeInTheDocument();
@@ -32,7 +36,10 @@ describe('EnterpriseBoundary', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('{}', { status: 401 })));
     render(
       <EnterpriseBoundary>
-        <div>Robot workspace</div>
+        <div>
+          Robot workspace
+          <EnterpriseAccount />
+        </div>
       </EnterpriseBoundary>
     );
     expect(screen.queryByText('Robot workspace')).not.toBeInTheDocument();
@@ -50,7 +57,12 @@ describe('EnterpriseBoundary', () => {
     const cleanup = vi.fn();
     function Workspace() {
       ReactUseEffect(() => cleanup, []);
-      return <div>Robot workspace</div>;
+      return (
+        <div>
+          Robot workspace
+          <EnterpriseAccount />
+        </div>
+      );
     }
     render(
       <EnterpriseBoundary>
@@ -70,7 +82,10 @@ describe('EnterpriseBoundary', () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('Sign-in service unavailable.')));
     render(
       <EnterpriseBoundary>
-        <div>Robot workspace</div>
+        <div>
+          Robot workspace
+          <EnterpriseAccount />
+        </div>
       </EnterpriseBoundary>
     );
     expect(await screen.findByRole('alert')).toHaveTextContent('Sign-in service unavailable.');
@@ -83,7 +98,10 @@ describe('EnterpriseBoundary', () => {
     vi.stubGlobal('fetch', fetch);
     render(
       <EnterpriseBoundary>
-        <div>Robot workspace</div>
+        <div>
+          Robot workspace
+          <EnterpriseAccount />
+        </div>
       </EnterpriseBoundary>
     );
     await act(async () => {
@@ -113,7 +131,10 @@ describe('EnterpriseBoundary', () => {
     vi.stubGlobal('fetch', fetch);
     render(
       <EnterpriseBoundary>
-        <div>Robot workspace</div>
+        <div>
+          Robot workspace
+          <EnterpriseAccount />
+        </div>
       </EnterpriseBoundary>
     );
     await act(async () => {
@@ -149,7 +170,10 @@ describe('EnterpriseBoundary', () => {
     );
     render(
       <EnterpriseBoundary>
-        <div>Robot workspace</div>
+        <div>
+          Robot workspace
+          <EnterpriseAccount />
+        </div>
       </EnterpriseBoundary>
     );
     await act(async () => {

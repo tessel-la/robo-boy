@@ -16,6 +16,7 @@ export async function fixture({
   port = 0,
   nativeOrigins,
   branding,
+  robots,
   requiredGroup = '',
   sessionSeconds = 3600,
 } = {}) {
@@ -142,6 +143,7 @@ export async function fixture({
     nativeOrigins,
     branding,
     requiredGroup,
+    robots,
     sessionSeconds,
     developmentAssets,
     clock: () => now,

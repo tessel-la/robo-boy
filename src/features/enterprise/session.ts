@@ -1,7 +1,12 @@
 import { enterpriseEnabled, enterpriseOrigin, managedGateway } from './config';
-import { isDesktopRuntime } from '../../runtime/runtimeConfig';
+import { isDesktopRuntime } from '../../runtime/platform';
 
+export interface EnterpriseRobot {
+  id: string;
+  name: string;
+}
 export interface EnterpriseSession {
+  robots?: EnterpriseRobot[];
   user: { id: string; name: string };
   expires: number;
   token?: string;
@@ -38,7 +43,11 @@ export function enterpriseMediaUrl(value: string): string {
   if (!enterpriseEnabled() || !isDesktopRuntime() || !session?.media) return value;
   const origin = enterpriseOrigin();
   const url = new URL(value, origin);
-  if (url.origin !== origin || !/^\/(video_stream|mesh_resources|recordings)(\/|$)/.test(url.pathname)) return value;
+  if (
+    url.origin !== origin ||
+    !/^\/(?:robots\/[a-z][a-z0-9-]{0,63}\/)?(video_stream|mesh_resources|recordings)(\/|$)/.test(url.pathname)
+  )
+    return value;
   return `${origin}/auth/media/${session.media}${url.pathname}${url.search}`;
 }
 
@@ -46,6 +55,18 @@ export function parseSession(value: unknown, native = false): EnterpriseSession 
   const result = value as EnterpriseSession;
   if (
     !result?.user ||
+    (result.robots !== undefined &&
+      (!Array.isArray(result.robots) ||
+        result.robots.length > 64 ||
+        result.robots.some(
+          robot =>
+            !robot ||
+            !/^[a-z][a-z0-9-]{0,63}$/.test(robot.id) ||
+            typeof robot.name !== 'string' ||
+            !robot.name.trim() ||
+            robot.name.length > 100
+        ) ||
+        new Set(result.robots.map(robot => robot.id)).size !== result.robots.length)) ||
     typeof result.user.id !== 'string' ||
     !result.user.id ||
     typeof result.user.name !== 'string' ||
@@ -110,4 +131,16 @@ export async function nativeSignIn(
     });
   }
   throw new Error('Sign-in expired. Start again.');
+}
+
+/** Robot IDs come from the authenticated deployment registry, never arbitrary upstream URLs. */
+export function enterpriseRobot(id?: string): EnterpriseRobot | undefined {
+  const robots = session?.robots ?? [];
+  if (!robots.length) {
+    if (id) throw new Error('This robot is no longer available. Choose a robot again.');
+    return undefined;
+  }
+  const robot = id ? robots.find(robot => robot.id === id) : robots[0];
+  if (!robot) throw new Error('This robot is no longer available. Choose a robot again.');
+  return robot;
 }

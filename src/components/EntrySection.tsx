@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import type { ConnectionParams } from '../runtime/connections';
 import './EntrySection.css';
 import { brand, managedGateway } from '../features/enterprise/config';
+import { getEnterpriseSession } from '../features/enterprise/session';
 import BrandMark from '../features/enterprise/BrandMark';
 import anime from 'animejs';
 import { animateLandingPage, animateAdvancedForm, animateButtonPress } from '../utils/animations';
@@ -77,6 +78,8 @@ const _CaretIcon = ({ isOpen }: { isOpen: boolean }) => (
 );
 
 const EntrySection: React.FC<EntrySectionProps> = ({ onConnect, embedded = false }) => {
+  const fleet = managedGateway() ? (getEnterpriseSession()?.robots ?? []) : [];
+  const [robotId, setRobotId] = useState(fleet[0]?.id ?? '');
   const [ros2Option, setRos2Option] = useState<'domain' | 'ip'>('ip');
   const [ros2Value, setRos2Value] = useState<string>('');
   const [servicePorts, setServicePorts] = useState<RuntimeServicePorts>(() => getDefaultServicePorts());
@@ -294,6 +297,7 @@ const EntrySection: React.FC<EntrySectionProps> = ({ onConnect, embedded = false
           ros2Option: 'ip',
           ros2Value: currentHostname,
           ...selectedPorts,
+          ...(robotId ? { enterpriseRobotId: robotId } : {}),
         };
         onConnect(params);
       },
@@ -364,6 +368,19 @@ const EntrySection: React.FC<EntrySectionProps> = ({ onConnect, embedded = false
         </div>
 
         <div className="connection-options">
+          {fleet.length > 0 && (
+            <label className="enterprise-robot-picker">
+              Robot
+              <select aria-label="Robot" value={robotId} onChange={event => setRobotId(event.target.value)}>
+                {fleet.map(robot => (
+                  <option key={robot.id} value={robot.id}>
+                    {robot.name}
+                  </option>
+                ))}
+              </select>
+              <span>Choose a robot. Each connection has its own workspace and control.</span>
+            </label>
+          )}
           <button
             type="button"
             className="advanced-toggle"

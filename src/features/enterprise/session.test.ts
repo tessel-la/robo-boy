@@ -172,6 +172,32 @@ describe('Enterprise transport', () => {
     expect(frame.isConnected).toBe(false);
   });
 
+  it('keeps robot routes distinct, credential-free and limited to the authenticated registry', () => {
+    enable();
+    const robots = [
+      { id: 'assembly', name: 'Assembly' },
+      { id: 'inspection', name: 'Inspection' },
+    ];
+    setEnterpriseSession({ ...identity, robots });
+    const a = describeConnectionTarget({ ros2Option: 'ip', ros2Value: 'ignored', enterpriseRobotId: 'assembly' });
+    const b = describeConnectionTarget({ ros2Option: 'ip', ros2Value: 'ignored', enterpriseRobotId: 'inspection' });
+    expect(a.key).not.toBe(b.key);
+    expect(b.label).toBe('Inspection');
+    expect(resolveRuntimeEndpoints(b.params).rosbridgeUrl).toBe('wss://robot.example/robots/inspection/websocket');
+    expect(enterpriseMediaUrl('https://robot.example/robots/inspection/recordings/files/a.mcap')).toBe(
+      `https://robot.example/auth/media/${identity.media}/robots/inspection/recordings/files/a.mcap`
+    );
+    expect(enterpriseMediaUrl('https://robot.example/robots/inspection/api/panels')).toBe(
+      'https://robot.example/robots/inspection/api/panels'
+    );
+    expect(JSON.stringify(b)).not.toContain(identity.media);
+    expect(() =>
+      describeConnectionTarget({ ros2Option: 'ip', ros2Value: 'ignored', enterpriseRobotId: 'missing' })
+    ).toThrow('no longer available');
+    for (const invalid of [null, [{ id: '../other', name: 'Other' }], [robots[0], robots[0]]])
+      expect(() => parseSession({ ...identity, robots: invalid })).toThrow();
+  });
+
   it('fails closed on invalid server URLs and malformed sessions', () => {
     enable();
     for (const url of ['http://public.example', 'https://user:secret@robot.example', 'https://robot.example/private']) {

@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import EntrySection from './EntrySection';
+import { setEnterpriseSession } from '../features/enterprise/session';
 import { RECENT_CONNECTIONS_STORAGE_KEY } from '../runtime/recentConnections';
 
 vi.mock('animejs', () => ({
@@ -36,6 +37,29 @@ describe('EntrySection connection target', () => {
   afterEach(() => {
     delete packagedApp.__TAURI_INTERNALS__;
     vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+    setEnterpriseSession(null);
+  });
+
+  it('keeps all configured robots selectable after one company sign-in', () => {
+    vi.stubEnv('VITE_ENTERPRISE_LOGIN', 'true');
+    vi.stubEnv('VITE_ENTERPRISE_SERVER_URL', 'https://fleet.example');
+    setEnterpriseSession({
+      user: { id: 'alice', name: 'Alice' },
+      expires: Date.now() + 60000,
+      robots: [
+        { id: 'assembly', name: 'Assembly robot' },
+        { id: 'inspection', name: 'Inspection robot' },
+      ],
+    });
+    const onConnect = vi.fn();
+    render(<EntrySection onConnect={onConnect} />);
+    expect(screen.getByRole('option', { name: 'Assembly robot' })).toBeInTheDocument();
+    fireEvent.change(screen.getByRole('combobox', { name: 'Robot' }), { target: { value: 'inspection' } });
+    fireEvent.click(screen.getByRole('button', { name: /Quick Connect/ }));
+    expect(onConnect).toHaveBeenCalledWith(
+      expect.objectContaining({ enterpriseRobotId: 'inspection', ros2Value: 'fleet.example' })
+    );
   });
 
   it('asks the packaged app for a host rather than offering localhost', () => {

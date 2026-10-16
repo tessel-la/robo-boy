@@ -87,16 +87,16 @@
   align-items: center;
   gap: 7px;
   padding: 0 7px 0 9px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  border: 1px solid var(--border-color);
   border-radius: 8px;
-  color: #fff;
-  background: rgba(255, 255, 255, 0.14);
+  color: var(--navbar-text, #fff);
+  background: color-mix(in srgb, var(--navbar-text, #fff) 10%, transparent);
   text-align: left;
 }
 
 .connection-switcher-trigger:hover,
 .connection-switcher-trigger[aria-expanded='true'] {
-  background: rgba(255, 255, 255, 0.21);
+  background: color-mix(in srgb, var(--navbar-text, #fff) 16%, transparent);
 }
 
 .connection-switcher-plus {

@@ -40,7 +40,7 @@
     "test:robot-resources": "node scripts/test-robot-resources.mjs",
     "test:embed-proxy": "node scripts/test-embed-proxy.mjs",
     "test:electron-tls": "node scripts/test-electron-tls.mjs",
-    "test:enterprise": "node --test infra/enterprise/gateway.test.mjs",
+    "test:enterprise": "node --test infra/enterprise/*.test.mjs",
     "e2e:enterprise": "playwright test --config config/playwright.enterprise.config.ts",
     "test:run": "vitest run --config config/vitest.config.ts",
     "test:coverage": "vitest run --config config/vitest.config.ts --coverage",

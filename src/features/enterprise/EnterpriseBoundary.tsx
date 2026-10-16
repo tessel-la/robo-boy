@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode, type CSSProperties } from 'react';
+import { useEffect, useRef, useState, createContext, useContext, type ReactNode } from 'react';
 import { brand, enterpriseEnabled, enterpriseOrigin } from './config';
 import {
   enterpriseFetch,
@@ -12,6 +12,9 @@ import { isDesktopRuntime } from '../../runtime/runtimeConfig';
 import { getDesktopBridge } from '../../runtime/desktopBridge';
 import BrandMark from './BrandMark';
 import './enterprise.css';
+
+const AccountContext = createContext<{ user: EnterpriseSession['user']; logout: () => Promise<void> } | null>(null);
+export const useEnterpriseAccount = () => useContext(AccountContext);
 
 export async function openSignInBrowser(url: string) {
   if (getDesktopBridge()?.openEnterpriseLogin) return getDesktopBridge()!.openEnterpriseLogin!(url);
@@ -106,17 +109,7 @@ export default function EnterpriseBoundary({ children }: { children: ReactNode }
     };
   }, [enabled]);
 
-  if (!enabled)
-    return brand.name !== 'Robo-Boy' || brand.logo ? (
-      <div className="enterprise-shell">
-        <div className="enterprise-account">
-          <BrandMark />
-        </div>
-        {children}
-      </div>
-    ) : (
-      <>{children}</>
-    );
+  if (!enabled) return <>{children}</>;
   const login = async () => {
     signedOut.current = false;
     revision.current += 1;
@@ -165,77 +158,71 @@ export default function EnterpriseBoundary({ children }: { children: ReactNode }
     }
   };
   if (current && confirmed)
-    return (
-      <div className="enterprise-shell">
-        <div className="enterprise-account">
-          <BrandMark />
-          <span>{current.user.name}</span>
-          <button type="button" onClick={() => void logout()}>
-            Sign out
-          </button>
-        </div>
-        {children}
-      </div>
-    );
+    return <AccountContext.Provider value={{ user: current.user, logout }}>{children}</AccountContext.Provider>;
   return (
-    <main
-      className="enterprise-login"
-      style={{ '--enterprise-accent': brand.accent || 'var(--primary-color)' } as CSSProperties}
-    >
-      <section className="enterprise-login-card" aria-labelledby="enterprise-login-title">
-        <BrandMark />
-        <h1 id="enterprise-login-title">{brand.loginTitle}</h1>
-        <p>{brand.loginMessage}</p>
-        {error && (
-          <p role="alert" className="enterprise-error">
-            {error}
-          </p>
-        )}
-        {loading ? (
-          <p role="status">Checking sign-in…</p>
-        ) : current ? (
-          <>
-            <p>
-              Signed in as <strong>{current.user.name}</strong>.
+    <main className="enterprise-login">
+      <header className="enterprise-login-header">
+        <span>Robot operations</span>
+        <span>Powered by Robo-Boy</span>
+      </header>
+      <div className="enterprise-login-content">
+        <section className="enterprise-login-card" aria-labelledby="enterprise-login-title">
+          <BrandMark />
+          <span className="enterprise-eyebrow">Your robotics workspace</span>
+          <h1 id="enterprise-login-title">{brand.loginTitle}</h1>
+          <p>{brand.loginMessage}</p>
+          {error && (
+            <p role="alert" className="enterprise-error">
+              {error}
             </p>
-            <button className="enterprise-primary" type="button" onClick={() => setConfirmed(true)}>
-              Continue as {current.user.name}
-            </button>
-            <button type="button" onClick={() => void logout()}>
-              Use another account
-            </button>
-          </>
-        ) : (
-          <button
-            className="enterprise-primary"
-            type="button"
-            disabled={working || loggingOut}
-            onClick={() => void login()}
-          >
-            {loggingOut ? 'Signing out…' : working ? 'Waiting for sign-in…' : 'Sign in with your company account'}
-          </button>
-        )}
-        {working && (
-          <>
-            <p role="status">Complete sign-in in your browser, then return here.</p>
+          )}
+          {loading ? (
+            <p role="status">Checking sign-in…</p>
+          ) : current ? (
+            <>
+              <p>
+                Signed in as <strong>{current.user.name}</strong>.
+              </p>
+              <button className="enterprise-primary" type="button" onClick={() => setConfirmed(true)}>
+                Continue as {current.user.name}
+              </button>
+              <button type="button" onClick={() => void logout()}>
+                Use another account
+              </button>
+            </>
+          ) : (
             <button
+              className="enterprise-primary"
               type="button"
-              onClick={() => {
-                attempt.current?.abort();
-                setWorking(false);
-              }}
+              disabled={working || loggingOut}
+              onClick={() => void login()}
             >
-              Cancel sign-in
+              {loggingOut ? 'Signing out…' : working ? 'Waiting for sign-in…' : 'Sign in with your company account'}
             </button>
-          </>
-        )}
-        {brand.supportUrl && (
-          <a href={brand.supportUrl} target="_blank" rel="noopener noreferrer">
-            Contact support
-          </a>
-        )}
-        <small>Powered by Robo-Boy</small>
-      </section>
+          )}
+          {working && (
+            <>
+              <p role="status">Complete sign-in in your browser, then return here.</p>
+              <button
+                type="button"
+                onClick={() => {
+                  attempt.current?.abort();
+                  setWorking(false);
+                }}
+              >
+                Cancel sign-in
+              </button>
+            </>
+          )}
+          {brand.supportUrl && (
+            <a href={brand.supportUrl} target="_blank" rel="noopener noreferrer">
+              Contact support
+            </a>
+          )}
+          <small>Secure company access</small>
+        </section>
+      </div>
+      <footer className="enterprise-login-footer">One sign-in. Your robots, workspaces and tools.</footer>
     </main>
   );
 }

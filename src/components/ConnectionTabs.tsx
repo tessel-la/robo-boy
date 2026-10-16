@@ -1,6 +1,7 @@
 import { type ReactNode, useEffect, useId, useRef, useState } from 'react';
 import type { ConnectionStatus } from '../runtime/connections';
 import './ConnectionTabs.css';
+import EnterpriseAccount from '../features/enterprise/EnterpriseAccount';
 
 export interface ConnectionTabItem {
   id: string;
@@ -204,6 +205,7 @@ export default function ConnectionTabs({
           )}
           {themeControl}
           {appUpdateControl}
+          <EnterpriseAccount />
           <button type="button" className="connection-switcher-add" onClick={openAnotherConnection}>
             <PlusIcon />
             <span>Open another connection</span>

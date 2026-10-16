@@ -1,4 +1,6 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
+
+const openAccount = async (page: Page) => page.getByRole('button', { name: /Switch connections/ }).click();
 
 test('branded company login protects the workspace and backend, then signs out', async ({ page, request }) => {
   await page.goto('/');
@@ -7,9 +9,12 @@ test('branded company login protects the workspace and backend, then signs out',
   await expect(page.getByRole('button', { name: /Quick Connect/ })).toHaveCount(0);
   expect((await request.get('/recordings/list')).status()).toBe(401);
   await page.getByRole('button', { name: 'Sign in with your company account' }).click();
+  await openAccount(page);
   await expect(page.getByRole('button', { name: 'Sign out' })).toBeVisible();
   await expect(page.getByText('Alice Employee', { exact: true })).toBeVisible();
+  await page.keyboard.press('Escape');
   await expect(page.getByRole('button', { name: /Quick Connect/ })).toBeVisible();
+  await openAccount(page);
   expect((await page.request.get('/recordings/list')).status()).toBe(200);
   await page.getByRole('button', { name: 'Sign out' }).click();
   await expect(page.getByRole('heading', { name: 'Your robotics workspace' })).toBeVisible();
@@ -47,9 +52,12 @@ test('native sign-in uses the system-browser handoff and explicit account confir
   await expect(page.getByRole('button', { name: 'Continue as Alice Employee' })).toBeVisible();
   await expect(page.getByRole('button', { name: /Quick Connect/ })).toHaveCount(0);
   await page.getByRole('button', { name: 'Continue as Alice Employee' }).click();
+  await openAccount(page);
   await expect(page.getByRole('button', { name: 'Sign out' })).toBeVisible();
+  await page.keyboard.press('Escape');
   await page.getByRole('button', { name: /Quick Connect/ }).click();
   await expect(page.getByLabel('Status: Connected')).toBeVisible({ timeout: 15000 });
+  await openAccount(page);
   await page.getByRole('button', { name: 'Sign out' }).click();
   await expect(page.getByRole('button', { name: 'Sign in with your company account' })).toBeVisible();
   await expect(page.getByLabel('Status: Connected')).toHaveCount(0);
@@ -65,9 +73,8 @@ test('login remains usable on a phone without horizontal overflow', async ({ pag
   expect(box.height).toBeGreaterThanOrEqual(44);
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320);
   await login.click();
+  await openAccount(page);
   await expect(page.getByRole('button', { name: 'Sign out' })).toBeVisible();
-  const account = (await page.locator('.enterprise-account').boundingBox())!;
-  const workspace = (await page.locator('.App').boundingBox())!;
-  expect(workspace.y).toBeGreaterThanOrEqual(account.y + account.height);
+  await expect(page.locator('.enterprise-account')).toHaveCount(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320);
 });

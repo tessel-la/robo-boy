@@ -1,71 +1,127 @@
 .enterprise-login {
-  min-height: var(--app-height, 100dvh);
-  display: grid;
-  place-items: center;
-  padding: max(24px, env(safe-area-inset-top)) 20px max(24px, env(safe-area-inset-bottom));
+  height: var(--app-height, 100dvh);
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
   box-sizing: border-box;
   background: var(--background-color);
   color: var(--text-color);
 }
 :root[data-desktop] .enterprise-login {
-  padding-top: calc(24px + var(--title-bar-height));
+  padding-top: var(--title-bar-height);
+}
+.enterprise-login-header,
+.enterprise-login-footer {
+  flex-shrink: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding: 24px clamp(20px, 5vw, 64px);
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  letter-spacing: 0.035em;
+}
+.enterprise-login-header {
+  border-bottom: 1px solid var(--border-color);
+}
+.enterprise-login-footer {
+  justify-content: center;
+  text-align: center;
+}
+.enterprise-login-content {
+  flex: 1 0 auto;
+  display: grid;
+  place-items: center;
+  padding: 40px 20px;
 }
 .enterprise-login-card {
-  width: min(100%, 420px);
+  width: min(100%, 480px);
   box-sizing: border-box;
-  padding: clamp(20px, 5vw, 36px);
+  padding: clamp(28px, 5vw, 48px);
   border: 1px solid var(--border-color);
-  border-radius: 14px;
+  border-radius: 20px;
   background: var(--card-bg);
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  align-items: stretch;
+  gap: 24px;
   overflow-wrap: anywhere;
+  text-align: center;
 }
 .enterprise-brand {
   display: flex;
   align-items: center;
-  gap: 12px;
-  font-weight: 700;
+  justify-content: center;
+  gap: 14px;
   min-width: 0;
+  font-size: 1.35rem;
+  font-weight: 650;
+  letter-spacing: -0.035em;
 }
 .enterprise-brand span {
   min-width: 0;
-  overflow-wrap: anywhere;
-}
-.enterprise-account .enterprise-brand span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 .enterprise-brand img {
+  display: block;
+  width: 48px;
+  height: 40px;
   object-fit: contain;
   flex-shrink: 0;
 }
+.enterprise-brand.is-wordmark img {
+  width: min(100%, 230px);
+  height: 56px;
+}
+.enterprise-brand .sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.enterprise-login-card .enterprise-brand {
+  margin-bottom: 16px;
+}
+.enterprise-eyebrow {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.13em;
+  color: var(--text-secondary);
+}
 .enterprise-login-card h1 {
-  font-size: clamp(1.5rem, 5vw, 2rem);
-  margin: 8px 0 0;
-  line-height: 1.2;
+  font-size: clamp(1.7rem, 5vw, 2.5rem);
+  letter-spacing: -0.045em;
+  margin: -8px 0 0;
+  line-height: 1.12;
+  font-weight: 600;
 }
 .enterprise-login-card p {
   margin: 0;
-  line-height: 1.6;
+  line-height: 1.65;
+  font-size: 0.95rem;
+  color: var(--text-secondary);
 }
-.enterprise-login-card button,
-.enterprise-account button {
-  min-height: 44px;
+.enterprise-login-card button {
+  min-height: 48px;
   font: inherit;
   border: 1px solid var(--border-color);
-  border-radius: 7px;
+  border-radius: 8px;
   background: var(--background-secondary);
   color: var(--text-color);
-  padding: 10px 14px;
+  padding: 14px 18px;
   cursor: pointer;
 }
 .enterprise-login-card .enterprise-primary {
-  border-color: var(--enterprise-accent);
-  box-shadow: inset 3px 0 var(--enterprise-accent);
-  font-weight: 700;
+  background: var(--primary-color);
+  color: var(--button-text-color);
+  border-color: var(--primary-color);
+  font-weight: 650;
+  box-shadow: none;
+}
+.enterprise-login-card .enterprise-primary:hover {
+  background: var(--primary-hover-color);
 }
 .enterprise-login-card button:disabled {
   opacity: 0.6;
@@ -76,64 +132,88 @@
   text-underline-offset: 4px;
 }
 .enterprise-login-card small {
+  font-size: 0.72rem;
   color: var(--text-secondary);
 }
-.enterprise-error {
+.enterprise-login-card p.enterprise-error {
   color: var(--error-color);
 }
-.enterprise-shell {
-  height: var(--app-height, 100dvh);
-  display: flex;
-  flex-direction: column;
-}
-.enterprise-shell > .App {
-  flex: 1;
-  min-height: 0;
-  position: relative;
-  top: auto;
-  bottom: auto;
-}
-:root[data-desktop] .enterprise-shell {
-  padding-top: var(--title-bar-height);
-  box-sizing: border-box;
-}
-:root[data-desktop] .enterprise-shell > .App {
-  top: auto;
-}
-.enterprise-account {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 8px 16px;
-  background: var(--navbar-bg);
-  color: var(--navbar-text);
-  flex-shrink: 0;
-  font-size: 0.8rem;
-}
-.enterprise-account .enterprise-brand {
-  margin-right: auto;
-}
-.enterprise-account .enterprise-brand img {
-  width: 24px;
-  height: 24px;
-}
-.enterprise-account button {
-  min-height: 32px;
-  font-size: inherit;
-  padding: 4px 10px;
-}
 .enterprise-login :focus-visible,
-.enterprise-account :focus-visible {
+.enterprise-menu-account :focus-visible {
   outline: 2px solid var(--primary-color);
   outline-offset: 4px;
 }
+.enterprise-menu-account {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 8px 4px;
+  border-top: 1px solid var(--border-color);
+}
+.enterprise-menu-account .enterprise-brand {
+  justify-content: flex-start;
+  gap: 8px;
+  font-size: 0.8rem;
+}
+.enterprise-menu-account .enterprise-brand img {
+  max-width: 140px;
+  width: auto;
+  height: 24px;
+}
+.enterprise-menu-account > span {
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  overflow-wrap: anywhere;
+}
+.enterprise-robot-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  text-align: left;
+  width: 100%;
+  color: var(--text-color);
+}
+.enterprise-robot-picker select {
+  width: 100%;
+  min-height: 48px;
+  padding: 12px 14px;
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  color: var(--text-color);
+  font: inherit;
+}
+.enterprise-robot-picker > span {
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+.entry-section .enterprise-brand {
+  margin: 8px auto 24px;
+}
+.entry-section .enterprise-brand.is-wordmark img {
+  width: 230px;
+  height: 58px;
+}
 @media (max-width: 480px) {
-  .enterprise-account {
-    flex-wrap: wrap;
+  .enterprise-login-header {
+    padding: 20px;
+    font-size: 0.65rem;
   }
-  .enterprise-account > span {
-    max-width: 40%;
-    overflow: hidden;
-    text-overflow: ellipsis;
+  .enterprise-login-content {
+    padding: 28px 16px;
+  }
+  .enterprise-login-card {
+    gap: 20px;
+    border-radius: 14px;
+    padding: 28px 22px;
+  }
+  .enterprise-brand {
+    font-size: 1.15rem;
+    gap: 10px;
+  }
+  .enterprise-brand img {
+    width: 40px;
+    height: 32px;
   }
 }

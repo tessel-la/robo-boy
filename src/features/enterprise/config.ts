@@ -1,12 +1,5 @@
-export interface Branding {
-  version: 1;
-  name: string;
-  logo: string;
-  accent: string;
-  loginTitle: string;
-  loginMessage: string;
-  supportUrl: string;
-}
+import type { Branding } from '../../../infra/enterprise/config.mjs';
+export type { Branding };
 declare const __ROBOBOY_BRANDING__: Branding | undefined;
 export const brand: Branding =
   typeof __ROBOBOY_BRANDING__ === 'undefined'
@@ -18,6 +11,8 @@ export const brand: Branding =
         loginTitle: 'Sign in to Robo-Boy',
         loginMessage: 'Use your company account to access your robot workspace.',
         supportUrl: '',
+        logoWordmark: false,
+        theme: null,
       }
     : __ROBOBOY_BRANDING__;
 
