@@ -4,6 +4,12 @@ This document describes the current runtime and the boundaries future developmen
 
 ## System Overview
 
+Enterprise deployments can add an optional OIDC authentication gateway in front of the existing
+routes. It protects access while the robot control gateway continues to own command arbitration.
+The default deployment has no login requirement. Public branding and the frontend login boundary
+live in `src/features/enterprise/`; the optional server lives in `infra/enterprise/`. See
+[Enterprise login and branding](enterprise.md) for the trust boundary and session lifecycle.
+
 ```text
 Browser or Tauri webview
   React application

@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { invoke } from '@tauri-apps/api/core';
 import { getDesktopBridge } from '../../runtime/desktopBridge';
 import { defaultSessionName, rememberSessionName } from './sessionName';
+import { setEnterpriseSession } from '../enterprise/session';
 
 vi.mock('../../runtime/desktopBridge', () => ({ getDesktopBridge: vi.fn() }));
 vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn() }));
@@ -12,7 +13,17 @@ describe('session names', () => {
     vi.mocked(getDesktopBridge).mockReset();
     vi.mocked(invoke).mockReset();
     localStorage.clear();
+    setEnterpriseSession(null);
     delete (window as unknown as { __TAURI_INTERNALS__?: object }).__TAURI_INTERNALS__;
+  });
+
+  it('uses the authenticated employee name before the OS name, preserving a chosen label', async () => {
+    setEnterpriseSession({ user: { id: 'alice', name: 'Alice Employee' }, expires: Date.now() + 60000 });
+    vi.mocked(getDesktopBridge).mockReturnValue({ getUsername: async () => 'shared-device' } as never);
+    expect(await defaultSessionName()).toBe('Alice Employee');
+    expect(getDesktopBridge).not.toHaveBeenCalled();
+    rememberSessionName('Test operator');
+    expect(await defaultSessionName()).toBe('Test operator');
   });
 
   it('uses the Electron username and bounds the display label', async () => {

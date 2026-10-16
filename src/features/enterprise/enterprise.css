@@ -1,0 +1,139 @@
+.enterprise-login {
+  min-height: var(--app-height, 100dvh);
+  display: grid;
+  place-items: center;
+  padding: max(24px, env(safe-area-inset-top)) 20px max(24px, env(safe-area-inset-bottom));
+  box-sizing: border-box;
+  background: var(--background-color);
+  color: var(--text-color);
+}
+:root[data-desktop] .enterprise-login {
+  padding-top: calc(24px + var(--title-bar-height));
+}
+.enterprise-login-card {
+  width: min(100%, 420px);
+  box-sizing: border-box;
+  padding: clamp(20px, 5vw, 36px);
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  background: var(--card-bg);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  overflow-wrap: anywhere;
+}
+.enterprise-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-weight: 700;
+  min-width: 0;
+}
+.enterprise-brand span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.enterprise-account .enterprise-brand span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.enterprise-brand img {
+  object-fit: contain;
+  flex-shrink: 0;
+}
+.enterprise-login-card h1 {
+  font-size: clamp(1.5rem, 5vw, 2rem);
+  margin: 8px 0 0;
+  line-height: 1.2;
+}
+.enterprise-login-card p {
+  margin: 0;
+  line-height: 1.6;
+}
+.enterprise-login-card button,
+.enterprise-account button {
+  min-height: 44px;
+  font: inherit;
+  border: 1px solid var(--border-color);
+  border-radius: 7px;
+  background: var(--background-secondary);
+  color: var(--text-color);
+  padding: 10px 14px;
+  cursor: pointer;
+}
+.enterprise-login-card .enterprise-primary {
+  border-color: var(--enterprise-accent);
+  box-shadow: inset 3px 0 var(--enterprise-accent);
+  font-weight: 700;
+}
+.enterprise-login-card button:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+.enterprise-login-card a {
+  color: var(--text-color);
+  text-underline-offset: 4px;
+}
+.enterprise-login-card small {
+  color: var(--text-secondary);
+}
+.enterprise-error {
+  color: var(--error-color);
+}
+.enterprise-shell {
+  height: var(--app-height, 100dvh);
+  display: flex;
+  flex-direction: column;
+}
+.enterprise-shell > .App {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  top: auto;
+  bottom: auto;
+}
+:root[data-desktop] .enterprise-shell {
+  padding-top: var(--title-bar-height);
+  box-sizing: border-box;
+}
+:root[data-desktop] .enterprise-shell > .App {
+  top: auto;
+}
+.enterprise-account {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  background: var(--navbar-bg);
+  color: var(--navbar-text);
+  flex-shrink: 0;
+  font-size: 0.8rem;
+}
+.enterprise-account .enterprise-brand {
+  margin-right: auto;
+}
+.enterprise-account .enterprise-brand img {
+  width: 24px;
+  height: 24px;
+}
+.enterprise-account button {
+  min-height: 32px;
+  font-size: inherit;
+  padding: 4px 10px;
+}
+.enterprise-login :focus-visible,
+.enterprise-account :focus-visible {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 4px;
+}
+@media (max-width: 480px) {
+  .enterprise-account {
+    flex-wrap: wrap;
+  }
+  .enterprise-account > span {
+    max-width: 40%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}

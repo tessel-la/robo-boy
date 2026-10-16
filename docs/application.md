@@ -1,5 +1,10 @@
 # Application
 
+An optional [enterprise build](enterprise.md) adds company branding and system-browser OIDC
+sign-in. Those builds use the configured HTTPS enterprise gateway instead of the direct robot
+ports described below. Authentication is independent of robot ownership; ordinary builds keep
+the existing direct-host workflow.
+
 Robo-Boy's packaged application is a thin Tauri shell around the same React application used by the web deployment. It runs on Linux, macOS, Windows and iPhone, and the runtime contract below is the same on all of them. It does not bundle, install, start, or stop ROS. Run the ROS stack separately on the local computer or on a reachable robot computer.
 
 Everything past the runtime contract is about the desktop build. See [iOS application](ios.md) for building, signing and installing on a phone.

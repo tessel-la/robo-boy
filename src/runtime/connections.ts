@@ -1,5 +1,11 @@
 import { normalizeConnectionHost } from './connectionHost';
-import { getDefaultServicePorts, normalizeRuntimeServicePorts, resolveRuntimeEndpoints } from './runtimeConfig';
+import {
+  getDefaultConnectionHost,
+  getDefaultServicePorts,
+  normalizeRuntimeServicePorts,
+  resolveRuntimeEndpoints,
+} from './runtimeConfig';
+import { managedGateway } from '../features/enterprise/config';
 
 export interface ConnectionParams {
   offline?: boolean;
@@ -21,10 +27,16 @@ export interface ConnectionTarget {
 }
 
 export const describeConnectionTarget = (params: ConnectionParams): ConnectionTarget => {
-  if (params.offline) return {
-    key: 'local-replay', storageScope: 'local-replay', label: 'Local replay',
-    description: 'Local MCAP recordings', params,
-  };
+  if (params.offline)
+    return {
+      key: 'local-replay',
+      storageScope: 'local-replay',
+      label: 'Local replay',
+      description: 'Local MCAP recordings',
+      params,
+    };
+  if (managedGateway())
+    params = { ros2Option: 'ip', ros2Value: getDefaultConnectionHost(), ...getDefaultServicePorts() };
   const ports = normalizeRuntimeServicePorts(params, getDefaultServicePorts());
   const isHost = params.ros2Option === 'ip';
   const value = isHost

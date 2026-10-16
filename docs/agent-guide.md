@@ -25,6 +25,7 @@ Before implementation:
 | Run or connect Robo-Boy               | [User guide](user-guide.md), [Development guide](development.md)                   | `docker-compose.yml`, `infra/`, `src/runtime/`, `src/hooks/useRos.ts`                |
 | Change application structure          | [Application architecture](architecture.md)                                        | `src/App.tsx`, `src/components/MainControlView.tsx`, owning feature module and tests |
 | Change web/desktop endpoints          | [Application](application.md), [Application architecture](architecture.md)     | `src/runtime/`, `config/vite.config.ts`, Caddy files, Compose files                  |
+| Change enterprise access or branding | [Enterprise login and branding](enterprise.md), [Application architecture](architecture.md) | `src/features/enterprise/`, `infra/enterprise/`, runtime URLs and native browser openers |
 | Add robot interfaces                  | [Robot workspace overlays](robot-overlays.md)                                      | `infra/docker/ros_entrypoint.sh`, Compose override, robot workspace install tree     |
 | Create or edit control-pad layouts    | [Custom gamepads](custom-gamepads.md)                                              | `src/features/customGamepad/`, `src/components/gamepads/custom/`                     |
 | Add a built-in gamepad component      | [Custom gamepads](custom-gamepads.md), [Application architecture](architecture.md) | component types, palette, editor, renderer, storage, ROS helpers, tests              |

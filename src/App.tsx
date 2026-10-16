@@ -2,6 +2,7 @@ import { lazy, Suspense, useState, useEffect, useRef } from 'react';
 import './App.css';
 // import Navbar from './components/Navbar';
 import EntrySection from './components/EntrySection';
+import EnterpriseBoundary from './features/enterprise/EnterpriseBoundary';
 import ConnectionTabs from './components/ConnectionTabs';
 import WorkspaceOpening from './components/WorkspaceOpening';
 import TitleBar from './components/TitleBar';
@@ -43,7 +44,7 @@ const safeSetStorageItem = (key: string, value: string): void => {
   }
 };
 
-function App() {
+function WorkspaceApp() {
   const [connectionSessions, setConnectionSessions] = useState<ConnectionSession[]>([]);
   const [activeConnectionId, setActiveConnectionId] = useState<string | null>(null);
   const [isAddingConnection, setIsAddingConnection] = useState(false);
@@ -235,7 +236,6 @@ function App() {
 
   return (
     <>
-      <TitleBar />
       <AppUpdatePrompt />
       <div className="App">
         <main>
@@ -259,7 +259,9 @@ function App() {
                           <WorkspaceOpening
                             stage="loading"
                             target={session.label}
-                            url={session.params.offline ? undefined : resolveRuntimeEndpoints(session.params).rosbridgeUrl}
+                            url={
+                              session.params.offline ? undefined : resolveRuntimeEndpoints(session.params).rosbridgeUrl
+                            }
                             offline={session.params.offline}
                             standalone
                           />
@@ -318,4 +320,13 @@ function App() {
   );
 }
 
-export default App;
+export default function App() {
+  return (
+    <>
+      <TitleBar />
+      <EnterpriseBoundary>
+        <WorkspaceApp />
+      </EnterpriseBoundary>
+    </>
+  );
+}

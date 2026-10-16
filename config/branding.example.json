@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "name": "Example Manufacturing",
+  "logo": "/branding/example.svg",
+  "accent": "#1765b5",
+  "loginTitle": "Your robotics workspace",
+  "loginMessage": "Sign in with your Example Manufacturing account to access the robot workspace.",
+  "supportUrl": "https://example.com/support"
+}

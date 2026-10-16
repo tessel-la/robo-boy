@@ -2,6 +2,7 @@ import React, { createContext, useContext, useMemo } from 'react';
 import { parseEmbedPorts } from './embedTarget';
 import type { ConnectionParams } from './connections';
 import { normalizeConnectionHost } from './connectionHost';
+import { managedGateway, enterpriseOrigin } from '../features/enterprise/config';
 
 export interface RuntimeEndpoints {
   rosbridgeUrl: string;
@@ -180,9 +181,7 @@ const resolveDirectEndpoints = (
     webrtcHlsBaseUrl: `${httpScheme}://${urlHost}:${ports.webrtcHlsPort}/`,
     // A browser frames the embed route beside its own page, whichever backend it talks to.
     embedBaseUrl:
-      mode === 'desktop'
-        ? `https://${urlHost}${ports.embedProxyPort === '443' ? '' : `:${ports.embedProxyPort}`}`
-        : '',
+      mode === 'desktop' ? `https://${urlHost}${ports.embedProxyPort === '443' ? '' : `:${ports.embedProxyPort}`}` : '',
     embedDirectPorts: mode === 'desktop' ? (ports.embedDirectPorts ?? []) : [],
     mode,
     host,
@@ -195,6 +194,23 @@ export function resolveRuntimeEndpoints(
   location = getBrowserLocation(),
   ports = getRuntimePortConfig()
 ): RuntimeEndpoints {
+  if (managedGateway()) {
+    const origin = enterpriseOrigin();
+    return {
+      rosbridgeUrl: origin.replace(/^http/, 'ws') + '/websocket',
+      videoStreamBaseUrl: origin + '/video_stream',
+      meshResourcesBaseUrl: origin + '/mesh_resources',
+      recordingsBaseUrl: origin + '/recordings',
+      ollamaBaseUrl: origin + '/ollama',
+      webrtcWhepBaseUrl: origin + '/webrtc/',
+      webrtcDiscoveryUrl: origin + '/webrtc/_discovery/paths',
+      webrtcHlsBaseUrl: '',
+      embedBaseUrl: origin,
+      embedDirectPorts: [],
+      mode: desktop ? 'desktop' : 'web',
+      host: new URL(origin).hostname,
+    };
+  }
   const configuredHost = params?.ros2Option === 'ip' ? String(params.ros2Value) : '';
   const host = normalizeConnectionHost(configuredHost, 'localhost');
   const selectedPorts = normalizeRuntimeServicePorts(params ?? undefined, ports);
@@ -261,10 +277,16 @@ export const useRuntimeConfig = (): RuntimeEndpoints => useContext(RuntimeConfig
  * rather than naming localhost and offering to connect somewhere nobody asked for.
  */
 export const getDefaultConnectionHost = (): string => {
+  if (managedGateway()) return new URL(enterpriseOrigin()).hostname;
   return isDesktopRuntime() ? '' : getBrowserLocation().hostname;
 };
 
 export const getDefaultServicePorts = (): RuntimeServicePorts => {
+  if (managedGateway()) {
+    const origin = new URL(enterpriseOrigin());
+    const port = origin.port || (origin.protocol === 'https:' ? '443' : '80');
+    return { rosbridgePort: port, videoStreamPort: port, meshResourcesPort: port };
+  }
   const ports = getRuntimePortConfig();
   return {
     rosbridgePort: ports.rosbridgePort,

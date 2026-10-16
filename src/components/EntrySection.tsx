@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import type { ConnectionParams } from '../runtime/connections';
 import './EntrySection.css';
+import { brand, managedGateway } from '../features/enterprise/config';
+import BrandMark from '../features/enterprise/BrandMark';
 import anime from 'animejs';
 import { animateLandingPage, animateAdvancedForm, animateButtonPress } from '../utils/animations';
 import {
@@ -346,17 +348,29 @@ const EntrySection: React.FC<EntrySectionProps> = ({ onConnect, embedded = false
     <div className={`entry-section-container ${embedded ? 'is-embedded' : ''}`} ref={containerRef}>
       <div className="entry-section card" data-testid="entry-section">
         <div className="logo-container" ref={logoRef}>
-          <h1 className="app-title">
-            <span className="title-robo">Robo</span>
-            <span className="title-dash" ref={dashRef}>
-              -
-            </span>
-            <span className="title-boy">Boy</span>
-          </h1>
+          {brand.name !== 'Robo-Boy' || brand.logo ? (
+            <h1 className="app-title">
+              <BrandMark />
+            </h1>
+          ) : (
+            <h1 className="app-title">
+              <span className="title-robo">Robo</span>
+              <span className="title-dash" ref={dashRef}>
+                -
+              </span>
+              <span className="title-boy">Boy</span>
+            </h1>
+          )}
         </div>
 
         <div className="connection-options">
-          <button type="button" className="advanced-toggle" onClick={() => onConnect({ offline: true, ros2Option: 'ip', ros2Value: 'localhost' })}>Open local recordings</button>
+          <button
+            type="button"
+            className="advanced-toggle"
+            onClick={() => onConnect({ offline: true, ros2Option: 'ip', ros2Value: 'localhost' })}
+          >
+            Open local recordings
+          </button>
           {needsConnectionTarget ? (
             <p className="connection-prompt">
               Enter the address of the computer running the ROS stack. It is remembered for next time.
@@ -379,23 +393,25 @@ const EntrySection: React.FC<EntrySectionProps> = ({ onConnect, embedded = false
               </button>
 
               {/* Nothing to collapse back to while the form is the only way to connect. */}
-              <button
-                type="button"
-                className="advanced-toggle"
-                onClick={toggleAdvanced}
-                title="Advanced Options"
-                style={{
-                  padding: '12px 16px',
-                  minWidth: '48px',
-                  display: 'flex',
-                  justifyContent: 'center',
-                  alignItems: 'center',
-                }}
-              >
-                <span className="advanced-toggle-content">
-                  <GearIcon />
-                </span>
-              </button>
+              {!managedGateway() && (
+                <button
+                  type="button"
+                  className="advanced-toggle"
+                  onClick={toggleAdvanced}
+                  title="Advanced Options"
+                  style={{
+                    padding: '12px 16px',
+                    minWidth: '48px',
+                    display: 'flex',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                  }}
+                >
+                  <span className="advanced-toggle-content">
+                    <GearIcon />
+                  </span>
+                </button>
+              )}
             </>
           )}
 
@@ -481,7 +497,7 @@ const EntrySection: React.FC<EntrySectionProps> = ({ onConnect, embedded = false
             </button>
           </form>
 
-          {recentConnections.length > 0 && (
+          {!managedGateway() && recentConnections.length > 0 && (
             <div className="recent-connections" aria-label="Recent connections">
               <div className="recent-connections-title">Recent</div>
               <div className="recent-connections-list">

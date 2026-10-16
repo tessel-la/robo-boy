@@ -1,0 +1,76 @@
+# Optional same-host enterprise deployment. Requires Compose 2.24.4+ for !reset.
+# No provider secret is passed to Vite or included in a frontend build.
+services:
+  app:
+    build:
+      dockerfile: infra/docker/Dockerfile
+      args:
+        VITE_ENTERPRISE_LOGIN: ${ROBOBOY_ENTERPRISE_LOGIN:-true}
+        VITE_ENTERPRISE_SERVER_URL: ${ROBOBOY_ENTERPRISE_ORIGIN:?Set an HTTPS enterprise origin}
+        ROBOBOY_BRANDING_FILE: ${ROBOBOY_BRANDING_FILE:-config/branding.default.json}
+    volumes: !reset []
+    network_mode: host
+    networks: !reset []
+    command: [nginx, '-c', /etc/nginx/enterprise.conf, '-g', 'daemon off;']
+    environment:
+      VITE_ENTERPRISE_LOGIN: ${ROBOBOY_ENTERPRISE_LOGIN:-true}
+      VITE_ENTERPRISE_SERVER_URL: ${ROBOBOY_ENTERPRISE_ORIGIN:?Set an HTTPS enterprise origin}
+      ROBOBOY_BRANDING_FILE: /app/${ROBOBOY_BRANDING_FILE:-config/branding.default.json}
+      VITE_WEB_BACKEND_MODE: proxy
+      PANEL_MANAGER_PROXY_TARGET: http://127.0.0.1:4100
+      OLLAMA_PROXY_TARGET: http://127.0.0.1:11434
+      FRONTEND_PORT: '5173'
+
+  ros-stack:
+    environment:
+      ROBOBOY_SERVICE_BIND_ADDRESS: 127.0.0.1
+      ROBOBOY_RECORDINGS_ADDRESS: 127.0.0.1
+
+  caddy:
+    network_mode: host
+    networks: !reset []
+    ports: !reset []
+    extra_hosts: !reset []
+    environment:
+      ROBOBOY_ENTERPRISE_ORIGIN: ${ROBOBOY_ENTERPRISE_ORIGIN:?Set an HTTPS enterprise origin}
+      BACKEND_HOST: 127.0.0.1
+      FRONTEND_HOST: 127.0.0.1
+      FRONTEND_PORT: '5173'
+      PANEL_MANAGER_UPSTREAM: 127.0.0.1:4100
+    volumes:
+      - ./infra/caddy/Enterprise.Caddyfile:/etc/caddy/Caddyfile:ro
+    depends_on:
+      - enterprise-auth
+
+  enterprise-auth:
+    build:
+      context: .
+      dockerfile: infra/docker/Dockerfile.enterprise
+    network_mode: host
+    restart: unless-stopped
+    init: true
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    environment:
+      ROBOBOY_ENTERPRISE_LOGIN: ${ROBOBOY_ENTERPRISE_LOGIN:-true}
+      ROBOBOY_ENTERPRISE_ORIGIN: ${ROBOBOY_ENTERPRISE_ORIGIN:?Set an HTTPS enterprise origin}
+      ROBOBOY_OIDC_ISSUER: ${ROBOBOY_OIDC_ISSUER:-}
+      ROBOBOY_OIDC_CLIENT_ID: ${ROBOBOY_OIDC_CLIENT_ID:-}
+      ROBOBOY_OIDC_CLIENT_SECRET_FILE: /run/secrets/oidc-client-secret
+      ROBOBOY_OIDC_REQUIRED_GROUP: ${ROBOBOY_OIDC_REQUIRED_GROUP:-}
+      ROBOBOY_AUTH_SESSION_SECONDS: ${ROBOBOY_AUTH_SESSION_SECONDS:-3600}
+      ROBOBOY_AUTH_NATIVE_ORIGINS: ${ROBOBOY_AUTH_NATIVE_ORIGINS:-}
+      ROBOBOY_BRANDING_FILE: /config/branding.json
+    volumes:
+      - type: bind
+        # No provider file is needed when login is explicitly disabled. Enabled mode
+        # rejects the empty fallback at startup before opening its listener.
+        source: ${ROBOBOY_OIDC_CLIENT_SECRET_FILE:-/dev/null}
+        target: /run/secrets/oidc-client-secret
+        read_only: true
+      - type: bind
+        source: ${ROBOBOY_BRANDING_FILE:-./config/branding.default.json}
+        target: /config/branding.json
+        read_only: true

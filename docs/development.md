@@ -181,6 +181,10 @@ If the frontend is opened over HTTPS, direct browser connections use `wss://` an
 
 ## Desktop Frontend
 
+For optional employee login and company branding, see [Enterprise login and branding](enterprise.md).
+The default development build has login disabled; enterprise build flags are public configuration,
+while OIDC client secrets belong only to the optional gateway.
+
 The Tauri application packages only the frontend and expects the ROS stack to run separately. After installing the Tauri platform prerequisites and Rust, start it with:
 
 ```bash

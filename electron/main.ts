@@ -7,6 +7,7 @@ import { registerUpdater } from './updater';
 import { registerRobotResources, robotResourceScheme } from './robotResources';
 import { fetchEmbed, isEmbedHost, registerEmbedProxy } from './embedProxy';
 import { configureCertificates } from './certificates';
+declare const __ROBOBOY_ENTERPRISE_LOGIN__: boolean;
 import { registerPanelFetch } from './panelFetch';
 import { registerAssistantSubscriptions } from './assistant';
 
@@ -209,7 +210,34 @@ const registerWindowControls = (): void => {
     const caller = new URL(event.senderFrame.url);
     const expected = new URL(devServerUrl ?? RENDERER_ORIGIN);
     if (caller.protocol !== expected.protocol || caller.host !== expected.host) return undefined;
-    try { return userInfo().username; } catch { return undefined; }
+    try {
+      return userInfo().username;
+    } catch {
+      return undefined;
+    }
+  });
+
+  ipcMain.handle('roboboy:enterprise-login', async (event, value: unknown) => {
+    const expected = new URL(devServerUrl ?? RENDERER_ORIGIN);
+    const caller = event.senderFrame ? new URL(event.senderFrame.url) : null;
+    if (
+      !windowFor(event) ||
+      event.senderFrame !== event.sender.mainFrame ||
+      caller?.protocol !== expected.protocol ||
+      caller?.host !== expected.host ||
+      typeof value !== 'string'
+    )
+      throw new Error('Sign-in caller rejected.');
+    const target = new URL(value);
+    if (
+      target.protocol !== 'https:' ||
+      target.username ||
+      target.password ||
+      target.pathname !== '/auth/login' ||
+      !/^[A-Za-z0-9_-]{43}$/.test(target.searchParams.get('native') ?? '')
+    )
+      throw new Error('Sign-in address rejected.');
+    await shell.openExternal(target.href);
   });
 
   ipcMain.handle('roboboy:window-minimize', event => windowFor(event)?.minimize());
@@ -247,7 +275,7 @@ if (!app.requestSingleInstanceLock()) {
   ]);
 
   void app.whenReady().then(async () => {
-    configureCertificates();
+    configureCertificates(typeof __ROBOBOY_ENTERPRISE_LOGIN__ !== 'undefined' && __ROBOBOY_ENTERPRISE_LOGIN__);
     serveRenderer(devServerUrl ? null : path.join(currentDir, '../renderer'));
     configurePermissions();
     registerEmbedProxy();

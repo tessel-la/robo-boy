@@ -1,6 +1,7 @@
 import ROSLIB, { type Ros } from 'roslib';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ReplaySession } from './ReplaySession';
+import { setEnterpriseSession } from '../enterprise/session';
 import type { BagInfo, ReaderRequest, ReaderResponse, ReplayMessage } from './types';
 
 const START = 1_000n * 1_000_000_000n;
@@ -52,10 +53,51 @@ beforeEach(() => {
 });
 afterEach(() => {
   session.dispose();
+  setEnterpriseSession(null);
+  delete (window as any).roboBoyDesktop;
+  vi.unstubAllEnvs();
   vi.useRealTimers();
 });
 
 describe('ReplaySession', () => {
+  it('authenticates playback, retry and export workers without changing saved recording sources', async () => {
+    vi.stubEnv('VITE_ENTERPRISE_LOGIN', 'true');
+    vi.stubEnv('VITE_ENTERPRISE_SERVER_URL', 'https://robot.example');
+    (window as any).roboBoyDesktop = {};
+    const identity = {
+      user: { id: 'alice', name: 'Alice' },
+      expires: Date.now() + 60000,
+      token: 'a'.repeat(43),
+      media: 'b'.repeat(43),
+    };
+    setEnterpriseSession(identity);
+    const bag = { url: 'https://robot.example/recordings/files/run.mcap', name: 'run.mcap', size: 1024 };
+    session.open(bag);
+    expect(worker.last('open')).toMatchObject({
+      source: { ...bag, url: `https://robot.example/auth/media/${identity.media}/recordings/files/run.mcap` },
+    });
+    worker.reply({ id: worker.last('open').id, op: 'opened', info: INFO });
+    expect(
+      JSON.stringify(session.getSnapshot(), (_, value) => (typeof value === 'bigint' ? String(value) : value))
+    ).not.toContain(identity.media);
+    const range = session.readRange(0, 1, ['/a'], () => true);
+    expect(worker.last('open')).toMatchObject({
+      source: { url: `https://robot.example/auth/media/${identity.media}/recordings/files/run.mcap` },
+    });
+    worker.reply({ id: 1, op: 'opened', info: INFO });
+    worker.reply({ id: 2, op: 'messages', messages: [], done: true });
+    await range;
+    // A retry must resolve the current read credential from the original canonical source.
+    setEnterpriseSession({ ...identity, media: 'c'.repeat(43) });
+    session.open(bag);
+    worker.reply({ id: worker.last('open').id, op: 'error', error: 'Connection lost' });
+    session.retry();
+    expect(worker.last('open')).toMatchObject({
+      source: { url: `https://robot.example/auth/media/${'c'.repeat(43)}/recordings/files/run.mcap` },
+    });
+    expect(bag.url).toBe('https://robot.example/recordings/files/run.mcap');
+  });
+
   it('replays a recording on the ROS host and reconnects where it stopped', () => {
     const bag = { url: 'http://robot.local:9091/files/run_0.mcap', name: 'run_0.mcap', size: 4096 };
     session.open(bag);

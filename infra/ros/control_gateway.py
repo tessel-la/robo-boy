@@ -739,6 +739,7 @@ def observer_services(value):
 def parse_args(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--port', type=int, default=9090)
+    parser.add_argument('--address', default=os.environ.get('ROBOBOY_SERVICE_BIND_ADDRESS', '0.0.0.0'))
     parser.add_argument('--upstream-port', type=int, default=9092)
     parser.add_argument('--journal', default='/var/lib/roboboy-control/unconfirmed')
     parser.add_argument('--allowed-origins', default=os.environ.get('ROBOBOY_CONTROL_ALLOWED_ORIGINS', ''),
@@ -770,7 +771,7 @@ def main():
                           observer_services=args.observer_services)
     url = f'ws://127.0.0.1:{args.upstream_port}'
     allowed_origins = frozenset(origin.strip() for origin in args.allowed_origins.split(',') if origin.strip()) if args.allowed_origins.strip() else None
-    application(authority, url, allowed_origins).listen(args.port, address='0.0.0.0')
+    application(authority, url, allowed_origins).listen(args.port, address=args.address)
     tornado.ioloop.PeriodicCallback(authority.tick, 1000).start()
     tornado.ioloop.IOLoop.current().spawn_callback(monitor_runner, authority, url)
     tornado.ioloop.IOLoop.current().start()

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Ros } from 'roslib';
+import { setEnterpriseSession } from '../enterprise/session';
 import { ControlSession, CONTROL_STATUS_TOPIC, controlSessionFor, type ControlStatus } from './ControlSession';
 
 import { defaultSessionName, rememberSessionName } from './sessionName';
@@ -45,7 +46,27 @@ describe('ControlSession', () => {
     vi.mocked(defaultSessionName).mockReset().mockResolvedValue(undefined);
     vi.mocked(rememberSessionName).mockClear();
   });
-  afterEach(() => vi.useRealTimers());
+  afterEach(() => {
+    vi.useRealTimers();
+    setEnterpriseSession(null);
+    vi.unstubAllEnvs();
+    delete (window as any).roboBoyDesktop;
+  });
+  it('authenticates a native connection before subscribing or requesting robot status', () => {
+    vi.stubEnv('VITE_ENTERPRISE_LOGIN', 'true');
+    (window as any).roboBoyDesktop = {};
+    const token = 'a'.repeat(43);
+    setEnterpriseSession({ user: { id: 'alice', name: 'Alice' }, expires: Date.now() + 60000, token });
+    const { ros, send } = fakeControlRos();
+    const session = new ControlSession(ros);
+    session.connected();
+    expect(send.mock.calls.map(([message]) => message)).toEqual([
+      { op: 'roboboy_auth', token },
+      { op: 'subscribe', topic: CONTROL_STATUS_TOPIC },
+      { op: 'roboboy_control', action: 'status' },
+    ]);
+    session.dispose();
+  });
   it('keeps server status fresh in shared mode without acquiring or heartbeating', () => {
     vi.useFakeTimers();
     const { ros, send, status } = fakeControlRos();
