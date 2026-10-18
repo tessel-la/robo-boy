@@ -4,8 +4,8 @@ This document defines how Robo-Boy owns multiple live ROS connections. The conne
 foundation; the tab bar is only a view over it.
 
 The landing screen offers **Quick Connect** for its suggested target and **Choose another robot**
-for a host, IP address or ROS domain. Once connected, **Add connection** stays visible beside the
-current robot in the toolbar. The switcher shows the number of open connections and lets you
+for a host, IP address or ROS domain. Once connected, use **Open another connection** in the
+connection dropdown. The switcher shows the number of open connections and lets you
 return to an existing workspace without closing it. The same actions work with reduced motion.
 
 ## Existing architecture

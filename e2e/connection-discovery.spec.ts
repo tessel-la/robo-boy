@@ -27,14 +27,9 @@ for (const width of [1280, 540, 390, 320]) {
     await expect(page.getByLabel('Status: Connected')).toBeVisible();
     await expect(page.locator('.workspace-opening')).toHaveCount(0);
 
-    const add = page.getByRole('button', { name: 'Add connection', exact: true });
-    await expect(add).toBeVisible();
-    const rect = await add.boundingBox();
-    expect(rect!.x).toBeGreaterThanOrEqual(0);
-    expect(rect!.x + rect!.width).toBeLessThanOrEqual(width);
-    const panelAdd = await page.locator('.top-bar .workspace-add-control').boundingBox();
-    expect(rect!.x + rect!.width + 4).toBeLessThanOrEqual(panelAdd!.x);
-    await add.click();
+    await expect(page.getByRole('button', { name: 'Add connection', exact: true })).toHaveCount(0);
+    await page.getByRole('button', { name: /Switch connections, current/ }).click();
+    await page.getByRole('button', { name: 'Open another connection', exact: true }).click();
     await disclosure.click();
     await page.getByRole('textbox', { name: 'Host or IP:' }).fill('beta.local');
     await page.getByRole('button', { name: 'Connect', exact: true }).click();
@@ -66,5 +61,6 @@ test('reduced motion keeps quick connect and the labelled disclosure usable', as
   await page.getByRole('button', { name: /Quick Connect/ }).click();
   await expect(page.getByLabel('Status: Connected')).toBeVisible();
   await expect(page.locator('.workspace-opening')).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Add connection', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: /Switch connections, current/ }).click();
+  await expect(page.getByRole('button', { name: 'Open another connection', exact: true })).toBeVisible();
 });

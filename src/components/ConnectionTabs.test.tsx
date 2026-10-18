@@ -8,7 +8,7 @@ const tabs = [
 ];
 
 describe('ConnectionTabs', () => {
-  it('adds a connection directly from the toolbar without closing the current one', () => {
+  it('keeps the add action in the dropdown without a duplicate toolbar button', () => {
     const onAdd = vi.fn();
     const onClose = vi.fn();
     render(
@@ -22,7 +22,9 @@ describe('ConnectionTabs', () => {
       />
     );
     expect(screen.getByTitle('2 open connections')).toBeVisible();
-    fireEvent.click(screen.getByRole('button', { name: 'Add connection' }));
+    expect(screen.queryByRole('button', { name: 'Add connection' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Switch connections, current/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open another connection' }));
     expect(onAdd).toHaveBeenCalledOnce();
     expect(onClose).not.toHaveBeenCalled();
   });

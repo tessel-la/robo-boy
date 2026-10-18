@@ -358,34 +358,6 @@
   }
 }
 
-.connection-tabs.has-add-action {
-  width: 350px;
-  max-width: min(350px, calc(100vw - 152px));
-  flex-basis: 350px;
-}
-
-.connection-add-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 5px;
-  flex: 0 0 auto;
-  min-height: 30px;
-  padding: 0 10px;
-  border: 1px solid color-mix(in srgb, var(--navbar-text, #fff) 22%, transparent);
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--navbar-text, #fff) 7%, transparent);
-  color: inherit;
-  font: inherit;
-  font-size: 0.72rem;
-  font-weight: 650;
-  white-space: nowrap;
-  box-shadow: none;
-  transition: background-color 160ms ease;
-}
-.connection-add-button svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.8; }
-.connection-add-button:hover { background: color-mix(in srgb, var(--navbar-text, #fff) 18%, transparent); }
-.connection-add-button:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 2px; }
 .connection-count {
   min-width: 17px;
   padding: 1px 4px;
@@ -397,21 +369,7 @@
 }
 .connection-switcher-popover { animation: connection-menu-enter 160ms ease-out; transform-origin: top left; }
 @keyframes connection-menu-enter { from { opacity: 0; transform: translateY(-4px) scale(0.98); } to { opacity: 1; transform: none; } }
-@media (max-width: 900px) {
-  .connection-tabs.has-add-action { max-width: 250px; flex-basis: 250px; }
-}
-@media (max-width: 480px) {
-  .connection-tabs.has-add-action { max-width: min(184px, calc(50vw - 28px)); flex-basis: min(184px, calc(50vw - 28px)); }
-  .connection-add-long-label { display: none; }
-  .connection-add-button { padding: 0 7px; }
-}
-@media (max-width: 460px) {
-  .top-bar.bt-running.workspace-active .connection-add-button { width: 28px; padding: 0; }
-  .top-bar.bt-running.workspace-active .connection-add-button > span,
-  .top-bar.bt-running.workspace-active .connection-count { display: none; }
-}
 @media (prefers-reduced-motion: reduce) {
-  .connection-add-button { transition: none; }
   .connection-switcher-popover { animation: none; }
 }
 
@@ -419,12 +377,7 @@
   max-width: min(220px, calc(100vw - 20px));
   flex-basis: 220px;
 }
-@media (min-width: 481px) and (max-width: 768px) {
-  .connection-tabs.has-add-action { max-width: min(250px, calc(50vw - 28px)); flex-basis: min(250px, calc(50vw - 28px)); }
-}
 @media (max-width: 360px) {
   /* Keep room for the current robot's name; the menu still shows the connection count. */
   .connection-count { display: none; }
-  .connection-add-button { padding: 0 4px; gap: 3px; }
-  .connection-add-button svg { width: 12px; height: 12px; }
 }
