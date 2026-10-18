@@ -64,6 +64,8 @@ try {
       bundle: true,
       platform: 'browser',
       format: 'iife',
+      // This fixture bypasses Vite. Match a standard, login-disabled renderer build.
+      define: { 'import.meta.env': '{}' },
     }),
     build({
       entryPoints: [path.join(root, 'electron/preload.ts')],
