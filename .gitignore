@@ -191,3 +191,6 @@ local-panel-sources.json
 
 # Local ROS recording output
 /recordings/
+
+# Private standalone enterprise access-session snapshots
+/.enterprise-sessions/

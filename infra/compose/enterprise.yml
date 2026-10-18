@@ -73,10 +73,12 @@ services:
       ROBOBOY_MICROSOFT_TENANT: ${ROBOBOY_MICROSOFT_TENANT:-}
       ROBOBOY_MICROSOFT_REQUIRED_ROLE: ${ROBOBOY_MICROSOFT_REQUIRED_ROLE:-}
       ROBOBOY_AUTH_SESSION_SECONDS: ${ROBOBOY_AUTH_SESSION_SECONDS:-3600}
+      ROBOBOY_AUTH_SESSION_FILE: /var/lib/roboboy-auth/sessions.json
       ROBOBOY_AUTH_NATIVE_ORIGINS: ${ROBOBOY_AUTH_NATIVE_ORIGINS:-}
       ROBOBOY_BRANDING_FILE: /config/branding.json
       ROBOBOY_ROBOTS_FILE: /config/robots.json
     volumes:
+      - enterprise-sessions:/var/lib/roboboy-auth
       - type: bind
         # No provider file is needed when login is explicitly disabled. Enabled mode
         # rejects the empty fallback at startup before opening its listener.
@@ -100,3 +102,6 @@ services:
         source: ${ROBOBOY_ROBOTS_FILE:-./config/robots.default.json}
         target: /config/robots.json
         read_only: true
+
+volumes:
+  enterprise-sessions:

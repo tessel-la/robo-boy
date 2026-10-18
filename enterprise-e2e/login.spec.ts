@@ -30,6 +30,9 @@ test('native sign-in uses the system-browser handoff and explicit account confir
     await browser.goto(url);
     await expect(browser.getByRole('heading', { name: 'Sign-in complete' })).toBeVisible();
     await browser.close();
+    // Match returning to the native app after system-browser sign-in. Firefox's text input
+    // insertion can otherwise target the closed sign-in tab instead of the app fixture.
+    await page.bringToFront();
   });
   await page.addInitScript(() => {
     const testWindow = window as unknown as {
@@ -60,6 +63,7 @@ test('native sign-in uses the system-browser handoff and explicit account confir
   await page.keyboard.press('Escape');
   await expect(page.getByRole('textbox', { name: 'Host or IP:' })).toBeVisible();
   await page.getByRole('textbox', { name: 'Host or IP:' }).fill('127.0.0.1');
+  await expect(page.getByRole('textbox', { name: 'Host or IP:' })).toHaveValue('127.0.0.1');
   await page.getByRole('textbox', { name: 'ROS', exact: true }).fill('5282');
   const sent: string[] = [];
   page.on('websocket', socket => socket.on('framesent', event => sent.push(String(event.payload))));

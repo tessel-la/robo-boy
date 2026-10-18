@@ -1,7 +1,11 @@
 import { spawn } from 'node:child_process';
 import { fixture } from '../infra/enterprise/test/provider.mjs';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 const origin = 'http://127.0.0.1:5280';
+const sessionDirectory = mkdtempSync(join(tmpdir(), 'roboboy-enterprise-e2e-'));
 const vite = spawn(
   process.execPath,
   [
@@ -32,11 +36,17 @@ const app = await fixture({
   frontend: 'http://127.0.0.1:5281',
   developmentAssets: true,
   nativeOrigins: [origin, 'app://robo-boy', 'tauri://localhost'],
+  sessionFile: join(sessionDirectory, 'sessions.json'),
+});
+let stopping;
+const stop = () => stopping ??= app.close().then(() => {
+  rmSync(sessionDirectory, { recursive: true, force: true });
+  process.exit(0);
 });
 for (const signal of ['SIGINT', 'SIGTERM'])
   process.once(signal, () => {
     vite.kill('SIGTERM');
-    void app.close().then(() => process.exit(0));
+    void stop();
   });
-vite.once('exit', () => void app.close().then(() => process.exit(0)));
+vite.once('exit', () => void stop());
 console.log('Isolated enterprise test deployment ready on ' + origin);

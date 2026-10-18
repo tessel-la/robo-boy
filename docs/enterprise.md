@@ -252,12 +252,50 @@ The frontend rechecks server state every 10 seconds and unmounts robot component
 access. Persistent trees retain the robot control model's documented disconnect behavior.
 
 An unavailable identity provider cannot grant a new session. An unavailable broker never
-falls back to raw robot ports. Restarting the broker signs out all sessions. Session state is
-bounded to 1024 sessions and 128 pending requests per sign-in stage; it is held in memory on
-one broker per deployment. Company policy scales through the identity provider, and the same
-configuration supports separate robot/cell deployments without company-specific source forks.
-Multiple broker replicas would require a shared session store and coordinated revocation;
-they are not supported by this in-memory implementation.
+falls back to raw robot ports. Session state is bounded to 1024 sessions and 128 pending requests
+per sign-in stage. Company policy scales through the identity provider, and the same configuration
+supports separate robot/cell deployments without company-specific source forks.
+
+### Recover sign-ins after a gateway restart
+
+The enterprise Compose overlay stores completed access sessions in its **enterprise-sessions**
+volume, at `/var/lib/roboboy-auth/sessions.json`. Restarting or recreating the gateway with that
+volume preserves unexpired web cookies, native credentials held by running apps, and their
+read-only media access. Recovery keeps the original expiry; a restart never extends a session.
+Existing memory-only sessions need one sign-in after upgrading to this version.
+
+For a standalone Node gateway on Linux, set `ROBOBOY_AUTH_SESSION_FILE` to an absolute path in a
+private writable directory. The gateway creates a missing directory with mode `0700` and its file
+with mode `0600`. It rejects symlink files, loose file permissions, or a directory writable by other
+users. Without this setting, standalone/test gateways retain memory-only sessions.
+
+The file contains credential hashes, provider and user identifiers, the display name, and expiry.
+It contains no raw cookie, native or media token, provider token, client secret, or pending login
+proof. Sign-in, renewal, logout, and expiry commit an atomic snapshot before reporting success.
+Snapshots synchronize both file contents and the containing directory; a killed process cannot
+leave a partially written session file. Writes happen when access sessions change, not for robot
+commands, session checks, or telemetry. The bounded snapshot needs no separate database service.
+
+The store belongs to one gateway process. A second writer is rejected; after a crash its abandoned
+writer lease becomes recoverable after 10 s. The Compose restart policy retries startup. Do not
+share this volume across active gateway replicas or manually remove a live writer's lock. A lost
+writer lock or failed write fences authenticated access, closes live authenticated connections,
+and returns an unavailable response. A failed logout commit is never acknowledged as successful.
+Corrupt or unreadable storage prevents startup instead of bypassing authentication.
+
+Saved sessions are bound to the public origin, session lifetime, provider issuers/client IDs, and
+provider access restrictions. Changing those settings invalidates saved sessions. Branding and
+robot-registry changes do not. To revoke every persisted session, stop the gateway, delete its
+session file, and start it again. Keep the volume for ordinary upgrades; do not restore an old
+snapshot as a routine rollback because it can restore credentials revoked after that snapshot.
+
+A gateway restart still drops active sockets and streams. Clients reconnect using their restored
+access session, and the robot control gateway applies its normal disconnect, action-recovery, and
+ownership rules. Login persistence never restores a robot-control lease automatically. Pending
+OIDC callbacks and unredeemed native handoffs are discarded and must be started again. A packaged
+app that itself restarts still needs to sign in because its raw credential remains memory-only.
+Multiple active gateway replicas still require shared transactional session storage and coordinated
+connection revocation; this deployment does not support them.
 
 ## Current boundaries
 
@@ -286,8 +324,11 @@ npm run e2e:enterprise
 npm run build
 ```
 
-The gateway suite uses a real local issuer with signed JWTs and simulated robot endpoints. It
-covers callback binding, replay, wrong token claims, group restrictions, native proof handoff,
+The gateway suite uses a real local issuer with signed JWTs and simulated robot endpoints. Restart
+tests cover restored browser/native access, media and sockets, logout, expiry during downtime,
+policy changes, abandoned handoffs, process death, writer-lock recovery, corrupt/private storage,
+and fail-closed write errors. The suite also covers callback binding, replay, wrong token claims,
+group restrictions, native proof handoff,
 unauthorized reads and writes, scoped media access, credential stripping and WebSocket revocation.
 Browser tests exercise branded login/logout, the native handoff and confirmation flow, and a
 320 px login layout in Chromium and Firefox. The ordinary suite continues to cover login-disabled

@@ -3,6 +3,7 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 # Keep in sync with gateway.mjs's local imports; gateway.test.mjs checks this list.
-COPY infra/enterprise/gateway.mjs infra/enterprise/config.mjs infra/enterprise/providers.mjs ./infra/enterprise/
+COPY infra/enterprise/gateway.mjs infra/enterprise/config.mjs infra/enterprise/providers.mjs infra/enterprise/session-store.mjs ./infra/enterprise/
+RUN mkdir -p /var/lib/roboboy-auth && chown node:node /var/lib/roboboy-auth && chmod 700 /var/lib/roboboy-auth
 USER node
 CMD ["node", "infra/enterprise/gateway.mjs"]

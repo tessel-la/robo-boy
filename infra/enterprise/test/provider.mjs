@@ -24,6 +24,7 @@ export async function fixture({
   userinfo,
   providers,
   sessionSeconds = 3600,
+  sessionFile,
 } = {}) {
   const { publicKey, privateKey } = await generateKeyPair('RS256');
   const jwk = { ...(await exportJWK(publicKey)), kid: 'test-key', alg: 'RS256', use: 'sig' };
@@ -148,7 +149,7 @@ export async function fixture({
   await once(backend, 'listening');
   let now = Date.now();
   const origin = publicOrigin || 'https://robot.example';
-  const gateway = await createEnterpriseGateway({
+  const gatewayOptions = {
     origin,
     upstream: upstream || `http://127.0.0.1:${backend.address().port}`,
     oidc: config,
@@ -160,14 +161,25 @@ export async function fixture({
     prompt,
     robots,
     sessionSeconds,
+    sessionFile,
     developmentAssets,
     clock: () => now,
-  });
+  };
+  let gateway = await createEnterpriseGateway(gatewayOptions);
   gateway.server.listen(port, '127.0.0.1');
   await once(gateway.server, 'listening');
   const url = `http://127.0.0.1:${gateway.server.address().port}`;
   return {
     ...gateway,
+    get server() { return gateway.server; },
+    sweep: () => gateway.sweep(),
+    async restart(overrides = {}) {
+      const port = gateway.server.address().port;
+      await gateway.close();
+      gateway = await createEnterpriseGateway({ ...gatewayOptions, ...overrides });
+      gateway.server.listen(port, '127.0.0.1');
+      await once(gateway.server, 'listening');
+    },
     url,
     origin,
     received,
@@ -180,9 +192,9 @@ export async function fixture({
     invalidateSignature: () => {
       invalidSignature = true;
     },
-    advance: milliseconds => {
+    advance: (milliseconds, sweep = true) => {
       now += milliseconds;
-      gateway.sweep();
+      if (sweep) gateway.sweep();
     },
     async login(nativeId, { session, renew, provider } = {}) {
       const query = new URLSearchParams({

@@ -8,6 +8,7 @@ import httpProxy from 'http-proxy';
 import { WebSocket, WebSocketServer } from 'ws';
 import { secureOrigin, loadBranding, enabled, robots } from './config.mjs';
 import { allowedAccount, memberOf, normalizeProviders, providersFromEnvironment } from './providers.mjs';
+import { openSessionStore, SessionStoreError } from './session-store.mjs';
 
 const random = () => randomBytes(32).toString('base64url');
 const hash = value => createHash('sha256').update(value).digest('hex');
@@ -42,7 +43,7 @@ async function jsonBody(request) {
   return JSON.parse(data || '{}');
 }
 
-/** One broker per robot deployment, like the control authority. Restart signs out all sessions. */
+/** One broker per deployment. A private durable store can preserve completed sign-ins across restarts. */
 export async function createEnterpriseGateway(options) {
   const origin = secureOrigin(options.origin);
   const secure = origin.startsWith('https:');
@@ -163,6 +164,33 @@ export async function createEnterpriseGateway(options) {
   const publicProviders = providers.map(({ id, label }) => ({ id, label }));
   const sessions = new Map();
   const media = new Map();
+  const disconnect = session => {
+    for (const connection of session.connections) connection.close();
+    session.connections.clear();
+  };
+  // Bind saved sessions to the deployment and verified provider/access policy, never just a subject label.
+  const policy = hash(JSON.stringify({
+    origin, ttl,
+    providers: providers.map(provider => ({
+      id: provider.id,
+      issuer: provider.config.serverMetadata().issuer,
+      client: provider.config.clientMetadata().client_id,
+      requiredGroup: provider.requiredGroup,
+      groupsClaim: provider.groupsClaim,
+      allowedDomains: [...provider.allowedDomains].sort(),
+      allowedEmails: [...provider.allowedEmails].sort(),
+    })).sort((a, b) => a.id.localeCompare(b.id)),
+  }));
+  const store = await openSessionStore({
+    file: options.sessionFile, policy, clock,
+    onFailure: () => { for (const session of sessions.values()) disconnect(session); },
+  });
+  for (const saved of store.sessions) {
+    const session = { ...saved, durable: true, connections: new Set() };
+    sessions.set(session.key, session);
+    media.set(session.mediaKey, session);
+  }
+  const persist = () => store.save([...sessions.values()].filter(session => session.durable));
   const transactions = new Map();
   const pending = new Map();
   const sockets = new Set();
@@ -196,7 +224,7 @@ export async function createEnterpriseGateway(options) {
   const wsServer = new WebSocketServer({ noServer: true, maxPayload: 10000000, perMessageDeflate: false });
   const setCookie = (name, value, age) =>
     `${name}=${value}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${age}${secure ? '; Secure' : ''}`;
-  const valid = session => session && session.expires > clock();
+  const valid = session => !store.failed && session && session.expires > clock();
   const identify = request => {
     const authorization = request.headers['x-roboboy-session'];
     if (authorization !== undefined)
@@ -259,9 +287,8 @@ export async function createEnterpriseGateway(options) {
   };
   const remove = session => {
     sessions.delete(session.key);
-    media.delete(session.media);
-    for (const connection of session.connections) connection.close();
-    session.connections.clear();
+    media.delete(session.mediaKey);
+    disconnect(session);
   };
   const track = (session, resource, rebind) => {
     const connection = {
@@ -283,7 +310,12 @@ export async function createEnterpriseGateway(options) {
     previous.connections.clear();
   };
   const sweep = () => {
-    for (const session of sessions.values()) if (!valid(session)) remove(session);
+    if (store.failed) return;
+    let changed = false;
+    for (const session of sessions.values()) if (!valid(session)) {
+      changed ||= session.durable;
+      remove(session);
+    }
     for (const collection of [transactions, pending]) {
       for (const [key, value] of collection)
         if (value.expires <= clock()) {
@@ -291,8 +323,11 @@ export async function createEnterpriseGateway(options) {
           collection.delete(key);
         }
     }
+    if (changed) persist();
   };
-  const timer = setInterval(sweep, 1000);
+  const timer = setInterval(() => {
+    try { sweep(); } catch { /* Storage failure has already fenced access and closed live connections. */ }
+  }, 1000);
   timer.unref();
   const failHandoff = id => {
     const attempt = pending.get(id);
@@ -313,6 +348,7 @@ export async function createEnterpriseGateway(options) {
     let nativeCallback;
     let browserPage = false;
     try {
+      if (store.failed) throw new SessionStoreError();
       sweep();
       const url = new URL(request.url, origin);
       if (
@@ -373,13 +409,16 @@ export async function createEnterpriseGateway(options) {
         }
         if (!attempt.session) return reply(response, 202, { pending: true });
         pending.delete(id);
+        // Only a redeemed handoff is a durable session; pending login credentials never reach disk.
+        attempt.session.durable = true;
+        persist();
         // The previous credential stays valid until its own expiry in case this response is lost.
         if (attempt.previous) migrate(attempt.previous, attempt.session);
         return reply(response, 200, {
           user: attempt.session.user,
           expires: attempt.session.expires,
           token: attempt.token,
-          media: attempt.session.media,
+          media: attempt.media,
           robots: publicRobots,
         });
       }
@@ -486,7 +525,7 @@ export async function createEnterpriseGateway(options) {
         if (provider.requiredGroup && groups === undefined && claims?.sub && config.serverMetadata().userinfo_endpoint)
           groups = (await oidc.fetchUserInfo(config, tokens.access_token, claims.sub))[provider.groupsClaim];
         if (
-          !claims?.sub ||
+          typeof claims?.sub !== 'string' || !claims.sub || claims.sub.length > 255 ||
           (provider.requiredGroup && !memberOf(groups, provider.requiredGroup)) ||
           !allowedAccount(provider, claims)
         ) {
@@ -505,11 +544,12 @@ export async function createEnterpriseGateway(options) {
           return page(response, 503, 'Service busy', 'Session capacity reached. Try again later.', nativeCallback);
         }
         const token = random();
+        const mediaToken = random();
         // The ID token only proves this sign-in; openid-client already rejected it if expired.
         // Provider token lifetimes (Keycloak defaults to 5 minutes) must not end the workspace session.
         const session = {
           key: hash(token),
-          media: random(),
+          mediaKey: hash(mediaToken),
           // Subjects are only unique per issuer, so non-company providers are namespaced.
           user: {
             id: provider.id === 'company' ? claims.sub : `${provider.id}:${claims.sub}`,
@@ -517,6 +557,7 @@ export async function createEnterpriseGateway(options) {
           },
           provider: provider.id,
           expires: clock() + ttl * 1000,
+          durable: !attempt.nativeId,
           connections: new Set(),
         };
         if (attempt.nativeId) {
@@ -525,6 +566,7 @@ export async function createEnterpriseGateway(options) {
             return page(response, 400, 'Sign-in expired', 'The app stopped waiting for this sign-in.', true);
           handoff.session = session;
           handoff.token = token;
+          handoff.media = mediaToken;
         } else {
           const previous = identify(request);
           if (previous) {
@@ -533,9 +575,10 @@ export async function createEnterpriseGateway(options) {
           }
         }
         sessions.set(session.key, session);
-        media.set(session.media, session);
+        media.set(session.mediaKey, session);
         if (attempt.nativeId)
           return complete(response, session, 'and confirm this account', setCookie(loginCookie, '', 0));
+        persist();
         const cookies = [setCookie(sessionCookie, token, ttl), setCookie(loginCookie, '', 0)];
         if (attempt.renew) return complete(response, session, 'to continue', cookies);
         response.writeHead(303, { Location: '/', 'Cache-Control': 'no-store', 'Set-Cookie': cookies });
@@ -551,7 +594,10 @@ export async function createEnterpriseGateway(options) {
             : { error: 'Sign in to continue.' }
         );
       if (url.pathname === '/auth/logout' && request.method === 'POST') {
-        if (session) remove(session);
+        if (session) {
+          remove(session);
+          persist();
+        }
         return reply(response, 200, {}, { 'Set-Cookie': setCookie(sessionCookie, '', 0) });
       }
       if (url.pathname.startsWith('/auth/') && !url.pathname.startsWith('/auth/media/'))
@@ -559,7 +605,7 @@ export async function createEnterpriseGateway(options) {
       let authorization = session;
       const mediaRequest = /^\/auth\/media\/([A-Za-z0-9_-]{43})(\/.*)$/.exec(url.pathname);
       if (mediaRequest) {
-        authorization = media.get(mediaRequest[1]);
+        authorization = media.get(hash(mediaRequest[1]));
         if (!['GET', 'HEAD'].includes(request.method) || !mediaPath(mediaRequest[2]))
           return reply(response, 403, { error: 'This credential only allows robot media reads.' });
         url.pathname = mediaRequest[2];
@@ -589,10 +635,12 @@ export async function createEnterpriseGateway(options) {
         track(authorization, response);
       }
       proxy.web(request, response, { target: route.target });
-    } catch {
+    } catch (error) {
       failHandoff(nativeCallback);
       // Provider errors can contain codes and credentials. Never return or log their raw text.
       if (response.headersSent) response.destroy();
+      else if (error instanceof SessionStoreError)
+        reply(response, 503, { error: 'Sign-in storage is unavailable. Contact your administrator.' });
       else if (browserPage)
         page(
           response,
@@ -609,7 +657,7 @@ export async function createEnterpriseGateway(options) {
     const url = new URL(request.url, origin);
     const route = robotRoute(url.pathname);
     if (
-      !route ||
+      store.failed || !route ||
       route.path !== '/websocket' ||
       sockets.size >= 1024 ||
       url.search ||
@@ -687,11 +735,13 @@ export async function createEnterpriseGateway(options) {
     sweep,
     close: async () => {
       clearInterval(timer);
-      for (const session of sessions.values()) remove(session);
+      // Shutdown drops transports, not durable access sessions or their original expiry.
+      for (const session of sessions.values()) disconnect(session);
       for (const socket of sockets) socket.terminate();
       wsServer.close();
       proxy.close();
       await new Promise(resolve => server.close(resolve));
+      await store.close();
     },
   };
 }
@@ -714,6 +764,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
         ? { providers: providersFromEnvironment(process.env, file => readFileSync(file, 'utf8')) }
         : {}),
       sessionSeconds: Number(process.env.ROBOBOY_AUTH_SESSION_SECONDS || '3600'),
+      sessionFile: process.env.ROBOBOY_AUTH_SESSION_FILE,
       branding: loadBranding(process.env.ROBOBOY_BRANDING_FILE),
       ...(process.env.ROBOBOY_AUTH_NATIVE_ORIGINS
         ? {
