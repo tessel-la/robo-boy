@@ -8,6 +8,25 @@ const tabs = [
 ];
 
 describe('ConnectionTabs', () => {
+  it('adds a connection directly from the toolbar without closing the current one', () => {
+    const onAdd = vi.fn();
+    const onClose = vi.fn();
+    render(
+      <ConnectionTabs
+        tabs={tabs}
+        activeTabId="alpha"
+        isAdding={false}
+        onSelect={vi.fn()}
+        onClose={onClose}
+        onAdd={onAdd}
+      />
+    );
+    expect(screen.getByTitle('2 open connections')).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Add connection' }));
+    expect(onAdd).toHaveBeenCalledOnce();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
   it('selects, closes, and opens connections independently', () => {
     const onSelect = vi.fn();
     const onClose = vi.fn();

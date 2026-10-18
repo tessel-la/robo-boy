@@ -19,6 +19,7 @@ vi.mock('animejs', () => ({
 vi.mock('../utils/animations', () => ({
   animateAdvancedForm: vi.fn(),
   animateButtonPress: vi.fn(),
+  prefersReducedMotion: vi.fn(() => false),
   animateLandingPage: vi.fn(),
 }));
 
@@ -39,6 +40,21 @@ describe('EntrySection connection target', () => {
     vi.unstubAllGlobals();
     vi.unstubAllEnvs();
     setEnterpriseSession(null);
+  });
+
+  it('explains multiple workspaces and labels the host form disclosure', () => {
+    render(<EntrySection onConnect={vi.fn()} />);
+    expect(screen.getByText('Each connection has its own workspace. Add more as you go.')).toBeVisible();
+    const toggle = screen.getByRole('button', { name: /Choose another robot/ });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    const form = document.getElementById(toggle.getAttribute('aria-controls')!);
+    expect(form).toHaveAttribute('aria-hidden', 'true');
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    expect(form).toHaveAttribute('aria-hidden', 'false');
+    expect(screen.getByRole('textbox', { name: 'Host or IP:' })).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: /Hide connection details/ }));
+    expect(form).toHaveAttribute('aria-hidden', 'true');
   });
 
   it('keeps all configured robots selectable after one company sign-in', () => {
@@ -240,7 +256,7 @@ describe('EntrySection recent connections', () => {
     const onConnect = vi.fn();
 
     render(<EntrySection onConnect={onConnect} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Advanced Options' }));
+    fireEvent.click(screen.getByRole('button', { name: /Choose another robot/ }));
     fireEvent.change(screen.getByLabelText('Host or IP:'), { target: { value: 'robot.tailnet.ts.net' } });
     fireEvent.change(screen.getByLabelText('ROS'), { target: { value: '19,090' } });
     fireEvent.change(screen.getByLabelText('Video'), { target: { value: '18,080' } });

@@ -110,7 +110,11 @@ export default function ConnectionTabs({
   };
 
   return (
-    <nav className="connection-tabs" aria-label="Robot connections" ref={navRef}>
+    <nav
+      className={`connection-tabs ${!isAdding && tabs.length > 0 ? 'has-add-action' : ''}`}
+      aria-label="Robot connections"
+      ref={navRef}
+    >
       <button
         type="button"
         className={`connection-switcher-trigger ${isAdding ? 'is-adding' : ''}`}
@@ -135,8 +139,28 @@ export default function ConnectionTabs({
         <span className="connection-switcher-label">
           {isAdding ? 'New connection' : (activeTab?.label ?? 'Connections')}
         </span>
+        {tabs.length > 1 && (
+          <span className="connection-count" title={`${tabs.length} open connections`}>
+            {tabs.length}
+          </span>
+        )}
         <ChevronIcon isOpen={isSwitcherOpen} />
       </button>
+
+      {!isAdding && tabs.length > 0 && (
+        <button
+          type="button"
+          className="connection-add-button"
+          onClick={openAnotherConnection}
+          aria-label="Add connection"
+          title="Open another robot workspace"
+        >
+          <PlusIcon />
+          <span>
+            Add<span className="connection-add-long-label"> connection</span>
+          </span>
+        </button>
+      )}
 
       {isSwitcherOpen && (
         <div className="connection-switcher-popover" id={popoverId} role="dialog" aria-label="Switch robot connection">
