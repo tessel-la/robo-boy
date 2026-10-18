@@ -7,9 +7,14 @@ for (const [name, enterprise, packaged, enabled] of [
   ['Robo-Boy', true, true, false],
   ['Robo-Boy', false, false, false],
   ['Robo-Boy', false, true, true],
+  ['</script><script>globalThis.updaterTestInjected = true</script>', false, true, false],
+  ['"; globalThis.updaterTestInjected = true; //', false, true, false],
+  ['Company\u2028Name\u2029', false, true, false],
 ]) {
   const handlers = new Map();
   globalThis.updaterTestHandlers = handlers;
+  // Fixture values are runtime data, never interpolated into the module's JavaScript source.
+  globalThis.updaterTestApp = { name, packaged };
   const result = await build({
     entryPoints: ['electron/updater.ts'],
     bundle: true,
@@ -29,7 +34,10 @@ for (const [name, enterprise, packaged, enabled] of [
           builder.onResolve({ filter: /^electron$/ }, () => ({ path: 'electron', namespace: 'test' }));
           builder.onLoad({ filter: /.*/, namespace: 'test' }, () => ({
             contents: `
-          export const app = {isPackaged: ${packaged}, getName: () => ${JSON.stringify(name)}};
+          export const app = {
+            get isPackaged() { return globalThis.updaterTestApp.packaged; },
+            getName: () => globalThis.updaterTestApp.name,
+          };
           export const ipcMain = {handle: (name, handler) => globalThis.updaterTestHandlers.set(name, handler)};
           export const shell = {};
         `,
@@ -52,6 +60,8 @@ for (const [name, enterprise, packaged, enabled] of [
       /application administrator/
     );
   }
+  assert.equal(globalThis.updaterTestInjected, undefined);
 }
 delete globalThis.updaterTestHandlers;
+delete globalThis.updaterTestApp;
 console.log('PASS company and enterprise apps refuse stock updates; standard packaged apps retain their updater.');
