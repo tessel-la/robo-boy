@@ -8,7 +8,7 @@
 
 ## Connect To A Robot
 
-Open Robo-Boy and submit the connection form. Quick Connect and Domain ID use the current Robo-Boy host's proxy routes. When you select **Host or IP**, the host entered on the connection screen is used as the ROS backend host for rosbridge, video, and mesh endpoints. Use **Ports** when rosbridge, video, or mesh resources are listening somewhere other than the defaults.
+Open Robo-Boy and use **Quick Connect** for the current Robo-Boy host's proxy routes, or **Choose another robot** to enter a host or IP address. In the desktop app's first launch, the address field is shown directly. The address identifies the ROS backend for rosbridge, video, and mesh endpoints. Expand **Connection ports** when those services use ports other than the defaults. ROS domain IDs are configured on the robot, not in Robo-Boy's connection form.
 
 Successful Host or IP connections are saved on the landing page as recent machines, including the service ports used for that machine. Use a recent entry to reconnect, or remove it from the list when it is no longer useful.
 

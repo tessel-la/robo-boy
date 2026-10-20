@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useId } from 'react';
+import { FiChevronDown, FiSliders } from 'react-icons/fi';
 import type { ConnectionParams } from '../runtime/connections';
 import './EntrySection.css';
 import { brand } from '../features/enterprise/config';
@@ -59,7 +60,6 @@ const TrashIcon = () => (
 const EntrySection: React.FC<EntrySectionProps> = ({ onConnect, embedded = false }) => {
   const fleet = hasEnterpriseRobots() ? (getEnterpriseSession()?.robots ?? []) : [];
   const [robotId, setRobotId] = useState(fleet[0]?.id ?? '');
-  const [ros2Option, setRos2Option] = useState<'domain' | 'ip'>('ip');
   const [ros2Value, setRos2Value] = useState<string>('');
   const [servicePorts, setServicePorts] = useState<RuntimeServicePorts>(() => getDefaultServicePorts());
   const [isTransitioning, setIsTransitioning] = useState(false);
@@ -222,8 +222,8 @@ const EntrySection: React.FC<EntrySectionProps> = ({ onConnect, embedded = false
 
     const selectedPorts = normalizeSelectedPorts();
     const params: ConnectionParams = {
-      ros2Option,
-      ros2Value: ros2Option === 'domain' ? parseInt(ros2Value, 10) || 0 : ros2Value,
+      ros2Option: 'ip',
+      ros2Value,
       ...selectedPorts,
     };
     onConnect(params);
@@ -391,7 +391,7 @@ const EntrySection: React.FC<EntrySectionProps> = ({ onConnect, embedded = false
                   </span>
                   <span className="connection-disclosure-copy">
                     <strong>{showAdvanced ? 'Hide connection details' : 'Choose another robot'}</strong>
-                    <span>Host, IP address or ROS domain</span>
+                    <span>Enter a host or IP address</span>
                   </span>
                 </button>
               )}
@@ -406,36 +406,25 @@ const EntrySection: React.FC<EntrySectionProps> = ({ onConnect, embedded = false
             className={`advanced-form ${showAdvanced ? 'visible' : ''}`}
           >
             <div className="form-group">
-              <label>Connection Method:</label>
-              <div className="radio-group">
-                <label>
-                  <input
-                    type="radio"
-                    value="domain"
-                    checked={ros2Option === 'domain'}
-                    onChange={() => setRos2Option('domain')}
-                  />
-                  Domain ID
-                </label>
-                <label>
-                  <input type="radio" value="ip" checked={ros2Option === 'ip'} onChange={() => setRos2Option('ip')} />
-                  Host or IP
-                </label>
-              </div>
-            </div>
-            <div className="form-group">
-              <label htmlFor="ros2Value">{ros2Option === 'domain' ? 'Domain ID:' : 'Host or IP:'}</label>
+              <label htmlFor="ros2Value">Host or IP:</label>
               <input
-                type={ros2Option === 'domain' ? 'number' : 'text'}
+                type="text"
                 id="ros2Value"
                 value={ros2Value}
                 onChange={e => setRos2Value(e.target.value)}
-                placeholder={ros2Option === 'domain' ? 'e.g., 0' : 'e.g., robot.tailnet.ts.net'}
+                placeholder="e.g., 192.168.1.42 or robot.local"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
                 required
               />
             </div>
-            <div className="form-group">
-              <label>Ports:</label>
+            <details className="connection-ports">
+              <summary>
+                <FiSliders className="connection-ports-icon" aria-hidden="true" />
+                <span>Connection ports</span>
+                <FiChevronDown className="connection-ports-chevron" aria-hidden="true" />
+              </summary>
               <div className="port-grid">
                 <label className="port-field" htmlFor="rosbridgePort">
                   <span>ROS</span>
@@ -480,7 +469,7 @@ const EntrySection: React.FC<EntrySectionProps> = ({ onConnect, embedded = false
                   />
                 </label>
               </div>
-            </div>
+            </details>
             <button type="submit" className="connect-btn">
               Connect
             </button>

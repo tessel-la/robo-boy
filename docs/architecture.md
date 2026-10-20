@@ -60,7 +60,7 @@ Keep orchestration here, but place feature-specific behavior inside feature modu
 
 ## ROS Boundary
 
-`useRos` is the owner of the active `ROSLIB.Ros` instance. `src/runtime/runtimeConfig.tsx` owns deployment-specific endpoints. Web builds use same-origin proxy routes for Quick Connect and Domain ID, and can use the selected host or IP for direct backend connections. Tauri builds connect directly to rosbridge, video, and mesh services on the selected ROS host. Keep this distinction out of feature components by consuming the runtime configuration boundary.
+`useRos` is the owner of the active `ROSLIB.Ros` instance. `src/runtime/runtimeConfig.tsx` owns deployment-specific endpoints. Web builds use same-origin proxy routes for Quick Connect, and can use the selected host or IP for direct backend connections. Tauri builds connect directly to rosbridge, video, and mesh services on the selected ROS host. Keep this distinction out of feature components by consuming the runtime configuration boundary.
 
 The public WebSocket endpoint is `infra/ros/control_gateway.py`; raw rosbridge binds only to loopback.
 `useRos` installs a connection-scoped `ControlSession`, and the shared top-bar `RobotControl` exposes

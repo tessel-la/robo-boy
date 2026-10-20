@@ -22,8 +22,31 @@ for (const width of [1280, 540, 390, 320]) {
     await expect(disclosure).toHaveAttribute('aria-expanded', 'true');
     await expect.poll(() => form.evaluate(element => Number(getComputedStyle(element).opacity))).toBe(1);
     expect(await form.evaluate(element => (element as HTMLElement).inert)).toBe(false);
-    await page.getByRole('textbox', { name: 'Host or IP:' }).fill('alpha.local');
-    await page.getByRole('button', { name: 'Connect', exact: true }).click();
+    await expect(form.getByRole('radio')).toHaveCount(0);
+    await expect(form.getByText('Domain ID')).toHaveCount(0);
+    const host = page.getByRole('textbox', { name: 'Host or IP:' });
+    const ports = page.locator('.connection-ports');
+    const portToggle = ports.locator('summary');
+    const rosPort = page.getByRole('textbox', { name: 'ROS', exact: true });
+    await expect(rosPort).toBeHidden();
+    await host.fill('alpha.local');
+    await host.press('Tab');
+    await expect(portToggle).toBeFocused();
+    await portToggle.press('Enter');
+    await expect(rosPort).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Connect', exact: true })).toBeVisible();
+    expect(await portToggle.evaluate(element => element.getBoundingClientRect().height)).toBeGreaterThanOrEqual(44);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await rosPort.fill('19090');
+    await page.screenshot({ path: `/tmp/roboboy-connections-${browserName}-${width}-ports.png` });
+    await portToggle.click();
+    await expect(rosPort).toBeHidden();
+    await portToggle.press('Tab');
+    await expect(page.getByRole('button', { name: 'Connect', exact: true })).toBeFocused();
+    await portToggle.click();
+    await expect(rosPort).toHaveValue('19090');
+    await portToggle.click();
+    await host.press('Enter');
     await expect(page.getByLabel('Status: Connected')).toBeVisible();
     await expect(page.locator('.workspace-opening')).toHaveCount(0);
 
@@ -42,6 +65,8 @@ for (const width of [1280, 540, 390, 320]) {
       .getByRole('dialog', { name: 'Switch robot connection' })
       .getByRole('button', { name: /alpha.local.*Connected/ })
       .click();
+    // Custom ports survive collapsing the menu and switching workspaces.
+    await expect(page.getByRole('button', { name: /Switch connections, current: alpha.local/ })).toHaveAccessibleName(/19090/);
     await expect(page.getByRole('button', { name: /Switch connections, current: alpha.local/ })).toBeVisible();
     await expect(page.getByTitle('2 open connections')).toBeAttached();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);

@@ -87,6 +87,7 @@ describe('EntrySection connection target', () => {
     render(<EntrySection onConnect={onConnect} />);
     expect(screen.queryByRole('combobox', { name: 'Robot' })).not.toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('Host or IP:'), { target: { value: '192.168.1.42' } });
+    fireEvent.click(screen.getByText('Connection ports'));
     fireEvent.change(screen.getByLabelText('ROS'), { target: { value: '19090' } });
     fireEvent.click(screen.getByRole('button', { name: 'Connect' }));
     expect(onConnect).toHaveBeenCalledWith(
@@ -104,6 +105,9 @@ describe('EntrySection connection target', () => {
     // The form that asks for one is the screen, so there is no advanced pane to open first.
     expect(screen.getByLabelText('Host or IP:')).toBeVisible();
     expect(screen.queryByTitle('Advanced Options')).not.toBeInTheDocument();
+    expect(screen.queryByRole('radio')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Domain ID/)).not.toBeInTheDocument();
+    expect(screen.getByText('Connection ports').closest('details')).not.toHaveAttribute('open');
   });
 
   it('connects the packaged app to the host it asked for', () => {
@@ -258,9 +262,14 @@ describe('EntrySection recent connections', () => {
     render(<EntrySection onConnect={onConnect} />);
     fireEvent.click(screen.getByRole('button', { name: /Choose another robot/ }));
     fireEvent.change(screen.getByLabelText('Host or IP:'), { target: { value: 'robot.tailnet.ts.net' } });
+    fireEvent.click(screen.getByText('Connection ports'));
+    expect(screen.getByText('Connection ports').closest('details')).toHaveAttribute('open');
     fireEvent.change(screen.getByLabelText('ROS'), { target: { value: '19,090' } });
     fireEvent.change(screen.getByLabelText('Video'), { target: { value: '18,080' } });
     fireEvent.change(screen.getByLabelText('Mesh'), { target: { value: '18,000' } });
+    // Collapsing the secondary settings preserves the selected ports on submit.
+    fireEvent.click(screen.getByText('Connection ports'));
+    expect(screen.getByText('Connection ports').closest('details')).not.toHaveAttribute('open');
     fireEvent.click(screen.getByRole('button', { name: 'Connect' }));
 
     expect(onConnect).toHaveBeenCalledWith({

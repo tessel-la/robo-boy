@@ -16,6 +16,7 @@ test('branded company login protects the workspace and backend, then signs out',
   await expect(page.getByRole('button', { name: /Quick Connect/ })).toBeVisible();
   await page.getByTitle('Advanced Options').click();
   await expect(page.getByRole('textbox', { name: 'Host or IP:' })).toBeVisible();
+  await page.getByText('Connection ports', { exact: true }).click();
   await expect(page.getByRole('textbox', { name: 'ROS', exact: true })).toHaveValue('9090');
   await openAccount(page);
   expect((await page.request.get('/recordings/list')).status()).toBe(200);
@@ -64,6 +65,7 @@ test('native sign-in uses the system-browser handoff and explicit account confir
   await expect(page.getByRole('textbox', { name: 'Host or IP:' })).toBeVisible();
   await page.getByRole('textbox', { name: 'Host or IP:' }).fill('127.0.0.1');
   await expect(page.getByRole('textbox', { name: 'Host or IP:' })).toHaveValue('127.0.0.1');
+  await page.getByText('Connection ports', { exact: true }).click();
   await page.getByRole('textbox', { name: 'ROS', exact: true }).fill('5282');
   const sent: string[] = [];
   page.on('websocket', socket => socket.on('framesent', event => sent.push(String(event.payload))));
