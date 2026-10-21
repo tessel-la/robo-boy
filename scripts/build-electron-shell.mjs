@@ -12,7 +12,8 @@
 import { build } from 'esbuild';
 import { loadEnv } from 'vite';
 import { enabled } from '../infra/enterprise/config.mjs';
-import { mkdir } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
+import { createThirdPartyNotices } from './third-party-notices.mjs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -26,10 +27,11 @@ const external = ['electron'];
 
 await mkdir(outDir, { recursive: true });
 
-await build({
+const main = await build({
   entryPoints: [path.join(projectRoot, 'electron', 'main.ts')],
   outfile: path.join(outDir, 'main.js'),
   bundle: true,
+  metafile: true,
   platform: 'node',
   target: 'node20',
   format: 'esm',
@@ -56,3 +58,5 @@ await build({
 });
 
 console.log(`[electron-shell] wrote ${path.relative(projectRoot, outDir)}/{main.js,preload.cjs}`);
+
+await writeFile(path.join(outDir, 'licenses.txt'), await createThirdPartyNotices(Object.keys(main.metafile.inputs)));

@@ -42,6 +42,7 @@ else if (args[args.indexOf('--model') + 1] === 'hang') {
       apiKey: process.env.ANTHROPIC_API_KEY,
       token: process.env.CLAUDE_CODE_OAUTH_TOKEN,
       config: process.env.CLAUDE_CONFIG_DIR,
+      nonessentialTraffic: process.env.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC,
     };
     console.log(JSON.stringify({ type: 'result', subtype: 'success', is_error: false, result: JSON.stringify(details) }));
   });
@@ -79,6 +80,7 @@ else if (args[args.indexOf('--model') + 1] === 'hang') {
       )
     );
     expect(details.config).toBe(config);
+    expect(details.nonessentialTraffic).toBe('1');
     expect(details.apiKey).toBeUndefined();
     expect(details.token).toBeUndefined();
     expect(details.args).toContain('--restricted');

@@ -12,10 +12,12 @@ describe('Claude runtime isolation', () => {
     vi.stubEnv('NODE_OPTIONS', '--require malicious.js');
     vi.stubEnv('BROWSER', 'malicious-browser');
     vi.stubEnv('DISPLAY', ':1');
+    vi.stubEnv('CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC', '0');
     const env = claudeEnvironment('/private/roboboy/claude');
     expect(env).toMatchObject({
       CLAUDE_CONFIG_DIR: '/private/roboboy/claude',
       CLAUDE_CODE_SAFE_MODE: '1',
+      CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
       DISPLAY: ':1',
     });
     expect(env).not.toHaveProperty('ANTHROPIC_API_KEY');

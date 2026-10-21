@@ -296,6 +296,19 @@ app behaves as the same code does over http. Tauri solves this the same way, wit
 window; the rules working around WebKitGTK stay keyed to the former so Chromium does not inherit
 them.
 
+## Licenses and microphone access
+
+The repository's [third-party notices](../THIRD_PARTY_NOTICES.md) document icon attribution.
+Production builds carry `licenses.txt` with the project license, icon credits, and upstream
+license/NOTICE text for their bundled JavaScript.
+Electron also ships a shell-side `licenses.txt`; keep both files when redistributing it. Native
+runtime and system-library licenses remain separate obligations.
+
+Electron asks before granting microphone access to the main app. The grant ends on a page reload
+or navigation. Panel capture also requires the host's manifest-derived permissions and a separate
+native approval; grants are not shared across panels. Arbitrary embedded pages cannot request
+capture. Playback of robot camera streams does not require access to this device's camera.
+
 ## Build An Installer
 
 That is the local equivalent of what CI runs for a release. Official installers for Linux, macOS, and
