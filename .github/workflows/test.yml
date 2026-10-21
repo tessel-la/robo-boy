@@ -52,6 +52,8 @@ jobs:
             - 'config/**'
             - 'public/**'
             - 'scripts/**'
+            - 'LICENSE'
+            - 'THIRD_PARTY_NOTICES.md'
             - 'package.json'
             - 'package-lock.json'
             - 'index.html'
@@ -145,7 +147,10 @@ jobs:
 
     - name: Test enterprise authentication gateway
       if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.frontend == 'true' || needs.changes.outputs.e2e == 'true'
-      run: npm run test:enterprise
+      run: |
+        npm run test:notices
+        npm run build:enterprise
+        npm run test:enterprise
 
     - name: Run tests with coverage
       if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.frontend == 'true' || needs.changes.outputs.e2e == 'true'

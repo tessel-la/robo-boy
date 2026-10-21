@@ -164,6 +164,7 @@ dev-dist/
 
 # Electron desktop shell: compiled shell, its renderer, and the packaged installers.
 dist-electron/
+dist-enterprise/
 release/
 playwright-report/
 test-results/

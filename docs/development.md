@@ -24,6 +24,20 @@ Set `FRONTEND_PORT` to use a different local Vite port:
 FRONTEND_PORT=3000 npm run dev
 ```
 
+## Icons and release notices
+
+Run `npm run icons:generate` to regenerate manifest-listed web icons from `images/logo.png`.
+Maskable assets retain their declared pixel sizes and use an opaque safe area. Android builds
+copy the native icons from `src-tauri/icons/android/` into the generated project.
+
+Vite, Electron-shell, and enterprise builds generate `licenses.txt` from the JavaScript packages
+in their application and worker build inputs. Missing license material fails the build. `THIRD_PARTY_NOTICES.md` supplies
+icon credits and upstream notices that package metadata alone does not capture. Run
+`npm run test:notices` after changing this pipeline.
+
+The enterprise image ships the gateway bundle and its notices instead of installing the frontend's
+production dependency tree. `npm run build:enterprise` builds that payload locally.
+
 ## Complete Development Stack
 
 Generate the certificate as described in the root README and start the stack. Every ROS and DDS setting has a

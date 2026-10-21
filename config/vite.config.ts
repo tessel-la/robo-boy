@@ -3,6 +3,7 @@ import { defineConfig, loadEnv } from 'vite';
 import { loadBranding, enabled, secureOrigin } from '../infra/enterprise/config.mjs';
 import type { Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
+import { thirdPartyNoticesPlugins } from '../scripts/third-party-notices.mjs';
 import { VitePWA } from 'vite-plugin-pwa';
 // import mkcert from 'vite-plugin-mkcert' // Ensure mkcert is commented out/removed
 
@@ -62,6 +63,7 @@ const allowedHosts = (process.env.ROBOBOY_ALLOWED_HOSTS ?? '')
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
   const env = { ...loadEnv(mode, process.cwd(), ''), ...process.env };
+  const notices = thirdPartyNoticesPlugins();
   const enterprise = enabled(env.VITE_ENTERPRISE_LOGIN);
   if (enterprise && (mode === 'tauri' || mode === 'electron') && !env.VITE_ENTERPRISE_SERVER_URL)
     throw new Error('Native enterprise builds require VITE_ENTERPRISE_SERVER_URL.');
@@ -84,6 +86,7 @@ export default defineConfig(({ mode }) => {
       // dependency-optimizer generations.
       dedupe: ['react', 'react-dom'],
     },
+    worker: { plugins: () => [notices.worker] },
     optimizeDeps: {
       // semver is first reached through the lazy external-panel registry. Make
       // it part of the initial dev optimization pass so login cannot trigger a
@@ -143,6 +146,7 @@ export default defineConfig(({ mode }) => {
     },
     plugins: [
       react(),
+      notices.app,
       roslibGlobalThisPlugin(),
       ...(mode === 'tauri' || mode === 'electron' ? [packagedHtmlCompatibilityPlugin()] : []),
       ...(mode === 'tauri' || mode === 'electron' || enterprise
@@ -160,7 +164,7 @@ export default defineConfig(({ mode }) => {
               workbox: {
                 // Registry and manifest JSON must be available before any lazy
                 // panel bundle can be discovered while the PWA is offline.
-                globPatterns: ['**/*.{js,css,html,ico,png,svg,json,webmanifest}'],
+                globPatterns: ['**/*.{js,css,html,ico,png,svg,json,webmanifest,txt}'],
                 // A recording opened or downloaded from the ROS host is a navigation too; it must
                 // reach the recorder instead of being answered with the app shell.
                 navigateFallbackDenylist: [/^\/recordings\//],

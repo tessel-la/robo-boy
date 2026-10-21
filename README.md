@@ -82,4 +82,5 @@ See the [documentation index](docs/README.md) for application usage, desktop pac
 
 ## License
 
-See [LICENSE](LICENSE).
+Robo-Boy uses [Apache 2.0](LICENSE). See [third-party notices](THIRD_PARTY_NOTICES.md) for icon
+attribution. Release builds include `licenses.txt` with notices for their bundled dependencies.
