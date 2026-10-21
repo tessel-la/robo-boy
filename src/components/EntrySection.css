@@ -280,6 +280,9 @@
 }
 
 .recent-connections-title {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
     color: var(--text-secondary);
     font-size: 0.75rem;
     text-transform: uppercase;
@@ -288,13 +291,23 @@
     text-align: left;
 }
 
+.recent-connections-title > span:last-child {
+    text-transform: none;
+}
+
 .recent-connections-list {
     display: flex;
     flex-direction: column;
     gap: 8px;
+    max-height: min(320px, 40dvh);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 4px;
 }
 
 .recent-connection-row {
+    box-sizing: border-box;
+    flex-shrink: 0;
     width: 100%;
     min-height: 38px;
     border: 1px solid var(--border-color);
@@ -305,6 +318,11 @@
     align-items: center;
     gap: 8px;
     padding: 4px;
+}
+
+.entry-attribution {
+    margin-top: 20px;
+    text-align: center;
 }
 
 .recent-connection-row:hover {

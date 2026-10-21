@@ -16,6 +16,7 @@ import { isDesktopRuntime } from '../../runtime/runtimeConfig';
 import { getDesktopBridge } from '../../runtime/desktopBridge';
 import BrandMark from './BrandMark';
 import LoginCopy from './LoginCopy';
+import RoboBoyAttribution from '../../components/RoboBoyAttribution';
 import SessionRenewal from './SessionRenewal';
 import './enterprise.css';
 
@@ -316,9 +317,7 @@ export default function EnterpriseBoundary({ children }: { children: ReactNode }
       </div>
       <footer className="enterprise-login-footer">
         <span>One sign-in. Your robots, workspaces and tools.</span>
-        <span className="enterprise-powered">
-          Powered by <strong>Robo-Boy</strong>
-        </span>
+        <RoboBoyAttribution />
       </footer>
     </main>
   );

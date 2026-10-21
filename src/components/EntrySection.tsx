@@ -5,6 +5,7 @@ import './EntrySection.css';
 import { brand } from '../features/enterprise/config';
 import { getEnterpriseSession, hasEnterpriseRobots } from '../features/enterprise/session';
 import BrandMark from '../features/enterprise/BrandMark';
+import RoboBoyAttribution from './RoboBoyAttribution';
 import anime from 'animejs';
 import { animateLandingPage, animateAdvancedForm, animateButtonPress, prefersReducedMotion } from '../utils/animations';
 import {
@@ -484,7 +485,10 @@ const EntrySection: React.FC<EntrySectionProps> = ({ onConnect, embedded = false
 
           {!hasEnterpriseRobots() && recentConnections.length > 0 && (
             <div className="recent-connections" aria-label="Recent connections">
-              <div className="recent-connections-title">Recent</div>
+              <div className="recent-connections-title">
+                <span>Recent</span>
+                <span>{recentConnections.length} saved</span>
+              </div>
               <div className="recent-connections-list">
                 {recentConnections.map(connection => (
                   <div key={connection.host} className="recent-connection-row">
@@ -512,6 +516,9 @@ const EntrySection: React.FC<EntrySectionProps> = ({ onConnect, embedded = false
               </div>
             </div>
           )}
+        </div>
+        <div className="entry-attribution">
+          <RoboBoyAttribution />
         </div>
       </div>
       <div

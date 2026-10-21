@@ -2,6 +2,7 @@ import { type ReactNode, useEffect, useId, useRef, useState } from 'react';
 import type { ConnectionStatus } from '../runtime/connections';
 import './ConnectionTabs.css';
 import EnterpriseAccount from '../features/enterprise/EnterpriseAccount';
+import RoboBoyAttribution from './RoboBoyAttribution';
 
 export interface ConnectionTabItem {
   id: string;
@@ -215,6 +216,9 @@ export default function ConnectionTabs({
             <PlusIcon />
             <span>Open another connection</span>
           </button>
+          <div className="connection-switcher-attribution">
+            <RoboBoyAttribution />
+          </div>
         </div>
       )}
     </nav>

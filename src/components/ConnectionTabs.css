@@ -381,3 +381,9 @@
   /* Keep room for the current robot's name; the menu still shows the connection count. */
   .connection-count { display: none; }
 }
+.connection-switcher-attribution {
+  margin-top: 8px;
+  padding: 10px 8px 2px;
+  border-top: 1px solid var(--border-color);
+  text-align: center;
+}

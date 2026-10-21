@@ -171,6 +171,10 @@ configuration supports:
 - A default company theme using the existing custom-theme format, plus an optional wordmark logo
 - Account and sign-out controls in the existing connection menu, without a second workspace header
 
+A small **Powered by Robo-Boy** attribution appears on the connection screen and in the workspace's
+connection menu, including company editions with login disabled. The login screen uses the same
+attribution in its footer. Branding does not remove it.
+
 Point `ROBOBOY_BRANDING_FILE` at the file when building. The broker uses the same file for its
 browser completion screen. Invalid colors, remote logo URLs, unknown fields, script URLs and
 unsupported versions fail configuration validation. A `theme` object accepts `id`, `name`,

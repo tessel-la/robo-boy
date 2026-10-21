@@ -23,13 +23,6 @@
   font-size: 0.75rem;
   letter-spacing: 0.035em;
 }
-.enterprise-powered {
-  color: var(--text-color);
-  font-size: 0.8rem;
-}
-.enterprise-powered strong {
-  font-weight: 700;
-}
 .enterprise-login-content {
   min-height: 0;
   overflow: auto;

@@ -1,0 +1,10 @@
+.robo-boy-attribution {
+  color: var(--text-color-secondary);
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+
+.robo-boy-attribution strong {
+  color: var(--text-color);
+  font-weight: 600;
+}
