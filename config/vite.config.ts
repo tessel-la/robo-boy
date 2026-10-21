@@ -1,5 +1,6 @@
 import { fileURLToPath } from 'node:url';
-import { defineConfig } from 'vite';
+import { defineConfig, loadEnv } from 'vite';
+import { loadBranding, enabled, secureOrigin } from '../infra/enterprise/config.mjs';
 import type { Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
@@ -59,111 +60,119 @@ const allowedHosts = (process.env.ROBOBOY_ALLOWED_HOSTS ?? '')
   .filter(Boolean);
 
 // https://vitejs.dev/config/
-export default defineConfig(({ mode }) => ({
-  // A packaged shell loads the built page from disk, so every asset has to be named relative to
-  // it. Only the web app is served from a site root.
-  base: mode === 'tauri' || mode === 'electron' ? './' : '/',
-  // External panel releases are deployment inputs, not Robo-Boy source files.
-  // Explicit panel builds point this at the generated .panel-stage/public tree.
-  publicDir: process.env.ROBOBOY_PUBLIC_DIR || 'public',
-  resolve: {
-    // Only the Tauri build reaches its native packages. Every other build -- the web app and the
-    // Electron shell, which brings its own bridge -- resolves stubs instead, so neither running
-    // nor type-checking them requires a desktop-only package to be installed.
-    alias: mode === 'tauri' ? {} : tauriStubAliases,
-    // MainControlView is lazy-loaded after the connection screen. Keep hooks
-    // and the renderer on one React instance across linked panel SDKs and
-    // dependency-optimizer generations.
-    dedupe: ['react', 'react-dom'],
-  },
-  optimizeDeps: {
-    // semver is first reached through the lazy external-panel registry. Make
-    // it part of the initial dev optimization pass so login cannot trigger a
-    // dependency re-bundle while React is mounting MainControlView.
-    // The replay worker's dependencies are only reached when a recording is opened; the
-    // resulting re-bundle would reload the page and abort that first load.
-    include: [
-      'react',
-      'react-dom',
-      'react-dom/client',
-      'semver',
-      '@mcap/core',
-      '@mcap/browser',
-      '@foxglove/rosmsg',
-      '@foxglove/rosmsg-serialization',
-      '@foxglove/rosmsg2-serialization',
-      'fzstd',
-    ],
-  },
-  server: {
-    // `tauri ios dev` runs the app on a device that reaches this server over the network, and
-    // names the address it will use. Everywhere else, listen on all interfaces within the container.
-    host: devHost || '0.0.0.0',
-    port: devPort,
-    // A device is told one port up front, so silently moving to the next free one would leave it
-    // loading nothing.
-    strictPort: Boolean(devHost),
-    // The Tauri dev host is a name the CLI picked for this run, so it is always trusted here.
-    allowedHosts: [...(devHost ? [devHost] : []), ...allowedHosts],
-    hmr: devHost ? { protocol: 'ws', host: devHost, port: devPort + 1 } : undefined,
-    proxy: {
-      '/api/panels': {
-        target: process.env.PANEL_MANAGER_PROXY_TARGET ?? 'http://127.0.0.1:4100',
-        changeOrigin: true,
-      },
-      '/ollama': {
-        target: process.env.OLLAMA_PROXY_TARGET ?? 'http://127.0.0.1:11434',
-        changeOrigin: true,
-        rewrite: path => path.replace(/^\/ollama/, ''),
-      },
-      '/webrtc/_discovery/paths': {
-        target: process.env.WEBRTC_DISCOVERY_PROXY_TARGET ?? 'http://127.0.0.1:9997',
-        changeOrigin: true,
-        rewrite: () => '/v3/paths/list',
-      },
-      '/webrtc': {
-        target: process.env.WEBRTC_PROXY_TARGET ?? 'http://127.0.0.1:8889',
-        changeOrigin: true,
-        rewrite: path => path.replace(/^\/webrtc/, ''),
-      },
+export default defineConfig(({ mode }) => {
+  const env = { ...loadEnv(mode, process.cwd(), ''), ...process.env };
+  const enterprise = enabled(env.VITE_ENTERPRISE_LOGIN);
+  if (enterprise && (mode === 'tauri' || mode === 'electron') && !env.VITE_ENTERPRISE_SERVER_URL)
+    throw new Error('Native enterprise builds require VITE_ENTERPRISE_SERVER_URL.');
+  if (env.VITE_ENTERPRISE_SERVER_URL) secureOrigin(env.VITE_ENTERPRISE_SERVER_URL);
+  return {
+    define: { __ROBOBOY_BRANDING__: JSON.stringify(loadBranding(env.ROBOBOY_BRANDING_FILE)) },
+    // A packaged shell loads the built page from disk, so every asset has to be named relative to
+    // it. Only the web app is served from a site root.
+    base: mode === 'tauri' || mode === 'electron' ? './' : '/',
+    // External panel releases are deployment inputs, not Robo-Boy source files.
+    // Explicit panel builds point this at the generated .panel-stage/public tree.
+    publicDir: process.env.ROBOBOY_PUBLIC_DIR || 'public',
+    resolve: {
+      // Only the Tauri build reaches its native packages. Every other build -- the web app and the
+      // Electron shell, which brings its own bridge -- resolves stubs instead, so neither running
+      // nor type-checking them requires a desktop-only package to be installed.
+      alias: mode === 'tauri' ? {} : tauriStubAliases,
+      // MainControlView is lazy-loaded after the connection screen. Keep hooks
+      // and the renderer on one React instance across linked panel SDKs and
+      // dependency-optimizer generations.
+      dedupe: ['react', 'react-dom'],
     },
-    // https: false, // Ensure HTTPS is disabled (default is false anyway)
-    // hmr: { // Optional: Specify host for Hot Module Replacement if needed
-    //   host: 'localhost', // Browser connects to Caddy on localhost
-    //   protocol: 'wss' // HMR connection should also go through Caddy (WSS)
-    // }
-  },
-  plugins: [
-    react(),
-    roslibGlobalThisPlugin(),
-    ...(mode === 'tauri' || mode === 'electron' ? [packagedHtmlCompatibilityPlugin()] : []),
-    ...(mode === 'tauri' || mode === 'electron'
-      ? []
-      : [
-          VitePWA({
-            registerType: 'autoUpdate', // Automatically update service worker
-            devOptions: {
-              enabled: process.env.VITE_PWA_DEV !== 'false', // Enable PWA in development for testing
-            },
-            // Use our external manifest file instead of inline configuration
-            manifest: false, // Disable inline manifest
-            injectRegister: 'auto',
-            includeAssets: ['favicon.ico'], // Include any additional assets
-            workbox: {
-              // Registry and manifest JSON must be available before any lazy
-              // panel bundle can be discovered while the PWA is offline.
-              globPatterns: ['**/*.{js,css,html,ico,png,svg,json,webmanifest}'],
-              // A recording opened or downloaded from the ROS host is a navigation too; it must
-              // reach the recorder instead of being answered with the app shell.
-              navigateFallbackDenylist: [/^\/recordings\//],
-            },
-            // The manifest is now defined in the manifest.webmanifest file
-          }),
-        ]),
-    // mkcert() // Ensure mkcert is commented out/removed
-  ],
-  build: {
-    outDir: process.env.ROBOBOY_DIST_DIR || 'dist',
-    chunkSizeWarningLimit: 1600,
-  },
-}));
+    optimizeDeps: {
+      // semver is first reached through the lazy external-panel registry. Make
+      // it part of the initial dev optimization pass so login cannot trigger a
+      // dependency re-bundle while React is mounting MainControlView.
+      // The replay worker's dependencies are only reached when a recording is opened; the
+      // resulting re-bundle would reload the page and abort that first load.
+      include: [
+        'react',
+        'react-dom',
+        'react-dom/client',
+        'semver',
+        '@mcap/core',
+        '@mcap/browser',
+        '@foxglove/rosmsg',
+        '@foxglove/rosmsg-serialization',
+        '@foxglove/rosmsg2-serialization',
+        'fzstd',
+      ],
+    },
+    server: {
+      // `tauri ios dev` runs the app on a device that reaches this server over the network, and
+      // names the address it will use. Everywhere else, listen on all interfaces within the container.
+      host: devHost || '0.0.0.0',
+      port: devPort,
+      // A device is told one port up front, so silently moving to the next free one would leave it
+      // loading nothing.
+      strictPort: Boolean(devHost),
+      // The Tauri dev host is a name the CLI picked for this run, so it is always trusted here.
+      allowedHosts: [...(devHost ? [devHost] : []), ...allowedHosts],
+      hmr: devHost ? { protocol: 'ws', host: devHost, port: devPort + 1 } : undefined,
+      proxy: {
+        '/api/panels': {
+          target: process.env.PANEL_MANAGER_PROXY_TARGET ?? 'http://127.0.0.1:4100',
+          changeOrigin: true,
+        },
+        '/ollama': {
+          target: process.env.OLLAMA_PROXY_TARGET ?? 'http://127.0.0.1:11434',
+          changeOrigin: true,
+          rewrite: path => path.replace(/^\/ollama/, ''),
+        },
+        '/webrtc/_discovery/paths': {
+          target: process.env.WEBRTC_DISCOVERY_PROXY_TARGET ?? 'http://127.0.0.1:9997',
+          changeOrigin: true,
+          rewrite: () => '/v3/paths/list',
+        },
+        '/webrtc': {
+          target: process.env.WEBRTC_PROXY_TARGET ?? 'http://127.0.0.1:8889',
+          changeOrigin: true,
+          rewrite: path => path.replace(/^\/webrtc/, ''),
+        },
+      },
+      // https: false, // Ensure HTTPS is disabled (default is false anyway)
+      // hmr: { // Optional: Specify host for Hot Module Replacement if needed
+      //   host: 'localhost', // Browser connects to Caddy on localhost
+      //   protocol: 'wss' // HMR connection should also go through Caddy (WSS)
+      // }
+    },
+    plugins: [
+      react(),
+      roslibGlobalThisPlugin(),
+      ...(mode === 'tauri' || mode === 'electron' ? [packagedHtmlCompatibilityPlugin()] : []),
+      ...(mode === 'tauri' || mode === 'electron' || enterprise
+        ? []
+        : [
+            VitePWA({
+              registerType: 'autoUpdate', // Automatically update service worker
+              devOptions: {
+                enabled: process.env.VITE_PWA_DEV !== 'false', // Enable PWA in development for testing
+              },
+              // Use our external manifest file instead of inline configuration
+              manifest: false, // Disable inline manifest
+              injectRegister: 'auto',
+              includeAssets: ['favicon.ico'], // Include any additional assets
+              workbox: {
+                // Registry and manifest JSON must be available before any lazy
+                // panel bundle can be discovered while the PWA is offline.
+                globPatterns: ['**/*.{js,css,html,ico,png,svg,json,webmanifest}'],
+                // A recording opened or downloaded from the ROS host is a navigation too; it must
+                // reach the recorder instead of being answered with the app shell.
+                navigateFallbackDenylist: [/^\/recordings\//],
+              },
+              // The manifest is now defined in the manifest.webmanifest file
+            }),
+          ]),
+      // mkcert() // Ensure mkcert is commented out/removed
+    ],
+    build: {
+      outDir: process.env.ROBOBOY_DIST_DIR || 'dist',
+      chunkSizeWarningLimit: 1600,
+    },
+  };
+});

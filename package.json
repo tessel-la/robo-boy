@@ -39,7 +39,10 @@
     "test:panel-installer": "node --test scripts/install-panels.test.mjs",
     "test:robot-resources": "node scripts/test-robot-resources.mjs",
     "test:embed-proxy": "node scripts/test-embed-proxy.mjs",
+    "test:electron-updater": "node scripts/test-electron-updater.mjs",
     "test:electron-tls": "node scripts/test-electron-tls.mjs",
+    "test:enterprise": "node --test infra/enterprise/*.test.mjs",
+    "e2e:enterprise": "playwright test --config config/playwright.enterprise.config.ts",
     "test:run": "vitest run --config config/vitest.config.ts",
     "test:coverage": "vitest run --config config/vitest.config.ts --coverage",
     "e2e": "playwright test --config config/playwright.config.ts",
@@ -62,9 +65,12 @@
     "@types/three": "^0.160.0",
     "animejs": "^3.2.1",
     "fzstd": "^0.1.1",
+    "http-proxy": "^1.18.1",
     "jose": "^6.2.12",
     "lodash-es": "^4.17.21",
+    "openid-client": "^6.8.8",
     "png-to-ico": "^2.1.8",
+    "proper-lockfile": "^4.1.2",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-icons": "^5.2.1",
@@ -73,7 +79,8 @@
     "roslib": "^1.4.1",
     "semver": "^7.8.5",
     "three": "^0.160.0",
-    "uuid": "^14.0.0"
+    "uuid": "^14.0.0",
+    "ws": "^8.22.0"
   },
   "overrides": {
     "roslib": {
@@ -101,9 +108,9 @@
     "eslint-plugin-react-refresh": "^0.4.6",
     "jsdom": "^25.0.1",
     "prettier": "^3.7.4",
-    "sharp": "^0.35.4",
+    "sharp": "^0.35.5",
     "typescript": "^5.2.2",
-    "vite": "^6.3.5",
+    "vite": "^6.4.4",
     "vite-plugin-mkcert": "^1.17.8",
     "vite-plugin-pwa": "^1.0.0",
     "vitest": "^4.1.11"

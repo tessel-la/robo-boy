@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import EntrySection from './EntrySection';
+import { setEnterpriseSession } from '../features/enterprise/session';
 import { RECENT_CONNECTIONS_STORAGE_KEY } from '../runtime/recentConnections';
 
 vi.mock('animejs', () => ({
@@ -18,6 +19,7 @@ vi.mock('animejs', () => ({
 vi.mock('../utils/animations', () => ({
   animateAdvancedForm: vi.fn(),
   animateButtonPress: vi.fn(),
+  prefersReducedMotion: vi.fn(() => false),
   animateLandingPage: vi.fn(),
 }));
 
@@ -36,6 +38,61 @@ describe('EntrySection connection target', () => {
   afterEach(() => {
     delete packagedApp.__TAURI_INTERNALS__;
     vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+    setEnterpriseSession(null);
+  });
+
+  it('explains multiple workspaces and labels the host form disclosure', () => {
+    render(<EntrySection onConnect={vi.fn()} />);
+    expect(screen.getByText('Each connection has its own workspace. Add more as you go.')).toBeVisible();
+    const toggle = screen.getByRole('button', { name: /Choose another robot/ });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    const form = document.getElementById(toggle.getAttribute('aria-controls')!);
+    expect(form).toHaveAttribute('aria-hidden', 'true');
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    expect(form).toHaveAttribute('aria-hidden', 'false');
+    expect(screen.getByRole('textbox', { name: 'Host or IP:' })).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: /Hide connection details/ }));
+    expect(form).toHaveAttribute('aria-hidden', 'true');
+  });
+
+  it('keeps all configured robots selectable after one company sign-in', () => {
+    vi.stubEnv('VITE_ENTERPRISE_LOGIN', 'true');
+    vi.stubEnv('VITE_ENTERPRISE_SERVER_URL', 'https://fleet.example');
+    setEnterpriseSession({
+      user: { id: 'alice', name: 'Alice' },
+      expires: Date.now() + 60000,
+      robots: [
+        { id: 'assembly', name: 'Assembly robot' },
+        { id: 'inspection', name: 'Inspection robot' },
+      ],
+    });
+    const onConnect = vi.fn();
+    render(<EntrySection onConnect={onConnect} />);
+    expect(screen.getByRole('option', { name: 'Assembly robot' })).toBeInTheDocument();
+    fireEvent.change(screen.getByRole('combobox', { name: 'Robot' }), { target: { value: 'inspection' } });
+    fireEvent.click(screen.getByRole('button', { name: /Quick Connect/ }));
+    expect(onConnect).toHaveBeenCalledWith(
+      expect.objectContaining({ enterpriseRobotId: 'inspection', ros2Value: 'fleet.example' })
+    );
+  });
+
+  it('keeps manual host/IP configuration after company login without a robot list', () => {
+    runPackaged();
+    vi.stubEnv('VITE_ENTERPRISE_LOGIN', 'true');
+    vi.stubEnv('VITE_ENTERPRISE_SERVER_URL', 'https://fleet.example');
+    setEnterpriseSession({ user: { id: 'alice', name: 'Alice' }, expires: Date.now() + 60000, robots: [] });
+    const onConnect = vi.fn();
+    render(<EntrySection onConnect={onConnect} />);
+    expect(screen.queryByRole('combobox', { name: 'Robot' })).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Host or IP:'), { target: { value: '192.168.1.42' } });
+    fireEvent.click(screen.getByText('Connection ports'));
+    fireEvent.change(screen.getByLabelText('ROS'), { target: { value: '19090' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Connect' }));
+    expect(onConnect).toHaveBeenCalledWith(
+      expect.objectContaining({ ros2Value: '192.168.1.42', rosbridgePort: '19090' })
+    );
   });
 
   it('asks the packaged app for a host rather than offering localhost', () => {
@@ -48,6 +105,9 @@ describe('EntrySection connection target', () => {
     // The form that asks for one is the screen, so there is no advanced pane to open first.
     expect(screen.getByLabelText('Host or IP:')).toBeVisible();
     expect(screen.queryByTitle('Advanced Options')).not.toBeInTheDocument();
+    expect(screen.queryByRole('radio')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Domain ID/)).not.toBeInTheDocument();
+    expect(screen.getByText('Connection ports').closest('details')).not.toHaveAttribute('open');
   });
 
   it('connects the packaged app to the host it asked for', () => {
@@ -200,11 +260,16 @@ describe('EntrySection recent connections', () => {
     const onConnect = vi.fn();
 
     render(<EntrySection onConnect={onConnect} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Advanced Options' }));
+    fireEvent.click(screen.getByRole('button', { name: /Choose another robot/ }));
     fireEvent.change(screen.getByLabelText('Host or IP:'), { target: { value: 'robot.tailnet.ts.net' } });
+    fireEvent.click(screen.getByText('Connection ports'));
+    expect(screen.getByText('Connection ports').closest('details')).toHaveAttribute('open');
     fireEvent.change(screen.getByLabelText('ROS'), { target: { value: '19,090' } });
     fireEvent.change(screen.getByLabelText('Video'), { target: { value: '18,080' } });
     fireEvent.change(screen.getByLabelText('Mesh'), { target: { value: '18,000' } });
+    // Collapsing the secondary settings preserves the selected ports on submit.
+    fireEvent.click(screen.getByText('Connection ports'));
+    expect(screen.getByText('Connection ports').closest('details')).not.toHaveAttribute('open');
     fireEvent.click(screen.getByRole('button', { name: 'Connect' }));
 
     expect(onConnect).toHaveBeenCalledWith({

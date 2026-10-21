@@ -26,15 +26,7 @@ interface UpdateTarget {
 }
 
 /** Matches `ResizeDirection` in src/runtime/desktopWindow.ts, which names the edges as Tauri does. */
-type ResizeDirection =
-  | 'North'
-  | 'South'
-  | 'East'
-  | 'West'
-  | 'NorthEast'
-  | 'NorthWest'
-  | 'SouthEast'
-  | 'SouthWest';
+type ResizeDirection = 'North' | 'South' | 'East' | 'West' | 'NorthEast' | 'NorthWest' | 'SouthEast' | 'SouthWest';
 
 /**
  * Whether the system draws the window buttons. On a Mac the shell keeps the native close, minimise
@@ -46,6 +38,7 @@ const nativeWindowControls = process.platform === 'darwin';
 const desktopBridge = {
   shell: 'electron' as const,
   getUsername: () => ipcRenderer.invoke('roboboy:session-username') as Promise<string | undefined>,
+  openEnterpriseLogin: (url: string) => ipcRenderer.invoke('roboboy:enterprise-login', url) as Promise<void>,
   robotResourceProtocol: true,
   nativeWindowControls,
 
@@ -118,7 +111,10 @@ const desktopBridge = {
    */
   updater: {
     target: () => ipcRenderer.invoke('roboboy:update-target') as Promise<UpdateTarget | null>,
-    download: async (asset: { tag: string; name: string }, onProgress: (received: number, total: number) => void): Promise<void> => {
+    download: async (
+      asset: { tag: string; name: string },
+      onProgress: (received: number, total: number) => void
+    ): Promise<void> => {
       const listener = (_event: unknown, received: number, total: number) => onProgress(received, total);
       ipcRenderer.on('roboboy:update-progress', listener);
       try {

@@ -1,4 +1,5 @@
 import type { RemoteBag } from './types';
+import { enterpriseFetch, enterpriseMediaUrl } from '../enterprise/session';
 
 /**
  * Copying a recording from the ROS host to this device.
@@ -48,7 +49,7 @@ export async function chooseSaveTarget(name: string): Promise<FileSystemFileHand
 export function downloadWithBrowser(url: string) {
   const frame = document.createElement('iframe');
   frame.hidden = true;
-  frame.src = url;
+  frame.src = enterpriseMediaUrl(url);
   document.body.append(frame);
   setTimeout(() => frame.remove(), 60_000);
 }
@@ -145,7 +146,7 @@ export class RecordingDownload {
     const wait = () => { clearTimeout(idle); idle = setTimeout(() => request.abort(), this.options.idleTimeout ?? 30_000); };
     wait();
     try {
-      const response = await (this.options.fetch ?? fetch)(this.bag.url, { cache: 'no-store', signal: request.signal, headers: from ? { Range: `bytes=${from}-` } : {} });
+      const response = await (this.options.fetch ?? enterpriseFetch)(this.bag.url, { cache: 'no-store', signal: request.signal, headers: from ? { Range: `bytes=${from}-` } : {} });
       const changed = new FatalError('The recording changed on the ROS host while it was downloading. Download it again.');
       if (response.status === 404) throw new FatalError('The recording is no longer on the ROS host.');
       if (response.status === 409) throw new FatalError('This recording is still being written on the ROS host. Stop it before downloading it.');

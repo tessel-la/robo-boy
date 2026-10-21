@@ -1,4 +1,5 @@
 # Byte-compiled / optimized / DLL files
+.secrets/
 __pycache__/
 *.py[cod]
 *$py.class
@@ -190,3 +191,6 @@ local-panel-sources.json
 
 # Local ROS recording output
 /recordings/
+
+# Private standalone enterprise access-session snapshots
+/.enterprise-sessions/

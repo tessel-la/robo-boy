@@ -1,0 +1,295 @@
+.enterprise-login {
+  height: var(--app-height, 100dvh);
+  /* Only the middle scrolls, and only on short windows; the footer always stays visible. */
+  overflow: hidden;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  box-sizing: border-box;
+  background: var(--background-color);
+  color: var(--text-color);
+}
+:root[data-desktop] .enterprise-login {
+  padding-top: var(--title-bar-height);
+}
+.enterprise-login-footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px 24px;
+  padding: 14px clamp(20px, 5vw, 64px);
+  border-top: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  letter-spacing: 0.035em;
+}
+.enterprise-powered {
+  color: var(--text-color);
+  font-size: 0.8rem;
+}
+.enterprise-powered strong {
+  font-weight: 700;
+}
+.enterprise-login-content {
+  min-height: 0;
+  overflow: auto;
+  display: grid;
+  place-items: center;
+  padding: 32px 20px;
+}
+.enterprise-login-card {
+  width: min(100%, 480px);
+  box-sizing: border-box;
+  padding: clamp(28px, 5vw, 48px);
+  border: 1px solid var(--border-color);
+  border-radius: 20px;
+  background: var(--card-bg);
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 24px;
+  overflow-wrap: anywhere;
+  text-align: center;
+}
+.enterprise-brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  min-width: 0;
+  font-size: 1.35rem;
+  font-weight: 650;
+  letter-spacing: -0.035em;
+}
+.enterprise-brand span {
+  min-width: 0;
+}
+.enterprise-brand img {
+  display: block;
+  width: 48px;
+  height: 40px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+.enterprise-brand.is-wordmark img {
+  width: min(100%, 230px);
+  height: 56px;
+}
+.enterprise-brand .sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.enterprise-login-card .enterprise-brand {
+  margin-bottom: 16px;
+}
+.enterprise-eyebrow {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.13em;
+  color: var(--text-secondary);
+}
+.enterprise-login-card h1 {
+  font-size: clamp(1.7rem, 5vw, 2.5rem);
+  letter-spacing: -0.045em;
+  margin: -8px 0 0;
+  line-height: 1.12;
+  font-weight: 600;
+}
+.enterprise-login-card p {
+  margin: 0;
+  line-height: 1.65;
+  font-size: 0.95rem;
+  color: var(--text-secondary);
+}
+.enterprise-login-card button {
+  min-height: 48px;
+  font: inherit;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--background-secondary);
+  color: var(--text-color);
+  padding: 14px 18px;
+  cursor: pointer;
+}
+.enterprise-login-card .enterprise-primary {
+  background: var(--primary-color);
+  color: var(--button-text-color);
+  border-color: var(--primary-color);
+  font-weight: 650;
+  box-shadow: none;
+}
+.enterprise-login-card .enterprise-primary:hover {
+  background: var(--primary-hover-color);
+}
+.enterprise-providers {
+  display: grid;
+  gap: 12px;
+}
+.enterprise-login-card button:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+.enterprise-login-card a {
+  color: var(--text-color);
+  text-underline-offset: 4px;
+}
+.enterprise-login-card small {
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+}
+.enterprise-login-card p.enterprise-error {
+  color: var(--error-color);
+}
+.enterprise-login :focus-visible,
+.enterprise-menu-account :focus-visible {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 4px;
+}
+.enterprise-menu-account {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 8px 4px;
+  border-top: 1px solid var(--border-color);
+}
+.enterprise-menu-account .enterprise-brand {
+  justify-content: flex-start;
+  gap: 8px;
+  font-size: 0.8rem;
+}
+.enterprise-menu-account .enterprise-brand img {
+  max-width: 140px;
+  width: auto;
+  height: 24px;
+}
+.enterprise-menu-account > span {
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  overflow-wrap: anywhere;
+}
+.enterprise-robot-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  text-align: left;
+  width: 100%;
+  color: var(--text-color);
+}
+.enterprise-robot-picker select {
+  width: 100%;
+  min-height: 48px;
+  padding: 12px 14px;
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  color: var(--text-color);
+  font: inherit;
+}
+.enterprise-robot-picker > span {
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+.entry-section .enterprise-brand {
+  margin: 8px auto 24px;
+}
+.entry-section .enterprise-brand.is-wordmark img {
+  width: 230px;
+  height: 58px;
+}
+.enterprise-renewal {
+  position: fixed;
+  top: calc(var(--title-bar-height, 0px) + var(--safe-area-top, 0px) + 12px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10020;
+  width: min(calc(100% - 32px), 460px);
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  background: var(--card-bg);
+  color: var(--text-color);
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.24);
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+.enterprise-renewal p {
+  margin: 0;
+  color: var(--text-secondary);
+}
+.enterprise-renewal strong {
+  color: var(--text-color);
+}
+.enterprise-renewal p.enterprise-error {
+  color: var(--error-color);
+}
+.enterprise-renewal div {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.enterprise-renewal button {
+  min-height: 36px;
+  font: inherit;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--background-secondary);
+  color: var(--text-color);
+  padding: 6px 14px;
+  cursor: pointer;
+}
+.enterprise-renewal .enterprise-primary {
+  background: var(--primary-color);
+  color: var(--button-text-color);
+  border-color: var(--primary-color);
+  font-weight: 650;
+}
+.enterprise-renewal .enterprise-primary:hover {
+  background: var(--primary-hover-color);
+}
+.enterprise-renewal :focus-visible {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 2px;
+}
+@media (max-height: 760px) {
+  .enterprise-login-content {
+    padding: 16px 20px;
+  }
+  .enterprise-login-card {
+    gap: 16px;
+    padding: 28px clamp(24px, 5vw, 40px);
+  }
+  .enterprise-login-card .enterprise-brand {
+    margin-bottom: 4px;
+  }
+}
+@media (max-width: 480px) {
+  .enterprise-login-footer {
+    justify-content: center;
+    text-align: center;
+  }
+  .enterprise-login-content {
+    padding: 28px 16px;
+  }
+  .enterprise-login-card {
+    gap: 20px;
+    border-radius: 14px;
+    padding: 28px 22px;
+  }
+  .enterprise-brand {
+    font-size: 1.15rem;
+    gap: 10px;
+  }
+  .enterprise-brand img {
+    width: 40px;
+    height: 32px;
+  }
+}

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { RemoteBag } from './types';
+import { enterpriseFetch } from '../enterprise/session';
 
 /** One MCAP file on the ROS host; paths are relative to the recorder's recording root. */
 export interface RemoteRecordingFile {
@@ -59,7 +60,7 @@ export function parseListing(value: unknown): RemoteListing {
   };
 }
 
-export async function fetchListing(baseUrl: string, path: string, signal?: AbortSignal, fetcher: typeof fetch = fetch): Promise<RemoteListing> {
+export async function fetchListing(baseUrl: string, path: string, signal?: AbortSignal, fetcher: typeof fetch = enterpriseFetch): Promise<RemoteListing> {
   let response: Response;
   try {
     response = await fetcher(`${baseUrl.replace(/\/+$/, '')}/list?path=${encodeURIComponent(path)}`, { cache: 'no-store', signal });

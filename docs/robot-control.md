@@ -58,6 +58,10 @@ nonfinite timeouts fail startup instead of silently changing policy.
 
 ## Why enforcement lives on the robot host
 
+An optional [enterprise authentication gateway](enterprise.md) can require employee sign-in
+before connections reach this control gateway. Access sessions and robot ownership leases are
+separate: signing in never grants control automatically.
+
 Previously, `useRos` created a separate ROSLIB connection for every session. Pads published directly; local behavior trees and external panels called services and sent action goals on that connection. rosbridge shared publishers between clients and ran services and action goals in separate threads. There was no application-wide ownership check. A local rosapi queue only serialized discovery within one browser; persistent-tree rejection only prevented two persistent trees, not pad commands or local trees from overlapping them.
 
 The ROS stack now runs `infra/ros/control_gateway.py` on the existing public rosbridge port (default **9090**). Caddy's `/websocket`, direct web connections, Tauri, and Electron all reach that gateway. The actual rosbridge listens only on **127.0.0.1:9092**, with the port optionally selected through `ROSBRIDGE_INTERNAL_PORT`. Each external connection has a private upstream connection, preserving ROSLIB subscriptions, service responses, action IDs, binary telemetry, and cleanup. A separate private subscription monitors the persistent runner.

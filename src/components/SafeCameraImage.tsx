@@ -1,5 +1,6 @@
 import { ImgHTMLAttributes, useEffect, useRef } from 'react';
 import { getSafeCameraStreamUrl } from '../utils/cameraStreamUrl';
+import { enterpriseMediaUrl } from '../features/enterprise/session';
 
 type SafeCameraImageProps = Omit<ImgHTMLAttributes<HTMLImageElement>, 'src'> & {
   src: string;
@@ -27,7 +28,7 @@ export default function SafeCameraImage({ src, allowedStreamBaseUrl, ...imagePro
 
     const safeSrc = getSafeCameraImageSrc(src, allowedStreamBaseUrl);
     if (safeSrc) {
-      imageElement.src = safeSrc;
+      imageElement.src = enterpriseMediaUrl(safeSrc);
     } else {
       imageElement.removeAttribute('src');
     }

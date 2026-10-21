@@ -267,7 +267,7 @@
 .top-bar .view-toggle button {
   background: transparent;
   border: none;
-  color: rgba(255, 255, 255, 0.6);
+  color: var(--navbar-text, #fff);
   padding: 4px 8px;
   border-radius: 6px;
   cursor: pointer;
@@ -291,12 +291,12 @@
 
 .top-bar .view-toggle button.active {
   background: var(--primary-color, #4285f4);
-  color: #fff;
+  color: var(--button-text-color, #fff);
 }
 
 .top-bar .view-toggle button:hover:not(.active) {
   background: rgba(255, 255, 255, 0.18);
-  color: #fff;
+  color: var(--navbar-text, #fff);
 }
 
 .top-bar .view-toggle .bt-execution-return {
@@ -361,14 +361,14 @@
   border: 0;
   border-radius: 7px;
   background: transparent;
-  color: rgba(255, 255, 255, 0.82);
+  color: var(--navbar-text, #fff);
   cursor: pointer;
 }
 
 .top-bar .assistant-toolbar-button:hover,
 .top-bar .assistant-toolbar-button:focus-visible {
   background: rgba(255, 255, 255, 0.18);
-  color: #fff;
+  color: var(--navbar-text, #fff);
   outline: none;
 }
 
@@ -800,7 +800,7 @@
 .top-bar .disconnect-button-icon {
   background: transparent;
   border: none;
-  color: rgba(255, 255, 255, 0.55);
+  color: var(--navbar-text, #fff);
   cursor: pointer;
   padding: 4px 6px;
   border-radius: 6px;

@@ -10,12 +10,15 @@
  * scripts as CommonJS whatever the package type says, and the app declares `"type": "module"`.
  */
 import { build } from 'esbuild';
+import { loadEnv } from 'vite';
+import { enabled } from '../infra/enterprise/config.mjs';
 import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const outDir = path.join(projectRoot, 'dist-electron', 'shell');
+const environment = { ...loadEnv('electron', projectRoot, ''), ...process.env };
 
 // Electron ships its own Node; bundling either would produce a second copy that cannot talk to
 // the running process.
@@ -31,6 +34,13 @@ await build({
   target: 'node20',
   format: 'esm',
   external,
+  define: {
+    __ROBOBOY_ENTERPRISE_LOGIN__: JSON.stringify(enabled(environment.VITE_ENTERPRISE_LOGIN)),
+    // The system browser may only open this build's own gateway, matching the renderer's origin.
+    __ROBOBOY_ENTERPRISE_ORIGIN__: JSON.stringify(
+      environment.VITE_ENTERPRISE_SERVER_URL ? new URL(environment.VITE_ENTERPRISE_SERVER_URL).origin : ''
+    ),
+  },
   sourcemap: true,
 });
 

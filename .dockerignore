@@ -1,4 +1,11 @@
 .git
+.env
+.env.*
+.secrets
+.enterprise-sessions
+config/*secrets*
+config/*.env
+config/oidc-client-secret
 .panel-stage
 node_modules
 dist

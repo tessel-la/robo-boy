@@ -102,7 +102,7 @@ The Tauri app uses the host selected on the connection screen (including VPN hos
 VPN interface, so remote desktop clients can reach it. If a desktop webview receives
 a CORS rejection, include `tauri://*,http://tauri.localhost,https://tauri.localhost` in `OLLAMA_ORIGINS`.
 
-In the browser app, Quick Connect and Domain ID use the Caddy proxy. The advanced Host or IP field accepts any hostname, DNS name, VPN name, IPv4 address, IPv6 address, or URL that resolves from the client machine. The Ports fields control rosbridge, video, and mesh ports for direct host connections and default to the matching `VITE_*_PORT` values. It connects directly to that host in `auto` mode when it differs from the frontend host. Use `VITE_WEB_BACKEND_MODE=proxy` to force all browser connections through Caddy.
+In the browser app, Quick Connect uses the Caddy proxy. The Host or IP field accepts any hostname, DNS name, VPN name, IPv4 address, IPv6 address, or URL that resolves from the client machine. Expand **Connection ports** to change rosbridge, video, and mesh ports for direct host connections; these default to the matching `VITE_*_PORT` values. It connects directly to that host in `auto` mode when it differs from the frontend host. Use `VITE_WEB_BACKEND_MODE=proxy` to force all browser connections through Caddy.
 
 The camera gateway is external. Robo-Boy starts no media server and does not care which one you run: a
 simulator provides one, or you run your own. **The packaged desktop and mobile apps never go through Robo-Boy
@@ -180,6 +180,10 @@ changes must not make an otherwise unchanged Robo-Boy commit fail.
 If the frontend is opened over HTTPS, direct browser connections use `wss://` and `https://` backend URLs. For a plain ROS backend, use the HTTP frontend URL or set `VITE_WEB_BACKEND_MODE=proxy` with `BACKEND_HOST`.
 
 ## Desktop Frontend
+
+For optional employee login and company branding, see [Enterprise login and branding](enterprise.md).
+The default development build has login disabled; enterprise build flags are public configuration,
+while OIDC client secrets belong only to the optional gateway.
 
 The Tauri application packages only the frontend and expects the ROS stack to run separately. After installing the Tauri platform prerequisites and Rust, start it with:
 

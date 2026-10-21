@@ -1,6 +1,7 @@
 services:
   # React App Development Server
   app:
+    restart: unless-stopped
     build:
       context: .
       dockerfile: infra/docker/Dockerfile.dev
@@ -45,6 +46,7 @@ services:
       - RECORDINGS_UPSTREAM=${RECORDINGS_UPSTREAM:-unix//run/roboboy-recordings/recordings.sock}
     volumes:
       - ./infra/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./infra/caddy/Routes.caddy:/etc/caddy/Routes.caddy:ro
       - ./infra/caddy/certs:/etc/caddy/certs:ro # Mount the certs directory (read-only)
       - ollama-relay-socket:/run/ollama-relay
       - webrtc-relay-socket:/run/webrtc-relay

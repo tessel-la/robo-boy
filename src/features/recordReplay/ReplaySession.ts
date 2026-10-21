@@ -1,5 +1,9 @@
 import ROSLIB, { type Ros } from 'roslib';
+import { enterpriseMediaUrl } from '../enterprise/session';
 import { isRemoteBag, type BagInfo, type BagSource, type ReaderRequest, type ReaderResponse, type ReplayMessage } from './types';
+
+// Keep the canonical source in session state; only worker messages carry a scoped read URL.
+const workerSource = (source: BagSource): BagSource => isRemoteBag(source) ? { ...source, url: enterpriseMediaUrl(source.url) } : source;
 
 type WireMessage = { op: string; id?: string; topic?: string; service?: string; args?: { topic?: string; type?: string } };
 type Emitter = { emit: (name: string, value: unknown) => void; removeAllListeners: () => void };
@@ -122,7 +126,7 @@ export class ReplaySession {
       this.worker = this.createWorker();
       this.worker.onmessage = ({ data }: MessageEvent<ReaderResponse>) => this.receive(data);
       this.worker.onerror = event => { this.update({ phase: 'error', playing: false, error: event.message || 'The recording reader stopped unexpectedly.' }); };
-      this.post({ id: ++this.requestId, op: 'open', source });
+      this.post({ id: ++this.requestId, op: 'open', source: workerSource(source) });
     } catch (error) { this.update({ phase: 'error', error: String(error) }); }
   }
   /** Whether a failed recording can be opened again as it was: remote reads fail with the connection. */
@@ -247,7 +251,7 @@ export class ReplaySession {
         if (data.done) finish();
         else worker.postMessage({ op: 'ack', id: data.id });
       };
-      worker.postMessage({ id: 1, op: 'open', source: bag } satisfies ReaderRequest);
+      worker.postMessage({ id: 1, op: 'open', source: workerSource(bag) } satisfies ReaderRequest);
     });
   }
   close() {

@@ -2,6 +2,8 @@ import { lazy, Suspense, useState, useEffect, useRef } from 'react';
 import './App.css';
 // import Navbar from './components/Navbar';
 import EntrySection from './components/EntrySection';
+import EnterpriseBoundary from './features/enterprise/EnterpriseBoundary';
+import { brand } from './features/enterprise/config';
 import ConnectionTabs from './components/ConnectionTabs';
 import WorkspaceOpening from './components/WorkspaceOpening';
 import TitleBar from './components/TitleBar';
@@ -10,7 +12,7 @@ import ThemeSelector from './features/theme/components/ThemeSelector';
 import {
   CustomTheme,
   DEFAULT_THEMES,
-  THEME_STORAGE_KEY,
+  themeStorageKey,
   CUSTOM_THEMES_STORAGE_KEY,
   applyThemeToDocument,
   readStoredTheme,
@@ -43,7 +45,7 @@ const safeSetStorageItem = (key: string, value: string): void => {
   }
 };
 
-function App() {
+function WorkspaceApp() {
   const [connectionSessions, setConnectionSessions] = useState<ConnectionSession[]>([]);
   const [activeConnectionId, setActiveConnectionId] = useState<string | null>(null);
   const [isAddingConnection, setIsAddingConnection] = useState(false);
@@ -72,7 +74,7 @@ function App() {
       setSelectedThemeId(applied);
       return;
     }
-    safeSetStorageItem(THEME_STORAGE_KEY, selectedThemeId);
+    safeSetStorageItem(themeStorageKey(), selectedThemeId);
   }, [selectedThemeId, customThemes]);
 
   // --- Theme CRUD Functions ---
@@ -213,7 +215,12 @@ function App() {
   // Combine default and custom themes for the selector
   const allThemesForSelector = [
     ...DEFAULT_THEMES.map(id => ({ id, name: id.charAt(0).toUpperCase() + id.slice(1), isDefault: true })),
-    ...customThemes.map((t: CustomTheme) => ({ id: t.id, name: t.name, iconId: t.iconId, isDefault: false })),
+    ...customThemes.map((t: CustomTheme) => ({
+      id: t.id,
+      name: t.name,
+      iconId: t.iconId,
+      isDefault: t.id === brand.theme?.id,
+    })),
   ];
 
   // What the assistant may read and change at app level.
@@ -235,7 +242,6 @@ function App() {
 
   return (
     <>
-      <TitleBar />
       <AppUpdatePrompt />
       <div className="App">
         <main>
@@ -259,7 +265,9 @@ function App() {
                           <WorkspaceOpening
                             stage="loading"
                             target={session.label}
-                            url={session.params.offline ? undefined : resolveRuntimeEndpoints(session.params).rosbridgeUrl}
+                            url={
+                              session.params.offline ? undefined : resolveRuntimeEndpoints(session.params).rosbridgeUrl
+                            }
                             offline={session.params.offline}
                             standalone
                           />
@@ -318,4 +326,13 @@ function App() {
   );
 }
 
-export default App;
+export default function App() {
+  return (
+    <>
+      <TitleBar />
+      <EnterpriseBoundary>
+        <WorkspaceApp />
+      </EnterpriseBoundary>
+    </>
+  );
+}

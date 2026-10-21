@@ -156,7 +156,7 @@ if [ "${ROBOBOY_EXTERNAL_CONTROL_LOCK:-false}" = "true" ]; then
 fi
 
 # Launch web_video_server
-ros2 run web_video_server web_video_server --ros-args -p address:=0.0.0.0 -p port:="${VIDEO_STREAM_PORT}" &
+ros2 run web_video_server web_video_server --ros-args -p address:="${ROBOBOY_SERVICE_BIND_ADDRESS:-0.0.0.0}" -p port:="${VIDEO_STREAM_PORT}" &
 
 echo "--- Waiting for processes to exit ---"
 wait -n

@@ -1,0 +1,107 @@
+# Optional same-host enterprise deployment. Requires Compose 2.24.4+ for !reset.
+# No provider secret is passed to Vite or included in a frontend build.
+services:
+  app:
+    build:
+      dockerfile: infra/docker/Dockerfile
+      args:
+        VITE_ENTERPRISE_LOGIN: ${ROBOBOY_ENTERPRISE_LOGIN:-true}
+        VITE_ENTERPRISE_SERVER_URL: ${ROBOBOY_ENTERPRISE_ORIGIN:?Set an HTTPS enterprise origin}
+        ROBOBOY_BRANDING_FILE: ${ROBOBOY_BRANDING_FILE:-config/branding.default.json}
+    volumes: !reset []
+    network_mode: host
+    networks: !reset []
+    command: [nginx, '-c', /etc/nginx/enterprise.conf, '-g', 'daemon off;']
+    environment:
+      VITE_ENTERPRISE_LOGIN: ${ROBOBOY_ENTERPRISE_LOGIN:-true}
+      VITE_ENTERPRISE_SERVER_URL: ${ROBOBOY_ENTERPRISE_ORIGIN:?Set an HTTPS enterprise origin}
+      ROBOBOY_BRANDING_FILE: /app/${ROBOBOY_BRANDING_FILE:-config/branding.default.json}
+      VITE_WEB_BACKEND_MODE: proxy
+      PANEL_MANAGER_PROXY_TARGET: http://127.0.0.1:4100
+      OLLAMA_PROXY_TARGET: http://127.0.0.1:11434
+      FRONTEND_PORT: '5173'
+
+  ros-stack:
+    environment:
+      ROBOBOY_SERVICE_BIND_ADDRESS: 127.0.0.1
+      ROBOBOY_RECORDINGS_ADDRESS: 127.0.0.1
+
+  caddy:
+    network_mode: host
+    networks: !reset []
+    ports: !reset []
+    extra_hosts: !reset []
+    environment:
+      ROBOBOY_ENTERPRISE_ORIGIN: ${ROBOBOY_ENTERPRISE_ORIGIN:?Set an HTTPS enterprise origin}
+      BACKEND_HOST: 127.0.0.1
+      FRONTEND_HOST: 127.0.0.1
+      FRONTEND_PORT: '5173'
+      PANEL_MANAGER_UPSTREAM: 127.0.0.1:4100
+    volumes:
+      - ./infra/caddy/Enterprise.Caddyfile:/etc/caddy/Caddyfile:ro
+    depends_on:
+      - enterprise-auth
+
+  enterprise-auth:
+    build:
+      context: .
+      dockerfile: infra/docker/Dockerfile.enterprise
+    network_mode: host
+    restart: unless-stopped
+    init: true
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    environment:
+      ROBOBOY_ENTERPRISE_LOGIN: ${ROBOBOY_ENTERPRISE_LOGIN:-true}
+      ROBOBOY_ENTERPRISE_ORIGIN: ${ROBOBOY_ENTERPRISE_ORIGIN:?Set an HTTPS enterprise origin}
+      ROBOBOY_OIDC_ISSUER: ${ROBOBOY_OIDC_ISSUER:-}
+      ROBOBOY_OIDC_CLIENT_ID: ${ROBOBOY_OIDC_CLIENT_ID:-}
+      ROBOBOY_OIDC_CLIENT_SECRET_FILE: /run/secrets/oidc-client-secret
+      ROBOBOY_OIDC_REQUIRED_GROUP: ${ROBOBOY_OIDC_REQUIRED_GROUP:-}
+      ROBOBOY_OIDC_GROUPS_CLAIM: ${ROBOBOY_OIDC_GROUPS_CLAIM:-groups}
+      ROBOBOY_OIDC_SCOPE: ${ROBOBOY_OIDC_SCOPE:-openid profile email}
+      ROBOBOY_OIDC_PROMPT: ${ROBOBOY_OIDC_PROMPT:-select_account}
+      ROBOBOY_OIDC_LABEL: ${ROBOBOY_OIDC_LABEL:-}
+      ROBOBOY_GOOGLE_CLIENT_ID: ${ROBOBOY_GOOGLE_CLIENT_ID:-}
+      ROBOBOY_GOOGLE_CLIENT_SECRET_FILE: /run/secrets/google-client-secret
+      ROBOBOY_GOOGLE_ALLOWED_DOMAINS: ${ROBOBOY_GOOGLE_ALLOWED_DOMAINS:-}
+      ROBOBOY_GOOGLE_ALLOWED_EMAILS: ${ROBOBOY_GOOGLE_ALLOWED_EMAILS:-}
+      ROBOBOY_MICROSOFT_CLIENT_ID: ${ROBOBOY_MICROSOFT_CLIENT_ID:-}
+      ROBOBOY_MICROSOFT_CLIENT_SECRET_FILE: /run/secrets/microsoft-client-secret
+      ROBOBOY_MICROSOFT_TENANT: ${ROBOBOY_MICROSOFT_TENANT:-}
+      ROBOBOY_MICROSOFT_REQUIRED_ROLE: ${ROBOBOY_MICROSOFT_REQUIRED_ROLE:-}
+      ROBOBOY_AUTH_SESSION_SECONDS: ${ROBOBOY_AUTH_SESSION_SECONDS:-3600}
+      ROBOBOY_AUTH_SESSION_FILE: /var/lib/roboboy-auth/sessions.json
+      ROBOBOY_AUTH_NATIVE_ORIGINS: ${ROBOBOY_AUTH_NATIVE_ORIGINS:-}
+      ROBOBOY_BRANDING_FILE: /config/branding.json
+      ROBOBOY_ROBOTS_FILE: /config/robots.json
+    volumes:
+      - enterprise-sessions:/var/lib/roboboy-auth
+      - type: bind
+        # No provider file is needed when login is explicitly disabled. Enabled mode
+        # rejects the empty fallback at startup before opening its listener.
+        source: ${ROBOBOY_OIDC_CLIENT_SECRET_FILE:-/dev/null}
+        target: /run/secrets/oidc-client-secret
+        read_only: true
+      # Optional additional providers; unused secret mounts stay empty.
+      - type: bind
+        source: ${ROBOBOY_GOOGLE_CLIENT_SECRET_FILE:-/dev/null}
+        target: /run/secrets/google-client-secret
+        read_only: true
+      - type: bind
+        source: ${ROBOBOY_MICROSOFT_CLIENT_SECRET_FILE:-/dev/null}
+        target: /run/secrets/microsoft-client-secret
+        read_only: true
+      - type: bind
+        source: ${ROBOBOY_BRANDING_FILE:-./config/branding.default.json}
+        target: /config/branding.json
+        read_only: true
+      - type: bind
+        source: ${ROBOBOY_ROBOTS_FILE:-./config/robots.default.json}
+        target: /config/robots.json
+        read_only: true
+
+volumes:
+  enterprise-sessions:
