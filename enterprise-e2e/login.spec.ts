@@ -2,6 +2,54 @@ import { expect, test, type Page } from '@playwright/test';
 
 const openAccount = async (page: Page) => page.getByRole('button', { name: /Switch connections/ }).click();
 
+for (const width of [1280, 320]) {
+  test(`company copy rotates without moving sign-in controls at ${width}px`, async ({ page, browserName }) => {
+    await page.setViewportSize({ width, height: 844 });
+    await page.clock.install();
+    await page.goto('/');
+    const heading = page.getByRole('heading', { level: 1 });
+    const signIn = page.getByRole('button', { name: 'Sign in with your company account' });
+    await expect(signIn).toBeEnabled();
+    await expect(page.getByText('Company operations', { exact: true })).toBeVisible();
+    const before = await signIn.boundingBox();
+    await page.clock.runFor(8000);
+    await expect(heading).toHaveText('Your robots. One workspace.');
+    await expect(page.getByText('Connect to your fleet and choose the tools for your next task.')).toBeVisible();
+    expect((await signIn.boundingBox())!.y).toBeCloseTo(before!.y, 0);
+    const pause = page.getByRole('button', { name: 'Pause messages' });
+    await pause.focus();
+    await pause.press('Enter');
+    await page.clock.runFor(16000);
+    await expect(heading).toHaveText('Your robots. One workspace.');
+    await page.getByRole('button', { name: 'Next message' }).click();
+    await expect(heading).toHaveText('Your robotics workspace');
+    await page.getByRole('button', { name: 'Play messages' }).click();
+    await expect(page.getByRole('button', { name: 'Pause messages' })).toBeVisible();
+    await page.mouse.move(10, 10);
+    await page.clock.runFor(8000);
+    await expect(heading).toHaveText('Your robots. One workspace.');
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.screenshot({ path: `/tmp/roboboy-login-copy-${browserName}-${width}.png` });
+    // Copy navigation never grants access or replaces the provider flow.
+    expect((await page.request.get('/recordings/list')).status()).toBe(401);
+    await signIn.click();
+    await expect(page.getByRole('button', { name: /Quick Connect/ })).toBeVisible();
+  });
+}
+
+test('reduced motion keeps company messages manually selectable', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.clock.install();
+  await page.goto('/');
+  const heading = page.getByRole('heading', { level: 1 });
+  await expect(heading).toHaveText('Your robotics workspace');
+  await page.clock.runFor(16000);
+  await expect(heading).toHaveText('Your robotics workspace');
+  await expect(page.getByRole('button', { name: /Pause messages|Play messages/ })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Next message' }).click();
+  await expect(heading).toHaveText('Your robots. One workspace.');
+});
+
 test('branded company login protects the workspace and backend, then signs out', async ({ page, request }) => {
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'Your robotics workspace' })).toBeVisible();

@@ -166,7 +166,8 @@ configuration supports:
 
 - Company name in the login screen, connection screen, workspace account bar and native title bar
 - A bundled logo under `public/branding/`
-- Login heading, explanatory text and HTTPS support link
+- Login eyebrow (the small label above the heading), heading, explanatory text and HTTPS support link
+- Optional rotating heading/message pairs, with manual navigation and pause controls
 - A default company theme using the existing custom-theme format, plus an optional wordmark logo
 - Account and sign-out controls in the existing connection menu, without a second workspace header
 
@@ -182,6 +183,56 @@ before building. Use assets your company is authorized to distribute; the exampl
 This is declarative branding, with no injected HTML, CSS or executable tenant code. Feature
 surfaces belonging to one company should use the existing external Panel SDK. Native application
 identifiers, installer names, OS icons and signing certificates remain platform packaging settings.
+
+### Edit the login text
+
+All copy beneath the company mark belongs to the branding file:
+
+| Field | Behavior |
+| --- | --- |
+| `loginEyebrow` | Small label above the heading; defaults to `Your robotics workspace`. Set `""` to hide it |
+| `loginTitle` | Static heading, up to 200 characters; cannot be blank |
+| `loginMessage` | Static supporting sentence, up to 500 characters; `""` hides it |
+| `loginSlides` | Optional array of up to eight `{ "title": "…", "message": "…" }` pairs, with the same text limits |
+
+Omit `loginSlides` or set it to `[]` to keep the existing static heading and sentence. A single
+slide is also static. With two or more, the slide pairs replace `loginTitle` and `loginMessage`
+and advance in order every 8 s, wrapping to the start. For example:
+
+```json
+{
+  "version": 1,
+  "name": "Example Manufacturing",
+  "loginEyebrow": "Company operations",
+  "loginSlides": [
+    { "title": "Start your shift.", "message": "Choose a robot and open your workspace." },
+    { "title": "See your fleet.", "message": "Use the tools your team needs." }
+  ]
+}
+```
+
+Operators can pause, resume, or browse messages. Hover pauses temporarily; focusing the navigation
+or selecting a message stops automatic rotation until **Play messages** is selected. Hidden tabs
+stop their timer. Reduced-motion preferences disable automatic rotation while preserving manual
+navigation. The layout reserves room for the longest slide so sign-in controls stay in place.
+Only the active slide is exposed to assistive technology; automatic changes are not announced.
+Timers and preference/visibility listeners are removed when the login screen unmounts.
+
+Copy is public plain text, escaped by React. It cannot inject markup, styles, scripts or provider
+settings. Provider button labels still come from the configured authentication providers. These
+settings affect the login screen in web, Electron and Tauri; they do not replace the robot connection
+screen, loader, gateway completion messages, or security notices. Editing JSON requires rebuilding
+the frontend and redistributing native packages. Keep the gateway on the same branding-capable
+release when it loads the same file.
+
+Existing version-1 branding files remain valid. Older Robo-Boy pins reject these new fields, so
+update the core release/submodule pin before adding them to a company file. In the company starter,
+edit `companies/<company>/branding.json` and use its normal build/package commands. No React patch
+or new company-specific component is needed. A separate company repository is optional; a direct
+build can use an externally maintained JSON file via `ROBOBOY_BRANDING_FILE`.
+
+See [the enterprise branding architecture review](enterprise-branding-review.md) for the repository
+ownership recommendation and the inspected starter's upgrade considerations.
 
 ## Select robots after sign-in
 

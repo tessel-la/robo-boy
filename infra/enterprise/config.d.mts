@@ -4,8 +4,10 @@ export interface Branding {
   name: string;
   logo: string;
   accent: string;
+  loginEyebrow: string;
   loginTitle: string;
   loginMessage: string;
+  loginSlides: { title: string; message: string }[];
   supportUrl: string;
   logoWordmark: boolean;
   theme: CustomTheme | null;

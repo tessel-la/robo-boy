@@ -15,6 +15,7 @@ import {
 import { isDesktopRuntime } from '../../runtime/runtimeConfig';
 import { getDesktopBridge } from '../../runtime/desktopBridge';
 import BrandMark from './BrandMark';
+import LoginCopy from './LoginCopy';
 import SessionRenewal from './SessionRenewal';
 import './enterprise.css';
 
@@ -244,9 +245,7 @@ export default function EnterpriseBoundary({ children }: { children: ReactNode }
       <div className="enterprise-login-content">
         <section className="enterprise-login-card" aria-labelledby="enterprise-login-title">
           <BrandMark />
-          <span className="enterprise-eyebrow">Your robotics workspace</span>
-          <h1 id="enterprise-login-title">{brand.loginTitle}</h1>
-          <p>{brand.loginMessage}</p>
+          <LoginCopy branding={brand} />
           {(error || checkError) && (
             <p role="alert" className="enterprise-error">
               {error || checkError}

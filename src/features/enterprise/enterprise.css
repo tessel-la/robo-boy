@@ -144,6 +144,55 @@
 .enterprise-login-card p.enterprise-error {
   color: var(--error-color);
 }
+.enterprise-login-copy {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+.enterprise-login-slides {
+  display: grid;
+}
+.enterprise-login-slide {
+  grid-area: 1 / 1;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  visibility: hidden;
+}
+.enterprise-login-slide[aria-hidden='false'] {
+  visibility: visible;
+}
+.enterprise-copy-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+}
+.enterprise-copy-controls span {
+  min-width: 4ch;
+}
+.enterprise-login-copy .enterprise-copy-controls button {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  min-height: 44px;
+  padding: 0;
+  border-color: transparent;
+  background: transparent;
+  color: var(--text-secondary);
+}
+.enterprise-login-copy .enterprise-copy-controls button:hover {
+  color: var(--text-color);
+  background: var(--background-secondary);
+}
+.enterprise-copy-controls svg {
+  width: 16px;
+  height: 16px;
+  pointer-events: none;
+}
 .enterprise-login :focus-visible,
 .enterprise-menu-account :focus-visible {
   outline: 2px solid var(--primary-color);

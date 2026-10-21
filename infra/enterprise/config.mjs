@@ -5,12 +5,17 @@ export const defaultBranding = Object.freeze({
   name: 'Robo-Boy',
   logo: '',
   accent: '',
+  loginEyebrow: 'Your robotics workspace',
   loginTitle: 'Sign in to Robo-Boy',
   loginMessage: 'Use your company account to access your robot workspace.',
+  loginSlides: [],
   supportUrl: '',
   logoWordmark: false,
   theme: null,
 });
+
+const validBrandingText = (value, limit) =>
+  typeof value === 'string' && value.length <= limit && !/[\x00-\x1f]/.test(value);
 
 export function branding(value = {}) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Branding must be an object.');
@@ -18,15 +23,25 @@ export function branding(value = {}) {
     throw new Error('Unknown branding setting.');
   const result = { ...defaultBranding, ...value };
   if (result.version !== 1) throw new Error('Unsupported branding version.');
-  for (const key of ['name', 'loginTitle', 'loginMessage', 'logo', 'accent', 'supportUrl']) {
-    if (
-      typeof result[key] !== 'string' ||
-      result[key].length > (key === 'loginMessage' ? 500 : 200) ||
-      /[\x00-\x1f]/.test(result[key])
-    )
+  for (const key of ['name', 'loginEyebrow', 'loginTitle', 'loginMessage', 'logo', 'accent', 'supportUrl']) {
+    if (!validBrandingText(result[key], key === 'loginMessage' ? 500 : 200))
       throw new Error(`Invalid branding ${key}.`);
   }
   if (!result.name.trim() || !result.loginTitle.trim()) throw new Error('Brand name and login title cannot be empty.');
+  if (!Array.isArray(result.loginSlides) || result.loginSlides.length > 8)
+    throw new Error('Configure at most eight login slides.');
+  for (const slide of result.loginSlides) {
+    if (
+      !slide ||
+      typeof slide !== 'object' ||
+      Array.isArray(slide) ||
+      Object.keys(slide).some(key => !['title', 'message'].includes(key)) ||
+      !validBrandingText(slide.title, 200) ||
+      !slide.title.trim() ||
+      !validBrandingText(slide.message, 500)
+    )
+      throw new Error('Invalid login slide. Supply a title and message as plain text.');
+  }
   if (typeof result.logoWordmark !== 'boolean') throw new Error('logoWordmark must be a boolean.');
   if (result.theme !== null) {
     const theme = result.theme;
