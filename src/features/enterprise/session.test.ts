@@ -17,6 +17,7 @@ import { fetchListing, remoteBag } from '../recordReplay/remoteRecordings';
 import { downloadWithBrowser, RecordingDownload } from '../recordReplay/downloadRecording';
 
 const carrier = window as typeof window & { roboBoyDesktop?: unknown };
+const realTimeout = setTimeout;
 const identity = {
   user: { id: 'alice', name: 'Alice' },
   expires: Date.now() + 60000,
@@ -29,6 +30,7 @@ const enable = (native = true) => {
   if (native) carrier.roboBoyDesktop = {};
 };
 afterEach(() => {
+  vi.restoreAllMocks();
   setEnterpriseSession(null);
   delete carrier.roboBoyDesktop;
   vi.unstubAllEnvs();
@@ -254,25 +256,42 @@ describe('Enterprise transport', () => {
     expect(fetch.mock.calls[3][1]?.headers).not.toHaveProperty('X-RoboBoy-Session');
   });
 
-  it('keeps polling a native sign-in through a brief outage and explains an unreachable server', async () => {
+  it.each([0, 100])('keeps polling through outages with a %i ms WebCrypto delay', async digestDelay => {
     enable();
+    if (digestDelay) {
+      const digest = crypto.subtle.digest.bind(crypto.subtle);
+      vi.spyOn(crypto.subtle, 'digest').mockImplementation(async (algorithm, bytes) => {
+        await new Promise(resolve => realTimeout(resolve, digestDelay));
+        return digest(algorithm, bytes);
+      });
+    }
     vi.useFakeTimers();
     const id = 'x'.repeat(43);
+    let firstPoll!: () => void;
+    const polling = new Promise<void>(resolve => {
+      firstPoll = resolve;
+    });
     const fetch = vi
       .fn()
       .mockResolvedValueOnce(
         new Response(JSON.stringify({ id, browserUrl: 'https://robot.example/auth/login?native=' + id }))
       )
-      .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+      .mockImplementationOnce(async () => {
+        firstPoll();
+        throw new TypeError('Failed to fetch');
+      })
       .mockResolvedValueOnce(new Response('', { status: 503 }))
       .mockResolvedValue(new Response(JSON.stringify(identity)));
     vi.stubGlobal('fetch', fetch);
     const result = nativeSignIn(new AbortController().signal, async () => {});
-    let settled = false;
-    void result.finally(() => (settled = true)).catch(() => {});
-    // Digesting runs off the timer queue, so advance until the poll loop finishes.
-    for (let step = 0; step < 40 && !settled; step += 1) await vi.advanceTimersByTimeAsync(250);
+    // WebCrypto uses the real event loop. Wait for it before advancing the polling clock.
+    await polling;
+    expect(fetch).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(1500);
+    expect(fetch).toHaveBeenCalledTimes(3);
+    await vi.advanceTimersByTimeAsync(1500);
     await expect(result).resolves.toMatchObject({ token: identity.token });
+    expect(fetch).toHaveBeenCalledTimes(4);
     vi.useRealTimers();
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')));
     await expect(nativeSignIn(new AbortController().signal, async () => {})).rejects.toThrow(
