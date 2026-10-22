@@ -54,14 +54,17 @@ test('branded company login protects the workspace and backend, then signs out',
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'Your robotics workspace' })).toBeVisible();
   await expect(page.getByText('Example Manufacturing', { exact: true })).toBeVisible();
+  await expect(page.locator('.enterprise-login-footer .robo-boy-attribution')).toHaveText('Powered by Robo-Boy');
   await expect(page.getByRole('button', { name: /Quick Connect/ })).toHaveCount(0);
   expect((await request.get('/recordings/list')).status()).toBe(401);
   await page.getByRole('button', { name: 'Sign in with your company account' }).click();
   await openAccount(page);
   await expect(page.getByRole('button', { name: 'Sign out' })).toBeVisible();
   await expect(page.getByText('Alice Employee', { exact: true })).toBeVisible();
+  await expect(page.locator('.connection-switcher-attribution')).toHaveText('Powered by Robo-Boy');
   await page.keyboard.press('Escape');
   await expect(page.getByRole('button', { name: /Quick Connect/ })).toBeVisible();
+  await expect(page.locator('.entry-attribution')).toHaveText('Powered by Robo-Boy');
   await page.getByTitle('Advanced Options').click();
   await expect(page.getByRole('textbox', { name: 'Host or IP:' })).toBeVisible();
   await page.getByText('Connection ports', { exact: true }).click();

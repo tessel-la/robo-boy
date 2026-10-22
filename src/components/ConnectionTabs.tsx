@@ -216,9 +216,7 @@ export default function ConnectionTabs({
             <PlusIcon />
             <span>Open another connection</span>
           </button>
-          <div className="connection-switcher-attribution">
-            <RoboBoyAttribution />
-          </div>
+          <RoboBoyAttribution className="connection-switcher-attribution" />
         </div>
       )}
     </nav>

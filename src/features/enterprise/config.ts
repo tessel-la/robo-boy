@@ -18,6 +18,8 @@ export const brand: Branding =
       }
     : __ROBOBOY_BRANDING__;
 
+export const companyBranded = brand.name !== 'Robo-Boy' || Boolean(brand.logo);
+
 export const enterpriseEnabled = () => import.meta.env.VITE_ENTERPRISE_LOGIN === 'true';
 export const managedGateway = () => enterpriseEnabled() || Boolean(import.meta.env.VITE_ENTERPRISE_SERVER_URL);
 export const enterpriseOrigin = () => {

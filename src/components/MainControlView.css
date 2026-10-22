@@ -37,6 +37,10 @@
   align-self: center;
 }
 
+.top-bar button:not(:disabled):hover {
+  opacity: 1;
+}
+
 .bt-execution-island {
   height: 26px;
   width: auto;
@@ -258,13 +262,16 @@
   align-items: center;
   gap: 2px;
   margin: 0;
-  background: rgba(255, 255, 255, 0.12);
-  border-radius: 9px;
-  padding: 3px;
+  height: var(--toolbar-control-height);
+  background: var(--toolbar-control-bg);
+  border-radius: var(--toolbar-control-radius);
+  padding: 2px;
+  box-sizing: border-box;
   min-width: 0;
 }
 
 .top-bar .view-toggle button {
+  height: calc(var(--toolbar-control-height) - 4px);
   background: transparent;
   border: none;
   color: var(--navbar-text, #fff);
@@ -295,7 +302,7 @@
 }
 
 .top-bar .view-toggle button:hover:not(.active) {
-  background: rgba(255, 255, 255, 0.18);
+  background: var(--toolbar-control-hover-bg);
   color: var(--navbar-text, #fff);
 }
 
@@ -347,9 +354,11 @@
   display: flex;
   align-items: center;
   gap: 2px;
-  background: rgba(255, 255, 255, 0.12);
-  border-radius: 9px;
-  padding: 3px;
+  height: var(--toolbar-control-height);
+  background: var(--toolbar-control-bg);
+  border-radius: var(--toolbar-control-radius);
+  padding: 2px;
+  box-sizing: border-box;
 }
 
 .top-bar .assistant-toolbar-button {
@@ -407,11 +416,14 @@
 
 .workspace-add-button,
 .workspace-split-button {
-  background: transparent;
+  height: var(--toolbar-control-height);
+  width: var(--toolbar-control-height);
+  min-width: var(--toolbar-control-height);
+  background: var(--toolbar-control-bg);
   border: 0;
-  color: rgba(255, 255, 255, 0.62);
-  padding: 4px 8px;
-  border-radius: 6px;
+  color: var(--navbar-text, #fff);
+  padding: 0;
+  border-radius: var(--toolbar-control-radius);
   cursor: pointer;
   line-height: 1;
   display: inline-flex;
@@ -430,20 +442,19 @@
 
 .workspace-add-button:hover:not(:disabled),
 .workspace-split-button:hover {
-  background: rgba(255, 255, 255, 0.18);
-  color: #fff;
+  background: var(--toolbar-control-hover-bg);
+  color: var(--navbar-text, #fff);
 }
 
-.workspace-add-button,
-.workspace-split-button {
-  height: 32px;
-  min-width: 32px;
-  background: rgba(255, 255, 255, 0.12);
+.workspace-add-button:focus-visible,
+.workspace-split-button:focus-visible {
+  outline: 2px solid var(--navbar-text, #fff);
+  outline-offset: -2px;
 }
 
 .workspace-split-button.active {
   background: var(--primary-color, #4285f4);
-  color: #fff;
+  color: var(--button-text-color, #fff);
 }
 
 .workspace-add-button:disabled {
@@ -758,7 +769,9 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 4px 6px;
+  width: calc(var(--toolbar-control-height) - 4px);
+  height: calc(var(--toolbar-control-height) - 4px);
+  padding: 0;
   border-radius: 6px;
   line-height: 1;
   background: transparent;
@@ -777,7 +790,7 @@
 }
 
 .top-bar .connection-status-icon:not(:disabled):hover {
-  background-color: var(--background-dark-transparent);
+  background-color: var(--toolbar-control-hover-bg);
 }
 
 .top-bar .connection-status-icon svg {
@@ -798,11 +811,13 @@
 }
 
 .top-bar .disconnect-button-icon {
+  width: calc(var(--toolbar-control-height) - 4px);
+  height: calc(var(--toolbar-control-height) - 4px);
   background: transparent;
   border: none;
   color: var(--navbar-text, #fff);
   cursor: pointer;
-  padding: 4px 6px;
+  padding: 0;
   border-radius: 6px;
   display: inline-flex;
   align-items: center;
@@ -819,7 +834,7 @@
 }
 
 .top-bar .disconnect-button-icon:hover {
-  background: rgba(255, 255, 255, 0.18);
+  background: var(--toolbar-control-hover-bg);
   color: var(--error-color, #dc3545);
 }
 
@@ -1284,7 +1299,7 @@ body.no-scroll {
   align-items: center;
   gap: 8px;
   padding: 0 16px;
-  border: 1px solid var(--primary-color);
+  border: 1px solid color-mix(in srgb, var(--text-color) 35%, var(--primary-color));
   border-radius: 7px;
   background: var(--primary-color);
   color: var(--button-text-color);
@@ -1309,14 +1324,22 @@ body.no-scroll {
 }
 
 .workspace-empty-add-button {
+  opacity: 1;
+  box-shadow: 0 2px 6px var(--background-dark-transparent);
   transition:
     transform 150ms ease,
-    filter 150ms ease;
+    box-shadow 150ms ease;
 }
 
 .workspace-empty-add-button:hover {
   transform: translateY(-1px);
-  filter: brightness(1.06);
+  opacity: 1;
+  box-shadow: 0 4px 10px var(--background-dark-transparent);
+}
+
+.workspace-empty-add-button:focus-visible {
+  outline: 2px solid var(--text-color);
+  outline-offset: 3px;
 }
 
 .workspace-empty-add-button:active {
@@ -2472,13 +2495,7 @@ body.no-scroll {
   .top-bar.workspace-active .workspace-add-control {
     position: absolute;
     top: calc(4px + var(--safe-area-top));
-    left: calc(50% - 14px);
-  }
-
-  .top-bar.workspace-active .workspace-add-button {
-    width: 28px;
-    min-width: 28px;
-    padding: 4px;
+    left: calc(50% - var(--toolbar-control-height) / 2);
   }
 
   .top-bar.workspace-active .status-controls {
@@ -2558,7 +2575,7 @@ body.no-scroll {
     justify-self: start;
     min-width: 0;
     gap: 1px;
-    padding: 3px;
+    padding: 2px;
   }
 
   .top-bar .view-toggle > button {

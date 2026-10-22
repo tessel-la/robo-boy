@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useId } from 'react';
 import { FiChevronDown, FiSliders } from 'react-icons/fi';
 import type { ConnectionParams } from '../runtime/connections';
 import './EntrySection.css';
-import { brand } from '../features/enterprise/config';
+import { companyBranded } from '../features/enterprise/config';
 import { getEnterpriseSession, hasEnterpriseRobots } from '../features/enterprise/session';
 import BrandMark from '../features/enterprise/BrandMark';
 import RoboBoyAttribution from './RoboBoyAttribution';
@@ -325,7 +325,7 @@ const EntrySection: React.FC<EntrySectionProps> = ({ onConnect, embedded = false
     <div className={`entry-section-container ${embedded ? 'is-embedded' : ''}`} ref={containerRef}>
       <div className="entry-section card" data-testid="entry-section">
         <div className="logo-container" ref={logoRef}>
-          {brand.name !== 'Robo-Boy' || brand.logo ? (
+          {companyBranded ? (
             <h1 className="app-title">
               <BrandMark />
             </h1>
@@ -517,9 +517,7 @@ const EntrySection: React.FC<EntrySectionProps> = ({ onConnect, embedded = false
             </div>
           )}
         </div>
-        <div className="entry-attribution">
-          <RoboBoyAttribution />
-        </div>
+        <RoboBoyAttribution className="entry-attribution" />
       </div>
       <div
         ref={transitionOverlayRef}

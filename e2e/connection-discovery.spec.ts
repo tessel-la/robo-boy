@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 import { installRosMock } from './helpers/rosMock';
 
 for (const width of [1280, 320]) {
-  test(`keeps twenty recent connections usable with quiet attribution at ${width}px`, async ({ page, browserName }) => {
+  test(`keeps twenty recent connections usable without stock attribution at ${width}px`, async ({ page, browserName }) => {
     await page.setViewportSize({ width, height: 844 });
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.addInitScript(() => localStorage.setItem('robo-boy-recent-connections', JSON.stringify(
@@ -14,10 +14,7 @@ for (const width of [1280, 320]) {
     await expect(page.getByText('20 saved')).toBeVisible();
     const list = page.locator('.recent-connections-list');
     expect(await list.evaluate(element => element.scrollHeight > element.clientHeight)).toBe(true);
-    const attribution = page.locator('.entry-attribution');
-    await attribution.scrollIntoViewIfNeeded();
-    await expect(attribution).toBeInViewport();
-    await expect(attribution).toHaveText('Powered by Robo-Boy');
+    await expect(page.locator('.entry-attribution')).toHaveCount(0);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.screenshot({ path: `/tmp/roboboy-recents-${browserName}-${width}.png` });
     const oldest = page.getByTitle('Connect to robot-0.local');
@@ -27,7 +24,7 @@ for (const width of [1280, 320]) {
     await oldest.press('Enter');
     await expect(page.getByLabel('Status: Connected')).toBeVisible();
     await page.getByRole('button', { name: /Switch connections, current/ }).click();
-    await expect(page.getByRole('dialog', { name: 'Switch robot connection' }).getByText(/Powered by/)).toHaveText('Powered by Robo-Boy');
+    await expect(page.getByRole('dialog', { name: 'Switch robot connection' }).getByText(/Powered by/)).toHaveCount(0);
   });
 }
 

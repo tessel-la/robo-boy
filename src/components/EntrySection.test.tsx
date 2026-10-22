@@ -45,7 +45,7 @@ describe('EntrySection connection target', () => {
   it('explains multiple workspaces and labels the host form disclosure', () => {
     render(<EntrySection onConnect={vi.fn()} />);
     expect(screen.getByText('Each connection has its own workspace. Add more as you go.')).toBeVisible();
-    expect(screen.getByText(/Powered by/)).toHaveTextContent('Powered by Robo-Boy');
+    expect(screen.queryByText(/Powered by/)).not.toBeInTheDocument();
     const toggle = screen.getByRole('button', { name: /Choose another robot/ });
     expect(toggle).toHaveAttribute('aria-expanded', 'false');
     const form = document.getElementById(toggle.getAttribute('aria-controls')!);
