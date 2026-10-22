@@ -109,7 +109,7 @@ export const generateThemeCss = (theme: CustomTheme): string => {
   const text = colors.text || (isColorDark(background) ? '#ffffff' : '#000000');
   const border = colors.border || (isColorDark(background) ? '#555555' : '#cccccc');
   const cardBg = colors.cardBg || (isColorDark(background) ? '#333333' : '#f8f8f8');
-  const buttonText = colors.buttonText || (isColorDark(primary) ? '#ffffff' : '#000000');
+  const buttonText = readableButtonText(primary, colors.buttonText);
   const fontFamily = resolveThemeFontFamily(theme.fontFamily);
 
   // Basic hover/darker logic (placeholder - replace with library)
@@ -144,6 +144,24 @@ export const generateThemeCss = (theme: CustomTheme): string => {
 };
 
 // --- Simple Color Helper Functions (Replace with a library like tinycolor2 later) ---
+
+// Keep configured text when it meets WCAG AA; otherwise choose the stronger black/white pair.
+function readableButtonText(background: string, preferred?: string): string {
+  const luminance = (hex: string): number => {
+    const rgb = hexToRgb(hex) ?? [0, 0, 0];
+    const linear = rgb.map(channel => {
+      const value = channel / 255;
+      return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+    });
+    return linear[0] * 0.2126 + linear[1] * 0.7152 + linear[2] * 0.0722;
+  };
+  const surface = luminance(background);
+  if (preferred) {
+    const text = luminance(preferred);
+    if ((Math.max(surface, text) + 0.05) / (Math.min(surface, text) + 0.05) >= 4.5) return preferred;
+  }
+  return (surface + 0.05) / 0.05 >= 1.05 / (surface + 0.05) ? '#000000' : '#ffffff';
+}
 
 function lightenDarkenColor(col: string, amt: number): string {
   col = col.startsWith('#') ? col.substring(1) : col;

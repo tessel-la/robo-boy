@@ -8,13 +8,17 @@ export const brand: Branding =
         name: 'Robo-Boy',
         logo: '',
         accent: '',
+        loginEyebrow: 'Your robotics workspace',
         loginTitle: 'Sign in to Robo-Boy',
         loginMessage: 'Use your company account to access your robot workspace.',
+        loginSlides: [],
         supportUrl: '',
         logoWordmark: false,
         theme: null,
       }
     : __ROBOBOY_BRANDING__;
+
+export const companyBranded = brand.name !== 'Robo-Boy' || Boolean(brand.logo);
 
 export const enterpriseEnabled = () => import.meta.env.VITE_ENTERPRISE_LOGIN === 'true';
 export const managedGateway = () => enterpriseEnabled() || Boolean(import.meta.env.VITE_ENTERPRISE_SERVER_URL);

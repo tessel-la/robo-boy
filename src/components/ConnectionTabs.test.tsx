@@ -24,6 +24,7 @@ describe('ConnectionTabs', () => {
     expect(screen.getByTitle('2 open connections')).toBeVisible();
     expect(screen.queryByRole('button', { name: 'Add connection' })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /Switch connections, current/ }));
+    expect(screen.queryByText(/Powered by/)).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Open another connection' }));
     expect(onAdd).toHaveBeenCalledOnce();
     expect(onClose).not.toHaveBeenCalled();

@@ -45,6 +45,7 @@ describe('EntrySection connection target', () => {
   it('explains multiple workspaces and labels the host form disclosure', () => {
     render(<EntrySection onConnect={vi.fn()} />);
     expect(screen.getByText('Each connection has its own workspace. Add more as you go.')).toBeVisible();
+    expect(screen.queryByText(/Powered by/)).not.toBeInTheDocument();
     const toggle = screen.getByRole('button', { name: /Choose another robot/ });
     expect(toggle).toHaveAttribute('aria-expanded', 'false');
     const form = document.getElementById(toggle.getAttribute('aria-controls')!);
@@ -208,6 +209,27 @@ describe('EntrySection connection target', () => {
 describe('EntrySection recent connections', () => {
   beforeEach(() => {
     localStorage.clear();
+  });
+
+  it('keeps an older connection beyond the first five available with its saved ports', () => {
+    localStorage.setItem(
+      RECENT_CONNECTIONS_STORAGE_KEY,
+      JSON.stringify(
+        Array.from({ length: 20 }, (_, index) => ({
+          host: `robot-${index}.local`,
+          rosbridgePort: '19090',
+          lastConnectedAt: index,
+        }))
+      )
+    );
+    const onConnect = vi.fn();
+    render(<EntrySection onConnect={onConnect} />);
+    expect(screen.getAllByRole('button', { name: /^Remove robot-/ })).toHaveLength(20);
+    expect(screen.getByText('20 saved')).toBeVisible();
+    fireEvent.click(screen.getByTitle('Connect to robot-0.local'));
+    expect(onConnect).toHaveBeenCalledWith(
+      expect.objectContaining({ ros2Value: 'robot-0.local', rosbridgePort: '19090' })
+    );
   });
 
   it('connects to a recent host', () => {

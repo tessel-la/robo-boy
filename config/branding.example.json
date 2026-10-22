@@ -3,7 +3,18 @@
   "name": "Example Manufacturing",
   "logo": "/branding/example.svg",
   "accent": "#1765b5",
+  "loginEyebrow": "Company operations",
   "loginTitle": "Your robotics workspace",
   "loginMessage": "Sign in with your Example Manufacturing account to access the robot workspace.",
+  "loginSlides": [
+    {
+      "title": "Your robotics workspace",
+      "message": "Sign in with your Example Manufacturing account to access the robot workspace."
+    },
+    {
+      "title": "Your robots. One workspace.",
+      "message": "Connect to your fleet and choose the tools for your next task."
+    }
+  ],
   "supportUrl": "https://example.com/support"
 }

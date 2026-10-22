@@ -12,7 +12,8 @@ test.describe('Entry Page', () => {
         await expect(page.locator('.entry-section')).toBeVisible();
 
         // Check for branding elements
-        await expect(page.locator('text=robo-boy')).toBeVisible();
+        await expect(page.getByRole('heading', { level: 1, name: /Robo\s*-\s*Boy/i })).toBeVisible();
+        await expect(page.locator('.entry-attribution')).toHaveCount(0);
     });
 
     test('should have Quick Connect button', async ({ page }) => {

@@ -1,6 +1,33 @@
 import { expect, test } from '@playwright/test';
 import { installRosMock } from './helpers/rosMock';
 
+for (const width of [1280, 320]) {
+  test(`keeps twenty recent connections usable without stock attribution at ${width}px`, async ({ page, browserName }) => {
+    await page.setViewportSize({ width, height: 844 });
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.addInitScript(() => localStorage.setItem('robo-boy-recent-connections', JSON.stringify(
+      Array.from({ length: 20 }, (_, index) => ({ host: `robot-${index}.local`, lastConnectedAt: index }))
+    )));
+    await installRosMock(page);
+    await page.goto('/');
+    await expect(page.locator('.recent-connection-row')).toHaveCount(20);
+    await expect(page.getByText('20 saved')).toBeVisible();
+    const list = page.locator('.recent-connections-list');
+    expect(await list.evaluate(element => element.scrollHeight > element.clientHeight)).toBe(true);
+    await expect(page.locator('.entry-attribution')).toHaveCount(0);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.screenshot({ path: `/tmp/roboboy-recents-${browserName}-${width}.png` });
+    const oldest = page.getByTitle('Connect to robot-0.local');
+    await oldest.focus();
+    await expect(oldest).toBeInViewport();
+    expect(await list.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
+    await oldest.press('Enter');
+    await expect(page.getByLabel('Status: Connected')).toBeVisible();
+    await page.getByRole('button', { name: /Switch connections, current/ }).click();
+    await expect(page.getByRole('dialog', { name: 'Switch robot connection' }).getByText(/Powered by/)).toHaveCount(0);
+  });
+}
+
 for (const width of [1280, 540, 390, 320]) {
   test(`discovers and switches multiple connections at ${width}px`, async ({ page, browserName }) => {
     await page.setViewportSize({ width, height: 844 });

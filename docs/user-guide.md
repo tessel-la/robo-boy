@@ -10,7 +10,7 @@
 
 Open Robo-Boy and use **Quick Connect** for the current Robo-Boy host's proxy routes, or **Choose another robot** to enter a host or IP address. In the desktop app's first launch, the address field is shown directly. The address identifies the ROS backend for rosbridge, video, and mesh endpoints. Expand **Connection ports** when those services use ports other than the defaults. ROS domain IDs are configured on the robot, not in Robo-Boy's connection form.
 
-Successful Host or IP connections are saved on the landing page as recent machines, including the service ports used for that machine. Use a recent entry to reconnect, or remove it from the list when it is no longer useful.
+Successful Host or IP connections are saved on the landing page as recent machines, including the service ports used for that machine. Robo-Boy keeps the 20 most recent hosts; scroll the list to reach older entries. Use a recent entry to reconnect, or remove it from the list when it is no longer useful. Existing saved connections are preserved when upgrading; entries already discarded by an older version cannot be recovered.
 
 After rosbridge connects, the main control view discovers available ROS resources and enables the camera, 3D, behavior-tree, and control-pad interfaces.
 
