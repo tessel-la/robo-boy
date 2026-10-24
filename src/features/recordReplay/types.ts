@@ -17,6 +17,8 @@ export interface ReplayMessage {
   topic: string;
   time: bigint;
   message: Record<string, unknown>;
+  /** Bounded acquisition-time TF samples restored alongside the latest scene state on seek. */
+  tfHistory?: unknown[];
 }
 /** A recording on the ROS host, replayed in place with range requests instead of being copied first. */
 export interface RemoteBag {

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import type { TfHistory, TransformResult } from './tfHistory';
 
 // Interface for storing transforms using THREE types within ROSLIB container
 export interface TransformStore {
@@ -10,6 +11,7 @@ export interface TransformStore {
       rotation: THREE.Quaternion;
     };
     isStatic: boolean;
+    stamp?: bigint;
   };
 }
 
@@ -306,12 +308,15 @@ export class CustomTFProvider {
   private transforms: TransformStore; // Stores THREE.Vector3 and THREE.Quaternion
   private callbacks: Map<string, Set<(transform: any | null) => void>>; // Callbacks expect ROSLIB structure
   private disposed = false;
+  private timedCallbacks = new Set<() => void>();
+  private stopHistory?: () => void;
 
-  constructor(/*ros: Ros,*/ fixedFrame: string, initialTransforms: TransformStore) {
+  constructor(fixedFrame: string, initialTransforms: TransformStore, private history?: TfHistory) {
     // this.ros = ros; // Removed ROS dependency if not strictly needed by provider itself
     this.fixedFrame = normalizeFrameId(fixedFrame);
     this.transforms = initialTransforms;
     this.callbacks = new Map();
+    this.stopHistory = history?.subscribe(() => this.notifyTimedTransforms());
     console.log(`[CustomTFProvider] Initialized with fixedFrame: ${this.fixedFrame}`);
   }
 
@@ -322,6 +327,7 @@ export class CustomTFProvider {
     const changedFrames = knownChangedFrames ?? getChangedFrames(oldTransforms, newTransforms);
 
     this.transforms = newTransforms;
+    this.notifyTimedTransforms();
 
     if (changedFrames.size > 0 && this.callbacks.size > 0) {
       const fixedFrameChanged =
@@ -369,6 +375,7 @@ export class CustomTFProvider {
 
     // Update the frame first
     this.fixedFrame = normalizedNewFrame;
+    this.notifyTimedTransforms();
 
     // Now update all callbacks - this must happen after the frame is updated
     // so lookupTransform uses the new fixed frame
@@ -478,12 +485,37 @@ export class CustomTFProvider {
     return result;
   }
 
+  private notifyTimedTransforms() {
+    this.timedCallbacks.forEach(resolve => {
+      try { resolve(); }
+      catch (error) { console.error('[CustomTFProvider] Timestamped TF callback failed:', error); }
+    });
+  }
+
+  /** Sensor geometry is fixed at acquisition time; URDF/axes retain the existing latest API. */
+  watchTransform(frameId: string, stamp: bigint, callback: (result: TransformResult) => void): () => void {
+    if (this.disposed) return () => {};
+    const resolve = () => {
+      if (stamp === 0n) {
+        const transform = this.lookupTransform(this.fixedFrame, frameId);
+        callback(transform ? { transform, error: null } : { transform: null, error: `No TF path from ${frameId} to ${this.fixedFrame}.` });
+      } else callback(this.history?.lookup(this.fixedFrame, frameId, stamp)
+        ?? { transform: null, error: 'Timestamped TF history is unavailable.' });
+    };
+    this.timedCallbacks.add(resolve);
+    try { resolve(); }
+    catch (error) { this.timedCallbacks.delete(resolve); throw error; }
+    return () => { this.timedCallbacks.delete(resolve); };
+  }
+
   dispose() {
     if (this.disposed) return;
     this.disposed = true;
     console.log("[CustomTFProvider] Disposing provider.");
     this.transforms = {}; // Clear transforms
     this.callbacks.clear(); // Clear callbacks
+    this.stopHistory?.();
+    this.timedCallbacks.clear();
   }
 
   // Helper method to convert THREE.js transform to ROSLIB format for callbacks

@@ -31,6 +31,7 @@ interface SettingsPopupProps {
   onEditVisualization?: (id: string) => void;
   onUpdateVisualizationTopic?: (id: string, newTopic: string) => void;
   allTopics: TopicInfo[];
+  visualizationStatus?: Record<string, string | null>;
 }
 
 /** Each section collapses on its own; the open ones share the remaining height so the frame
@@ -126,6 +127,7 @@ const SettingsPopup: React.FC<SettingsPopupProps> = ({
   tfDisplay,
   onTfDisplayChange,
   activeVisualizations,
+  visualizationStatus,
   onRemoveVisualization,
   onAddVisualizationClick,
   onEditVisualization,
@@ -430,6 +432,7 @@ const SettingsPopup: React.FC<SettingsPopupProps> = ({
 
                 return (
                   <li key={viz.id} className="visualization-item">
+                    {visualizationStatus?.[viz.id] && <p role="status" className="visualization-status">{visualizationStatus[viz.id]}</p>}
                     <div className="visualization-item-heading">
                       <span className="viz-type">{TYPE_LABELS[viz.type]}</span>
                       <div className="visualization-item-actions">

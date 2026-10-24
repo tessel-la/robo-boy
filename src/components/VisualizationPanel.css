@@ -709,3 +709,8 @@ input[type='number'].scale-field-number:disabled {
     font-size: 14px;
   }
 }
+.visualization-status {
+  font-size: 0.8rem;
+  overflow-wrap: anywhere;
+  color: var(--text-color);
+}

@@ -1,4 +1,5 @@
 import { McapIndexedReader } from '@mcap/core';
+import { TF_HISTORY_NS, TF_SAMPLES_PER_FRAME, TF_MAX_FRAMES } from '../../utils/tfHistoryLimits';
 import { BlobReadable } from '@mcap/browser';
 import { parse } from '@foxglove/rosmsg';
 import { MessageReader as Ros2Reader } from '@foxglove/rosmsg2-serialization';
@@ -14,7 +15,7 @@ export interface TimedMessage extends ReplayMessage {
 }
 const NS = 1_000_000_000n;
 /** tf2 keeps 10 s by default; older dynamic transforms are stale for every consumer. */
-const TF_LOOKBACK = 30n * NS;
+const TF_LOOKBACK = TF_HISTORY_NS;
 
 /**
  * Give panels the message shapes rosbridge delivers live: int64 as numbers (bigint would break their
@@ -118,22 +119,29 @@ export class BagReader {
     const result: ReplayMessage[] = [];
     for (const topic of topics) {
       if (cancelled()) return [];
-      if (topic !== '/tf' && topic !== '/tf_static') {
+      if (topic !== '/tf' && topic !== '/tf_static' && topic !== '/roboboy/tf') {
         for await (const item of this.read(this.info.start, time, [topic], true)) {
           result.push({ topic: item.topic, time: item.time, message: item.message });
           break;
         }
         continue;
       }
-      const from = topic === '/tf' && time - TF_LOOKBACK > this.info.start ? time - TF_LOOKBACK : this.info.start;
+      const from = topic !== '/tf_static' && time - TF_LOOKBACK > this.info.start ? time - TF_LOOKBACK : this.info.start;
       const frames = new Map<string, unknown>();
+      const history: unknown[] = [];
+      const counts = new Map<string, number>();
       for await (const item of this.read(from, time, [topic], true)) {
         if (cancelled()) return [];
         for (const transform of (item.message.transforms ?? []) as { child_frame_id: string }[]) {
-          if (!frames.has(transform.child_frame_id)) frames.set(transform.child_frame_id, transform);
+          if (!frames.has(transform.child_frame_id) && frames.size < TF_MAX_FRAMES) frames.set(transform.child_frame_id, transform);
+          const count = counts.get(transform.child_frame_id) ?? 0;
+          if (topic !== '/tf_static' && frames.has(transform.child_frame_id) && count < TF_SAMPLES_PER_FRAME && history.length < 8192) {
+            history.push(transform);
+            counts.set(transform.child_frame_id, count + 1);
+          }
         }
       }
-      if (frames.size) result.push({ topic, time, message: { transforms: [...frames.values()] } });
+      if (frames.size) result.push({ topic, time, message: { transforms: [...frames.values()] }, ...(history.length ? { tfHistory: history } : {}) });
     }
     return result.sort((a, b) => a.time < b.time ? -1 : a.time > b.time ? 1 : 0);
   }

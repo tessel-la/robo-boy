@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, memo } from 'react';
+import React, { useCallback, useEffect, useRef, useState, memo } from 'react';
 // Revert to using namespace for roslib types
 import { Ros } from 'roslib';
 import * as THREE from 'three'; // Keep THREE import for potential use, though ROS3D handles Points creation
@@ -152,6 +152,10 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({
   // State for modular visualizations
   const [visualizations, setVisualizations] = useState<VisualizationConfig[]>(initialState.visualizations);
   const [allTopics, setAllTopics] = useState<TopicInfo[]>([]); // Store all topics
+  const [visualizationStatus, setVisualizationStatus] = useState<Record<string, string | null>>({});
+  const reportVisualizationStatus = useCallback((id: string, status: string | null) => {
+    setVisualizationStatus(previous => previous[id] === status ? previous : { ...previous, [id]: status });
+  }, []);
 
   // Save visualization state whenever visualizations, fixed frame, or displayed TF frames change
   useEffect(() => {
@@ -229,6 +233,7 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({
   };
 
   const removeVisualization = (idToRemove: string) => {
+    setVisualizationStatus(previous => { const next = { ...previous }; delete next[idToRemove]; return next; });
     setVisualizations((prev: VisualizationConfig[]) => prev.filter((viz: VisualizationConfig) => viz.id !== idToRemove));
     console.log("Removed visualization with ID:", idToRemove);
   };
@@ -540,6 +545,8 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({
             <React.Fragment key={viz.id}>
               <PointCloudViz
                 ros={ros}
+                visualizationId={viz.id}
+                onStatus={reportVisualizationStatus}
                 isRosConnected={isRosConnected}
                 ros3dViewer={ros3dViewer}
                 customTFProvider={customTFProvider}
@@ -597,6 +604,8 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({
           return (
             <React.Fragment key={viz.id}>
               <PoseStampedViz
+                visualizationId={viz.id}
+                onStatus={reportVisualizationStatus}
                 ros={ros}
                 isRosConnected={isRosConnected}
                 ros3dViewer={ros3dViewer}
@@ -633,6 +642,7 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({
         classNames={{ panel: 'visualization-menu-panel' }}
         menuContent={
           <SettingsPopup
+            visualizationStatus={visualizationStatus}
             onClose={closeSettingsPopup}
             fixedFrame={fixedFrame}
             availableFrames={availableFrames}

@@ -4,6 +4,7 @@ import * as THREE from 'three';
 
 import { runSerializedRosapi } from './rosapiQueue';
 import { normalizeFrameId, type TransformStore } from './tfUtils';
+import { rosStamp, TfHistory } from './tfHistory';
 
 /** Robo-Boy's ROS stack republishes /tf here, coalesced to one message per display frame
  * (infra/ros/tf_relay.py). A robot's /tf can run at kHz; forwarded one-for-one it saturates
@@ -110,15 +111,20 @@ function parseTransform(candidate: unknown, isStatic: boolean): {
     return null;
   }
 
+  const stamp = rosStamp((stamped.header as { stamp?: unknown })?.stamp);
+  const quaternion = new THREE.Quaternion(rx, ry, rz, rw);
+  if (stamp === null || childFrame === parentFrame || !Number.isFinite(quaternion.lengthSq()) || quaternion.lengthSq() < 1e-12) return null;
+  quaternion.normalize();
   return {
     childFrame,
     entry: {
       parentFrame,
       transform: {
         translation: new THREE.Vector3(tx, ty, tz),
-        rotation: new THREE.Quaternion(rx, ry, rz, rw),
+        rotation: quaternion,
       },
       isStatic,
+      ...(stamp !== null && stamp > 0n ? { stamp } : {}),
     },
   };
 }
@@ -146,13 +152,18 @@ export function mergeTfMessage(
 
   transforms.forEach(candidate => {
     const parsed = parseTransform(candidate, isStatic);
-    if (!parsed || entriesEqual(next[parsed.childFrame], parsed.entry)) return;
+    if (!parsed) return;
+    const previous = next[parsed.childFrame];
+    if (!isStatic && previous?.stamp !== undefined && parsed.entry.stamp !== undefined
+      && previous.stamp > parsed.entry.stamp) return;
+    const geometryChanged = !entriesEqual(previous, parsed.entry);
+    if (!geometryChanged && previous?.stamp === parsed.entry.stamp) return;
     if (next === current) next = { ...current };
     next[parsed.childFrame] = parsed.entry;
-    changedFrames.add(parsed.childFrame);
+    if (geometryChanged) changedFrames.add(parsed.childFrame);
   });
 
-  return changedFrames.size > 0 ? { transforms: next, changedFrames } : null;
+  return next !== current ? { transforms: next, changedFrames } : null;
 }
 
 /**
@@ -164,6 +175,7 @@ export function mergeTfMessage(
  * comes back.
  */
 class SharedTfStream {
+  readonly history = new TfHistory();
   private transforms: TransformStore = {};
   private listeners = new Set<TfStreamListener>();
   private messageListeners = new Set<TfMessageListener>();
@@ -220,6 +232,7 @@ class SharedTfStream {
     this.stop();
     this.transforms = {};
     this.staticMessages.clear();
+    this.history.clear();
     if (forgotten.size > 0) {
       this.listeners.forEach(listener => {
         try {
@@ -244,6 +257,7 @@ class SharedTfStream {
       if (source.known) this.knownSource = source;
       if (generation !== this.generation || !this.running) return;
       const { name } = source;
+      this.history.source = name;
       this.dynamicTopic = new ROSLIB.Topic({
         ros: this.ros,
         name,
@@ -286,6 +300,7 @@ class SharedTfStream {
     this.transforms = Object.fromEntries(
       Object.entries(this.transforms).filter(([, entry]) => entry.isStatic)
     );
+    this.history.clear(true);
   }
 
   private handleDynamicMessage = (message: unknown): void => {
@@ -297,6 +312,7 @@ class SharedTfStream {
   };
 
   private consume(message: unknown, isStatic: boolean): void {
+    this.history.ingest(message, isStatic);
     if (isStatic) {
       const transforms = (message as { transforms?: unknown[] } | null)?.transforms;
       if (Array.isArray(transforms)) {
@@ -342,6 +358,10 @@ const streamFor = (ros: Ros): SharedTfStream => {
 
 export function subscribeToTfStream(ros: Ros, listener: TfStreamListener): () => void {
   return streamFor(ros).subscribe(listener);
+}
+
+export function getTfHistory(ros: Ros): TfHistory {
+  return streamFor(ros).history;
 }
 
 export function subscribeToTfMessages(ros: Ros, listener: TfMessageListener): () => void {

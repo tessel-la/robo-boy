@@ -1,205 +1,148 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { renderHook, waitFor } from '@testing-library/react';
-import { usePoseStampedClient } from './usePoseStampedClient';
+import { act, renderHook } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as THREE from 'three';
-import { Topic } from 'roslib';
+import type { Ros } from 'roslib';
+import { usePoseStampedClient } from './usePoseStampedClient';
 import { CustomTFProvider } from '../utils/tfUtils';
+import { TfHistory } from '../utils/tfHistory';
+import type { Viewer } from '../utils/ros3d';
 
-// Mock dependencies
+const topics = vi.hoisted(() => [] as { receive: (message: unknown) => void; unsubscribe: ReturnType<typeof vi.fn> }[]);
 vi.mock('roslib', () => ({
-    Ros: vi.fn(),
-    Topic: vi.fn(),
+  Topic: vi.fn(function () {
+    const topic = {
+      receive: (_message: unknown) => {},
+      subscribe: (callback: (message: unknown) => void) => {
+        topic.receive = callback;
+      },
+      unsubscribe: vi.fn(),
+    };
+    topics.push(topic);
+    return topic;
+  }),
 }));
 
-// Mock THREE
-vi.mock('three', async () => {
-    const actual = await vi.importActual<typeof import('three')>('three');
-    return {
-        ...actual,
-        Group: class {
-            visible = true;
-            add = vi.fn();
-            remove = vi.fn();
-            clear = vi.fn();
-            position = { set: vi.fn(), copy: vi.fn() };
-            quaternion = { set: vi.fn(), copy: vi.fn() };
-            children = [];
-        },
-        Mesh: class {
-            rotateZ = vi.fn();
-            position = { set: vi.fn() };
-        },
-        CylinderGeometry: class { },
-        ConeGeometry: class { },
-        MeshLambertMaterial: class { },
-        AxesHelper: class { },
-        Vector3: class {
-            x: number; y: number; z: number;
-            constructor(x = 0, y = 0, z = 0) { this.x = x; this.y = y; this.z = z; }
-            clone() { return new (this.constructor as any)(this.x, this.y, this.z); }
-        },
-        Quaternion: class {
-            x: number; y: number; z: number; w: number;
-            constructor(x = 0, y = 0, z = 0, w = 1) { this.x = x; this.y = y; this.z = z; this.w = w; }
-        },
-        Color: class {
-            constructor(hex: any) { }
-        },
-        Line: class {
-            geometry = { dispose: vi.fn() };
-            material = { dispose: vi.fn() };
-        },
-        BufferGeometry: class {
-            setFromPoints = vi.fn().mockReturnThis();
-            dispose = vi.fn();
-        },
-        LineBasicMaterial: class {
-            dispose = vi.fn();
-        }
-    };
+const tf = (sec: number, x: number, angle = 0) => ({
+  transforms: [
+    {
+      header: { frame_id: 'map', stamp: { sec, nanosec: 0 } },
+      child_frame_id: 'camera',
+      transform: {
+        translation: { x, y: 0, z: 0 },
+        rotation: new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), angle),
+      },
+    },
+  ],
+});
+const pose = (sec = 2, frame_id = 'camera') => ({
+  header: { frame_id, stamp: { sec, nanosec: 0 } },
+  pose: { position: { x: 1, y: 0, z: 0 }, orientation: { x: 0, y: 0, z: 0, w: 1 } },
 });
 
-// Mock ROS3D
-vi.mock('../utils/ros3d', () => ({
-    Viewer: vi.fn(),
-    Axes: class {
-        position = { copy: vi.fn() };
-        quaternion = { copy: vi.fn() };
-    }
-}));
+function setup(options = {}) {
+  const history = new TfHistory();
+  const provider = new CustomTFProvider('map', {}, history);
+  const scene = new THREE.Scene();
+  const requestRender = vi.fn();
+  const onStatus = vi.fn();
+  const viewer = {
+    scene,
+    addObject: (object: THREE.Object3D) => scene.add(object),
+    requestRender,
+  } as unknown as Viewer;
+  const props = {
+    ros: { isConnected: true } as Ros,
+    isRosConnected: true,
+    ros3dViewer: { current: viewer },
+    customTFProvider: { current: provider },
+    fixedFrame: 'map',
+    topic: '/pose',
+    options,
+    onStatus,
+  };
+  const hook = renderHook(value => usePoseStampedClient(value), { initialProps: props });
+  const receive = (message: unknown) => act(() => topics[topics.length - 1].receive(message));
+  return { ...hook, history, provider, scene, onStatus, receive, requestRender, props };
+}
 
-describe('usePoseStampedClient', () => {
-    let mockRos: any;
-    let mockViewer: any;
-    let mockScene: any;
-    let defaultProps: any;
+beforeEach(() => {
+  topics.length = 0;
+  vi.clearAllMocks();
+});
+describe('PoseStamped spatial rendering', () => {
+  it('composes source-frame translation and rotation with the local pose', () => {
+    const s = setup();
+    s.history.ingest(tf(2, 10, Math.PI / 2), false);
+    s.receive(pose());
+    const group = s.scene.children[0];
+    expect(group.visible).toBe(true);
+    const arrow = group.children[0];
+    expect(arrow.position.x).toBeCloseTo(10);
+    expect(arrow.position.y).toBeCloseTo(1);
+    expect(
+      arrow.quaternion.angleTo(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), Math.PI / 2))
+    ).toBeCloseTo(0);
+    expect(s.onStatus).toHaveBeenLastCalledWith(null);
+    s.unmount();
+    s.provider.dispose();
+  });
 
-    beforeEach(() => {
-        vi.clearAllMocks();
+  it('waits for bracketed TF, then leaves the observation anchored at acquisition time', () => {
+    const s = setup({ trailEnabled: true, showTrail: true });
+    s.history.ingest(tf(1, 10), false);
+    s.receive(pose());
+    const group = s.scene.children[0];
+    expect(group.visible).toBe(false);
+    expect(s.onStatus).toHaveBeenLastCalledWith(expect.stringContaining('Waiting for TF'));
+    act(() => s.history.ingest(tf(3, 30), false));
+    expect(group.visible).toBe(true);
+    expect(group.children[0].position.x).toBe(21);
+    act(() => s.history.ingest(tf(4, 100), false));
+    expect(group.children[0].position.x).toBe(21);
+    s.receive(pose(3));
+    const trail = group.children.find(child => child instanceof THREE.Line) as THREE.Line;
+    expect(trail.geometry.getAttribute('position').count).toBe(2);
+    expect(trail.geometry.getAttribute('position').getX(0)).toBe(21);
+    s.unmount();
+    s.provider.dispose();
+  });
 
-        mockRos = { isConnected: true };
-        mockScene = {
-            add: vi.fn(),
-            remove: vi.fn(),
-        };
-        mockViewer = {
-            scene: mockScene,
-            addObject: vi.fn(),
-        };
+  it('supports zero stamps and reports malformed headers/poses without stale geometry', () => {
+    const s = setup({ visualizationType: 'axes' });
+    s.receive(pose(0, 'map'));
+    expect(s.scene.children[0].visible).toBe(true);
+    s.receive(pose(2, ''));
+    expect(s.scene.children[0].visible).toBe(false);
+    expect(s.onStatus).toHaveBeenLastCalledWith('Message frame_id is missing.');
+    s.receive({ ...pose(), pose: { ...pose().pose, position: { x: Number.NaN, y: 0, z: 0 } } });
+    expect(s.onStatus).toHaveBeenLastCalledWith('Pose contains invalid coordinates.');
+    s.unmount();
+    s.provider.dispose();
+  });
 
-        defaultProps = {
-            ros: mockRos,
-            isRosConnected: true,
-            ros3dViewer: { current: mockViewer },
-            customTFProvider: { current: {} }, // Mock TF Provider ref
-            topic: '/pose',
-            fixedFrame: 'map',
-            options: {
-                visualizationType: 'arrow',
-                scale: 1.0,
-                color: '#ff0000',
-            }
-        };
+  it('detaches old ROS/TF callbacks and disposes geometry across source changes', () => {
+    const s = setup();
+    s.history.ingest(tf(2, 10), false);
+    s.receive(pose());
+    const group = s.scene.children[0];
+    const arrow = group.children[0];
+    const geometry = (arrow.children[0] as THREE.Mesh).geometry;
+    const dispose = vi.spyOn(geometry, 'dispose');
+    const late = topics[0].receive;
+    const nextProvider = new CustomTFProvider('map', {}, new TfHistory());
+    s.rerender({ ...s.props, ros: { isConnected: true } as Ros, customTFProvider: { current: nextProvider } });
+    expect(topics[0].unsubscribe).toHaveBeenCalledOnce();
+    expect(dispose).toHaveBeenCalledOnce();
+    const next = s.scene.children[0];
+    act(() => {
+      late(pose());
+      s.history.ingest(tf(2, 99), false);
     });
-
-    it('should initialize and subscribe when connected', () => {
-        const mockSubscribe = vi.fn();
-        (Topic as any).mockImplementation(function () {
-            return {
-                subscribe: mockSubscribe,
-                unsubscribe: vi.fn(),
-            };
-        });
-
-        renderHook(() => usePoseStampedClient(defaultProps));
-
-        expect(mockViewer.addObject).toHaveBeenCalled();
-        expect(Topic).toHaveBeenCalledWith(expect.objectContaining({
-            name: '/pose',
-        }));
-        expect(mockSubscribe).toHaveBeenCalled();
-    });
-
-    it('should process message and update visualization (arrow)', () => {
-        let messageCallback: any;
-        (Topic as any).mockImplementation(function () {
-            return {
-                subscribe: (cb: any) => { messageCallback = cb; },
-                unsubscribe: vi.fn(),
-            };
-        });
-
-        const { result } = renderHook(() => usePoseStampedClient(defaultProps));
-
-        const msg = {
-            header: { frame_id: 'map' },
-            pose: {
-                position: { x: 1, y: 2, z: 3 },
-                orientation: { x: 0, y: 0, z: 0, w: 1 },
-            }
-        };
-
-        if (messageCallback) {
-            messageCallback(msg);
-        }
-
-        // Check internal logic via side effects if possible
-        // or inspect the returned refs/objects if they are exposed
-        // The hook returns visualizationGroup, let's check that
-        const group = result.current.visualizationGroup;
-        expect(group).toBeDefined();
-        if (group) {
-            expect(group.add).toHaveBeenCalled(); // Should have added arrow parts
-        }
-    });
-
-    it('should handle axes visualization type', () => {
-        let messageCallback: any;
-        (Topic as any).mockImplementation(function () {
-            return {
-                subscribe: (cb: any) => { messageCallback = cb; },
-                unsubscribe: vi.fn(),
-            };
-        });
-
-        const propsWithAxes = {
-            ...defaultProps,
-            options: { ...defaultProps.options, visualizationType: 'axes' }
-        };
-
-        const { result } = renderHook(() => usePoseStampedClient(propsWithAxes));
-
-        if (messageCallback) {
-            messageCallback({
-                header: { frame_id: 'map' },
-                pose: {
-                    position: { x: 1, y: 2, z: 3 },
-                    orientation: { x: 0, y: 0, z: 0, w: 1 },
-                }
-            });
-        }
-
-        const group = result.current.visualizationGroup;
-        expect(group).toBeDefined();
-        if (group) {
-            expect(group.add).toHaveBeenCalled(); // Should have added axes
-        }
-    });
-
-    it('should cleanup on unmount', () => {
-        const mockUnsubscribe = vi.fn();
-        (Topic as any).mockImplementation(function () {
-            return {
-                subscribe: vi.fn(),
-                unsubscribe: mockUnsubscribe,
-            };
-        });
-
-        const { unmount } = renderHook(() => usePoseStampedClient(defaultProps));
-
-        unmount();
-
-        expect(mockUnsubscribe).toHaveBeenCalled();
-        expect(mockScene.remove).toHaveBeenCalled();
-    });
+    expect(next.visible).toBe(false);
+    expect(next.children).toHaveLength(0);
+    s.unmount();
+    expect(s.scene.children).toHaveLength(0);
+    nextProvider.dispose();
+    s.provider.dispose();
+  });
 });

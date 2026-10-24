@@ -44,6 +44,7 @@ interface UsePointCloudClientProps {
   material?: PointCloudMaterialOptions;
   options?: PointCloudClientOptions;
   clientRef?: React.MutableRefObject<ROS3D.PointCloud2 | null>;
+  onStatus?: (status: string | null) => void;
 }
 
 // Custom Hook for managing the PointCloud2 client lifecycle
@@ -57,6 +58,7 @@ export function usePointCloudClient({
   material = {},
   options = {},
   clientRef,
+  onStatus,
 }: UsePointCloudClientProps) {
   const pointsClient = useRef<ROS3D.PointCloud2 | null>(null);
 
@@ -209,6 +211,7 @@ export function usePointCloudClient({
       queue_length: 1,
       fixedFrame: fixedFrame,
       requestRender: ros3dViewer.current.requestRender,
+      onStatus,
       messageHandler: function (message: any) {
         try {
           this.fixedFrame = fixedFrame;
@@ -333,7 +336,7 @@ export function usePointCloudClient({
       ros3dViewer.current?.requestRender?.();
     };
 
-  }, [ros, isRosConnected, ros3dViewer, customTFProvider, selectedPointCloudTopic, material, options, fixedFrame]);
+  }, [ros, isRosConnected, ros3dViewer, customTFProvider, selectedPointCloudTopic, material, options, fixedFrame, onStatus]);
 
   return {
     axisRanges: axisRanges.current,
@@ -375,14 +378,15 @@ function setupAxisRangeUpdates(
       const geometry = pointsObj.geometry as THREE.BufferGeometry;
       const positions = geometry.getAttribute('position') as THREE.BufferAttribute;
 
-      if (positions && positions.count > 0) {
+      if (positions && geometry.drawRange.count > 0) {
         let min = Infinity;
         let max = -Infinity;
 
-        const sampleCount = Math.min(positions.count, 1000);
-        const sampleStep = Math.max(1, Math.floor(positions.count / sampleCount));
+        const count = Math.min(positions.count, geometry.drawRange.count);
+        const sampleCount = Math.min(count, 1000);
+        const sampleStep = Math.max(1, Math.floor(count / sampleCount));
 
-        for (let i = 0; i < positions.count; i += sampleStep) {
+        for (let i = 0; i < count; i += sampleStep) {
           let val;
           if (axisIndex === 0) val = positions.getX(i);
           else if (axisIndex === 1) val = positions.getY(i);
