@@ -5,7 +5,6 @@ import type { Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import { thirdPartyNoticesPlugins } from '../scripts/third-party-notices.mjs';
 import { VitePWA } from 'vite-plugin-pwa';
-// import mkcert from 'vite-plugin-mkcert' // Ensure mkcert is commented out/removed
 
 const packagedHtmlCompatibilityPlugin = (): Plugin => ({
   name: 'packaged-html-compatibility',
@@ -138,11 +137,6 @@ export default defineConfig(({ mode }) => {
           rewrite: path => path.replace(/^\/webrtc/, ''),
         },
       },
-      // https: false, // Ensure HTTPS is disabled (default is false anyway)
-      // hmr: { // Optional: Specify host for Hot Module Replacement if needed
-      //   host: 'localhost', // Browser connects to Caddy on localhost
-      //   protocol: 'wss' // HMR connection should also go through Caddy (WSS)
-      // }
     },
     plugins: [
       react(),
@@ -172,7 +166,6 @@ export default defineConfig(({ mode }) => {
               // The manifest is now defined in the manifest.webmanifest file
             }),
           ]),
-      // mkcert() // Ensure mkcert is commented out/removed
     ],
     build: {
       outDir: process.env.ROBOBOY_DIST_DIR || 'dist',
