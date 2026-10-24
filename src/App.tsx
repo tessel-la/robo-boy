@@ -1,6 +1,5 @@
 import { lazy, Suspense, useState, useEffect, useRef } from 'react';
 import './App.css';
-// import Navbar from './components/Navbar';
 import EntrySection from './components/EntrySection';
 import EnterpriseBoundary from './features/enterprise/EnterpriseBoundary';
 import { brand } from './features/enterprise/config';
