@@ -167,7 +167,7 @@ configuration supports:
 - Company name in the login screen, connection screen, workspace account bar and native title bar
 - A bundled logo under `public/branding/`
 - Login eyebrow (the small label above the heading), heading, explanatory text and HTTPS support link
-- Optional rotating heading/message pairs, with manual navigation and pause controls
+- Optional surprise heading/message pairs, chosen once per login visit
 - A default company theme using the existing custom-theme format, plus an optional wordmark logo
 - Account and sign-out controls in the existing connection menu, without a second workspace header
 
@@ -204,7 +204,8 @@ All copy beneath the company mark belongs to the branding file:
 
 Omit `loginSlides` or set it to `[]` to keep the existing static heading and sentence. A single
 slide is also static. With two or more, the slide pairs replace `loginTitle` and `loginMessage`
-and advance in order every 8 s, wrapping to the start. For example:
+and one pair is chosen randomly when the login screen opens. It stays unchanged until the next
+visit. For example:
 
 ```json
 {
@@ -218,12 +219,18 @@ and advance in order every 8 s, wrapping to the start. For example:
 }
 ```
 
-Operators can pause, resume, or browse messages. Hover pauses temporarily; focusing the navigation
-or selecting a message stops automatic rotation until **Play messages** is selected. Hidden tabs
-stop their timer. Reduced-motion preferences disable automatic rotation while preserving manual
-navigation. The layout reserves room for the longest slide so sign-in controls stay in place.
-Only the active slide is exposed to assistive technology; automatic changes are not announced.
-Timers and preference/visibility listeners are removed when the login screen unmounts.
+There are no arrows, playback controls, timers or automatic changes during a login visit. The
+next visit chooses a different pair when the list contains another distinct message. The app
+remembers only the previous public title/message pair in the versioned, company-scoped
+`robo-boy-login-message-v1:<theme-id>:<company-name>` local-storage key. Corrupt or obsolete values
+are ignored. If storage is unavailable, login still works and same-process visits use a memory
+fallback; non-repetition across app restarts then cannot be guaranteed. Duplicate pairs are treated
+as the same message, so a list of identical pairs cannot produce a different surprise.
+
+Only the chosen heading and its matching supporting text are rendered. Authentication checks,
+errors and other parent rerenders keep the current choice. Web, Electron and Tauri use the same
+component and behavior. Existing-session checks finish before mounting the message, so restoring
+an authenticated workspace does not consume an unseen surprise.
 
 Copy is public plain text, escaped by React. It cannot inject markup, styles, scripts or provider
 settings. Provider button labels still come from the configured authentication providers. These
