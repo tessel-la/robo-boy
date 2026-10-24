@@ -147,7 +147,8 @@ export type ExplorerColumn = 'providers' | 'consumers' | 'rate';
 
 export interface ExplorerConfig {
   version: 1;
-  view: 'resources' | 'graph' | 'health';
+  view: 'resources' | 'graph' | 'health' | 'parameters';
+  parameterNode: string;
   kind: ResourceKind;
   query: string;
   selected: string;
