@@ -20,7 +20,7 @@ from rclpy.action import ActionServer, CancelResponse
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import MultiThreadedExecutor
 from std_msgs.msg import Int32, String
-from rcl_interfaces.msg import Parameter, ParameterValue, ParameterType
+from rcl_interfaces.msg import Parameter, ParameterValue, ParameterType, ParameterDescriptor, FloatingPointRange
 from rcl_interfaces.srv import SetParameters
 from std_srvs.srv import Trigger
 import tornado.ioloop
@@ -40,6 +40,7 @@ async def until(predicate, timeout=15):
 
 
 status_queues = {}
+service_queues = {}
 
 
 async def status(socket, predicate=lambda value: True):
@@ -54,10 +55,22 @@ async def send(socket, **message):
     await socket.write_message(json.dumps(message))
 
 
+async def parameter_call(socket, suffix, service_type, args, token=None):
+    request_id = 'parameter-smoke-' + str(uuid.uuid4())
+    await send(socket, op='call_service', id=request_id, service=suffix if suffix.startswith('/') else '/control_smoke/' + suffix,
+               type=service_type if '/' in service_type else 'rcl_interfaces/srv/' + service_type, args=args, controlToken=token)
+    while True:
+        response = await asyncio.wait_for(service_queues[socket].get(), 15)
+        if response.get('id') == request_id:
+            return response
+
+
 async def smoke():
     external = os.environ.get('CONTROL_SMOKE_EXTERNAL_LOCK') == 'true'
     rclpy.init()
     node = rclpy.create_node('control_smoke')
+    node.declare_parameter('speed', 1.0, ParameterDescriptor(description='Maximum speed',
+                           floating_point_range=[FloatingPointRange(from_value=0.0, to_value=5.0, step=0.0)]))
     group = ReentrantCallbackGroup()
     commands, cancelled = [], []
     node.create_subscription(Int32, '/control_smoke/command', lambda msg: commands.append(msg.data), 10, callback_group=group)
@@ -122,6 +135,7 @@ async def smoke():
                 socket = await tornado.websocket.websocket_connect('ws://127.0.0.1:19090')
                 clients.append(socket)
                 queue = status_queues[socket] = asyncio.Queue()
+                service_queues[socket] = asyncio.Queue()
                 latest = [None]
                 async def consume():
                     while True:
@@ -134,6 +148,8 @@ async def smoke():
                         if message.get('topic') == STATUS_TOPIC:
                             latest[0] = json.loads(message['msg']['data'])
                             queue.put_nowait(latest[0])
+                        elif message.get('op') == 'service_response':
+                            service_queues[socket].put_nowait(message)
                 async def heartbeat():
                     while True:
                         await asyncio.sleep(2)
@@ -156,6 +172,34 @@ async def smoke():
             await until(lambda: authority.owner is not None)
             owner, observer = (a, b) if authority.owner == aid else (b, a)
             lease = await status(owner, lambda value: bool(value['token']))
+            # Wait for rosbridge's own DDS graph; this process seeing its node is not enough.
+            for attempt in range(50):
+                discovered = await parameter_call(observer, '/rosapi/services', 'rosapi_msgs/srv/Services', {})
+                if '/control_smoke/list_parameters' in discovered.get('values', {}).get('services', []):
+                    break
+                await asyncio.sleep(.2)
+            else:
+                raise AssertionError('Parameter fixture was not discovered by rosbridge')
+            listing = await parameter_call(observer, 'list_parameters', 'ListParameters', dict(prefixes=[], depth=0))
+            assert listing['result'] and 'speed' in listing['values']['result']['names'], listing
+            values = await parameter_call(observer, 'get_parameters', 'GetParameters', dict(names=['speed']))
+            assert values['result'] and values['values']['values'][0]['double_value'] == 1.0, values
+            descriptions = await parameter_call(observer, 'describe_parameters', 'DescribeParameters', dict(names=['speed']))
+            descriptor = descriptions['values']['descriptors'][0]
+            assert descriptor['name'] == 'speed' and descriptor['type'] == 3 and not descriptor['read_only'], descriptions
+            assert descriptor['floating_point_range'][0]['to_value'] == 5.0, descriptions
+            update = dict(parameters=[dict(name='speed', value=dict(type=3, double_value=2.0))])
+            rejected = await parameter_call(observer, 'set_parameters_atomically', 'SetParametersAtomically', update)
+            assert not rejected['result'] and node.get_parameter('speed').value == 1.0, rejected
+            updated = await parameter_call(owner, 'set_parameters_atomically', 'SetParametersAtomically', update, lease['token'])
+            assert updated['result'] and updated['values']['result']['successful'], updated
+            assert node.get_parameter('speed').value == 2.0
+            rejected = await parameter_call(owner, 'set_parameters_atomically', 'SetParametersAtomically',
+                                           dict(parameters=[dict(name='speed', value=dict(type=3, double_value=6.0))]), lease['token'])
+            assert rejected['result'] and not rejected['values']['result']['successful'] and rejected['values']['result']['reason'], rejected
+            assert node.get_parameter('speed').value == 2.0
+            await until(lambda: not authority.pending)
+            print('Native ROS 2 parameters passed: observer list/get/describe, lease-gated atomic update and declared-range rejection.')
             await send(observer, op='publish', topic='/control_smoke/command', msg={'data': 99}, controlToken=lease['token'])
             await status(observer, lambda value: bool(value['error']))
             assert commands == [], commands

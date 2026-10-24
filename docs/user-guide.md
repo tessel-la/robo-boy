@@ -57,6 +57,10 @@ Navigation: drag to orbit, scroll to zoom, and pan with a middle- or right-butto
 
 The Data Explorer lists the robot's topics, services, actions and nodes with their publisher, subscriber, client and server counts, measures the traffic of topics you watch, shows message contents and interface schemas, draws who talks to whom, and collects diagnostics, logs and your own topic health rules. From a topic you can open Time Series, 3D, Camera, TF tree or recording settings. Endpoint counts, delivery settings and host-side rates need the ROS inspection companion, which the Docker stack starts; see [Data Explorer](data-explorer.md) for what each measurement means and how to deploy the companion.
 
+In **Parameters**, select a node to inspect typed values and descriptions. Stage edits, choose **Review changes**,
+then **Apply changes** with robot control. Read-only values cannot be edited, and live changes are checked before
+submission. See [parameter browsing and editing](data-explorer.md#parameters) for limits and ROS stack setup.
+
 ### Behavior Trees
 
 The behavior-tree editor provides sequence, selector, and parallel control nodes plus ROS action, service, and topic nodes. Use ROS discovery to populate the palette, configure node parameters, connect nodes from parent to child, and run or stop the tree from the toolbar.

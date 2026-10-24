@@ -244,9 +244,13 @@ export default function EnterpriseBoundary({ children }: { children: ReactNode }
   return (
     <main className="enterprise-login">
       <div className="enterprise-login-content">
-        <section className="enterprise-login-card" aria-labelledby="enterprise-login-title">
+        <section
+          className="enterprise-login-card"
+          aria-labelledby={loading ? undefined : 'enterprise-login-title'}
+          aria-label={loading ? 'Company sign-in' : undefined}
+        >
           <BrandMark />
-          <LoginCopy branding={brand} />
+          {!loading && <LoginCopy branding={brand} />}
           {(error || checkError) && (
             <p role="alert" className="enterprise-error">
               {error || checkError}

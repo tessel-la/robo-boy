@@ -1,4 +1,5 @@
 import type { ExplorerConfig, InspectionSnapshot, Resource, Rule, SchemaField } from './types';
+import { isParameterNodeName } from './parametersModel';
 
 const object = (value: unknown): Record<string, unknown> =>
   value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
@@ -41,7 +42,8 @@ export function sanitizeExplorerConfig(value: unknown): ExplorerConfig {
   }
   return {
     version: 1,
-    view: input.view === 'graph' || input.view === 'health' ? input.view : 'resources',
+    view: input.view === 'graph' || input.view === 'health' || input.view === 'parameters' ? input.view : 'resources',
+    parameterNode: isParameterNodeName(input.parameterNode) ? input.parameterNode : '',
     kind: ['topic', 'service', 'action', 'node'].includes(String(input.kind))
       ? (input.kind as ExplorerConfig['kind'])
       : 'topic',

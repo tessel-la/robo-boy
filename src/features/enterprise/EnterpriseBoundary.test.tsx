@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import EnterpriseBoundary from './EnterpriseBoundary';
 import EnterpriseAccount from './EnterpriseAccount';
 import { getEnterpriseSession, setEnterpriseSession } from './session';
+import { brand } from './config';
 
 const carrier = window as typeof window & { roboBoyDesktop?: unknown };
 afterEach(() => {
@@ -109,6 +110,40 @@ describe('EnterpriseBoundary', () => {
     expect(cleanup).toHaveBeenCalledOnce();
     expect(fetch.mock.calls.some(([url]) => url.endsWith('/auth/logout'))).toBe(true);
     expect(getEnterpriseSession()).toBeNull();
+  });
+  it('does not consume a surprise while restoring an existing session', async () => {
+    enable();
+    const original = brand.loginSlides;
+    const key = `robo-boy-login-message-v1:${brand.theme?.id ?? ''}:${brand.name}`;
+    const previous = localStorage.getItem(key);
+    const messages = [
+      { title: 'First welcome.', message: 'First message.' },
+      { title: 'Next welcome.', message: 'Next message.' },
+    ];
+    brand.loginSlides = messages;
+    localStorage.setItem(key, JSON.stringify([messages[0].title, messages[0].message]));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => new Response(JSON.stringify(url.endsWith('/auth/logout') ? {} : user())))
+    );
+    try {
+      render(
+        <EnterpriseBoundary>
+          <TrackedWorkspace cleanup={() => {}} />
+        </EnterpriseBoundary>
+      );
+      expect(screen.queryByRole('heading')).not.toBeInTheDocument();
+      await screen.findByText('Robot workspace');
+      expect(localStorage.getItem(key)).toBe(JSON.stringify([messages[0].title, messages[0].message]));
+      fireEvent.click(screen.getByRole('button', { name: 'Sign out' }));
+      await screen.findByRole('button', { name: 'Sign in with your company account' });
+      expect(screen.getByRole('heading')).toHaveTextContent(messages[1].title);
+      expect(screen.getByText(messages[1].message)).toBeInTheDocument();
+    } finally {
+      brand.loginSlides = original;
+      if (previous === null) localStorage.removeItem(key);
+      else localStorage.setItem(key, previous);
+    }
   });
   it('fails closed on service outages instead of exposing robot controls', async () => {
     enable();
