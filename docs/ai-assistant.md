@@ -91,7 +91,6 @@ to the live reply without pulling users away from older messages. Multi-step tas
 with Pending, In progress, Waiting for approval/input, Blocked and Done states. Approval is not
 completion. Agent questions remain in the transcript after the user's answer. Closed activity/context
 disclosures do not render invisible list markers into copied chat text.
-See [source comparison and remaining boundaries](assistant-ui-review.md).
 
 The assistant follows the handbook's [Robo-Boy product UI](https://github.com/tessel-la/tessella-handbook/blob/main/design/product-ui.md):
 runtime theme surfaces and fonts, restrained message tinting, shared panel resize controls,
@@ -271,9 +270,6 @@ goal is rejected and returned to the model for correction. Retrieved schemas che
 field names/types and nested arrays. Joint-trajectory goals additionally need distinct joint
 names, one finite position per joint, and increasing positive times. These checks do not certify
 joint limits, collision clearance or robot safety; motion remains in the reviewed Pad/BT flow.
-
-See [assistant investigation](assistant-investigation.md) for source comparisons and the protocol
-choice.
 
 Left to general ROS knowledge the model answers app questions from outside the app: asked whether Robo-Boy could measure the distance between two frames, it replied "write a `tf2_ros` node" — for something computed here from live `/tf` before a provider is called.
 
