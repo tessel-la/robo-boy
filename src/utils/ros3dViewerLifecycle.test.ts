@@ -38,6 +38,13 @@ describe('ROS3D viewer render lifecycle', () => {
     document.body.innerHTML = '';
   });
 
+  it('rejects a missing viewer container before allocating rendering resources', async () => {
+    const { Viewer } = await import('./ros3d');
+    expect(() => new Viewer({ divID: 'missing', width: 640, height: 480, antialias: true }))
+      .toThrow('Element with ID missing not found');
+    expect(scheduledFrames).toHaveLength(0);
+  });
+
   it('coalesces invalidations and stops after rendering the latest scene state', async () => {
     const { Viewer } = await import('./ros3d');
     const viewer = new Viewer({ divID: 'viewer', width: 640, height: 480, antialias: true });
