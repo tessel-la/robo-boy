@@ -45,7 +45,11 @@ const readStoredFrame = (): FloatingFrame | null => {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Partial<FloatingFrame>;
-    if ([parsed.left, parsed.top, parsed.width, parsed.height].every(value => typeof value === 'number' && Number.isFinite(value))) {
+    if (
+      [parsed.left, parsed.top, parsed.width, parsed.height].every(
+        value => typeof value === 'number' && Number.isFinite(value)
+      )
+    ) {
       return clampFrame(parsed as FloatingFrame);
     }
   } catch {
@@ -72,9 +76,19 @@ export const useFloatingFrame = (enabled: boolean) => {
   const [frame, setFrame] = useState<FloatingFrame | null>(() => (enabled ? readStoredFrame() : null));
   const [isDragging, setIsDragging] = useState(false);
   const frameRef = useRef(frame);
+  const gestureCleanupRef = useRef<(() => void) | null>(null);
   frameRef.current = frame;
 
-  const resolvedFrame = enabled ? frame ?? defaultAssistantFrame() : null;
+  const resolvedFrame = enabled ? (frame ?? defaultAssistantFrame()) : null;
+  useEffect(() => {
+    if (!enabled) {
+      gestureCleanupRef.current?.();
+      setIsDragging(false);
+    }
+    return () => {
+      gestureCleanupRef.current?.();
+    };
+  }, [enabled]);
 
   useEffect(() => {
     if (!enabled) return;
@@ -87,7 +101,8 @@ export const useFloatingFrame = (enabled: boolean) => {
 
   const startGesture = useCallback(
     (event: React.PointerEvent<HTMLElement>, edge: ResizeEdge | 'move') => {
-      if (event.button !== 0) return;
+      if (!enabled || event.button !== 0) return;
+      gestureCleanupRef.current?.();
       const start = { x: event.clientX, y: event.clientY };
       const origin = frameRef.current ?? defaultAssistantFrame();
       const target = event.currentTarget;
@@ -118,19 +133,24 @@ export const useFloatingFrame = (enabled: boolean) => {
         setFrame(latest);
       };
       const onUp = () => {
-        target.removeEventListener('pointermove', onMove);
-        target.removeEventListener('pointerup', onUp);
-        target.removeEventListener('pointercancel', onUp);
-        target.releasePointerCapture?.(event.pointerId);
+        cleanup();
         setIsDragging(false);
         storeFrame(latest);
       };
+      const cleanup = () => {
+        target.removeEventListener('pointermove', onMove);
+        target.removeEventListener('pointerup', onUp);
+        target.removeEventListener('pointercancel', onUp);
+        if (target.hasPointerCapture?.(event.pointerId)) target.releasePointerCapture?.(event.pointerId);
+        gestureCleanupRef.current = null;
+      };
+      gestureCleanupRef.current = cleanup;
       target.addEventListener('pointermove', onMove);
       target.addEventListener('pointerup', onUp);
       target.addEventListener('pointercancel', onUp);
       event.preventDefault();
     },
-    []
+    [enabled]
   );
 
   const reset = useCallback(() => {

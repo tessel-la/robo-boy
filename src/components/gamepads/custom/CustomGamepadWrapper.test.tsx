@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import CustomGamepadWrapper from './CustomGamepadWrapper';
 
@@ -9,6 +9,7 @@ const customLayout = vi.fn(({ layout, ros, isEditing }) => (
 ));
 
 vi.mock('../../../features/customGamepad/gamepadStorage', () => ({
+  GAMEPAD_STORAGE_EVENT: 'robo-boy-gamepads-changed',
   getGamepadLayout: (...args: unknown[]) => getGamepadLayout(...args),
 }));
 
@@ -38,5 +39,16 @@ describe('CustomGamepadWrapper', () => {
 
     expect(screen.getByText('Layout Not Found')).toBeInTheDocument();
     expect(screen.getByText('The gamepad layout "missing-layout" could not be loaded.')).toBeInTheDocument();
+  });
+
+  it('does not rebind live controls after an authoring save until operator activation', () => {
+    const before = { layout: { id: 'layout-1', name: 'Original' } };
+    getGamepadLayout.mockReturnValue(before);
+    render(<CustomGamepadWrapper ros={{} as any} layoutId="layout-1" />);
+    getGamepadLayout.mockReturnValue({ layout: { id: 'layout-1', name: 'Updated' } });
+    act(() => window.dispatchEvent(new CustomEvent('robo-boy-gamepads-changed')));
+    expect(customLayout.mock.calls[customLayout.mock.calls.length - 1]?.[0].layout).toEqual(before.layout);
+    fireEvent.click(screen.getByRole('button', { name: 'Activate updated controls' }));
+    expect(customLayout.mock.calls[customLayout.mock.calls.length - 1]?.[0].layout.name).toBe('Updated');
   });
 });

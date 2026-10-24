@@ -7,6 +7,7 @@ interface Props {
   subscription?: boolean;
   value?: ThinkingEffort;
   disabled?: boolean;
+  compact?: boolean;
   onChange: (value: ThinkingEffort | undefined) => void;
 }
 
@@ -16,13 +17,14 @@ export default function AssistantThinkingSettings({
   subscription = false,
   value,
   disabled,
+  compact = false,
   onChange,
 }: Props) {
   const efforts = thinkingEfforts(provider, model, subscription);
   if (!efforts.length) return null;
   return (
-    <label>
-      Thinking effort
+    <label className={compact ? 'assistant-chat-effort' : undefined}>
+      {compact ? 'Reasoning' : 'Thinking effort'}
       <select
         aria-label="Thinking effort"
         disabled={disabled}
@@ -40,9 +42,11 @@ export default function AssistantThinkingSettings({
           </option>
         ))}
       </select>
-      <span className="assistant-subscription-note">
-        Higher effort can take longer and use more tokens or plan allowance. Account limits still apply.
-      </span>
+      {!compact && (
+        <span className="assistant-subscription-note">
+          Higher effort can take longer and use more tokens or plan allowance. Account limits still apply.
+        </span>
+      )}
     </label>
   );
 }

@@ -61,6 +61,7 @@ describe('assistant capability registry', () => {
 
   it('names only response kinds the parser still accepts', () => {
     const sample: Record<string, unknown> = {
+      contextRequest: { kind: 'contextRequest', reads: [{ kind: 'graph' }] },
       padProposal: {
         kind: 'padProposal',
         layout: { name: 'Pad', components: [{ type: 'button', label: 'Go', action: { topic: '/go', messageType: 'std_msgs/msg/Bool' } }] },

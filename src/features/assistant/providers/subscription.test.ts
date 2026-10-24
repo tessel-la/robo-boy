@@ -14,6 +14,14 @@ const request = {
 };
 describe('subscription provider routing', () => {
   afterEach(() => vi.unstubAllGlobals());
+  it('forwards request-scoped thinking and removes the listener on completion', async () => {
+    const unsubscribe = vi.fn(), onThinking = vi.fn();
+    const onStream = vi.fn((_id, callback) => { callback('Checking.'); return unsubscribe; });
+    vi.stubGlobal('roboBoyDesktop', { assistant: { send: vi.fn(async () => 'Done.'), cancel: vi.fn(), onThinking: onStream } });
+    await expect(sendAssistantChat({ ...request, onThinking })).resolves.toBe('Done.');
+    expect(onThinking).toHaveBeenCalledWith('Checking.');
+    expect(unsubscribe).toHaveBeenCalledOnce();
+  });
   it('sends only conversation data to the native runtime and never falls back to API billing', async () => {
     const send = vi.fn(async (_id: string, _request: unknown) => 'reply'),
       fetch = vi.fn();

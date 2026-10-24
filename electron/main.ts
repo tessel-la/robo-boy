@@ -1,4 +1,5 @@
 import { app, BrowserWindow, ipcMain, net, protocol, shell } from 'electron';
+import { hasAgentBackground, registerAgentBackground } from './agentBackground';
 import { readFile } from 'node:fs/promises';
 import { userInfo } from 'node:os';
 import path from 'node:path';
@@ -164,6 +165,7 @@ const createWindow = async (): Promise<BrowserWindow> => {
       webSecurity: true,
     },
   });
+  window.on('close', event => { if (hasAgentBackground(window)) { event.preventDefault(); window.hide(); } });
 
   // Showing only once the first frame is ready keeps the window from flashing its background
   // colour before React has mounted.
@@ -273,6 +275,7 @@ if (!app.requestSingleInstanceLock()) {
     registerRobotResources(devServerUrl ? new URL(devServerUrl).origin : RENDERER_ORIGIN);
     registerPanelFetch();
     registerAssistantSubscriptions(devServerUrl ? new URL(devServerUrl).origin : RENDERER_ORIGIN);
+    registerAgentBackground(devServerUrl ? new URL(devServerUrl).origin : RENDERER_ORIGIN);
     registerWindowControls();
     registerUpdater();
 
@@ -282,6 +285,7 @@ if (!app.requestSingleInstanceLock()) {
     // macOS keeps an application running with no windows; clicking its dock icon opens one again.
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) void createWindow();
+      else BrowserWindow.getAllWindows()[0].show();
     });
   });
 

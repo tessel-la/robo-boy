@@ -12,6 +12,11 @@ Custom gamepads are JSON-defined control surfaces created and rendered by the sa
 
 Layouts are stored in `localStorage` under `robo-boy-custom-gamepads`. Exported JSON is versioned and can be imported into another browser.
 
+The Pad library refreshes after editor or assistant authoring saves and Undo, including changes
+from another window. Existing running controls retain their previous definition until the operator
+chooses **Activate updated controls**. The runtime wrapper fills its workspace tile; an activation
+notice shares that space without shrinking the Pad horizontally or overflowing narrow mobile tiles.
+
 ## Supported Components
 
 | Component       | Primary role                                                                      |

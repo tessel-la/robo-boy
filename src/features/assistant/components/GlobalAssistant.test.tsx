@@ -1,11 +1,40 @@
 import React, { createRef } from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import * as rosContext from '../context/rosContext';
 
 const sendAssistantChatMock = vi.hoisted(() => vi.fn());
 vi.mock('../providers/index', async importOriginal => {
   const actual = await importOriginal<typeof import('../providers/index')>();
-  return { ...actual, sendAssistantChat: sendAssistantChatMock };
+  // Domain objects below are fixture specifications, not the production response protocol.
+  // Simulate native tool rounds here; transport replay is tested with MockLanguageModelV4.
+  return { ...actual, sendAssistantChat: async (request: import('../providers/types').SendChatRequest) => {
+    let previous = '', observation: unknown;
+    for (let step = 0; step < 12; step++) {
+      request.beforeStep?.();
+      const current = { ...request, systemPrompt: (request.refreshSystemPrompt?.() ?? request.systemPrompt), observation };
+      const raw = await sendAssistantChatMock(current);
+      if (!raw) return 'Tool work completed.';
+      let response: Record<string, any>;
+      try { response = JSON.parse(raw); } catch { return raw; }
+      if (response.kind === 'tool') {
+        observation = await request.tools!.execute(response.name, response.input, crypto.randomUUID());
+        continue;
+      }
+      if (response.kind === 'explanation') return response.message;
+      if (response.kind === 'clarification') return response.question;
+      if (raw === previous) return response.summary || 'Tool work completed.';
+      previous = raw;
+      if (response.kind === 'contextRequest') {
+        observation = await Promise.all(response.reads.map((read: Record<string, any>) => { const { kind, ...input } = read; return request.tools!.execute(`read_${kind}`, input, crypto.randomUUID()); }));
+      } else {
+        const names: Record<string, string> = { workspaceEdit: 'edit_workspace', padProposal: 'propose_pad', tree: 'propose_tree', rosAction: 'propose_operation' };
+        const { kind, summary, followUp, ...input } = response;
+        observation = await request.tools!.execute(names[kind], kind === 'tree' ? { tree: response } : input, crypto.randomUUID());
+      }
+    }
+    throw new Error('Fixture exceeded native step allowance.');
+  } };
 });
 
 const discoveryMock = vi.hoisted(() => ({
@@ -40,6 +69,7 @@ const workspace: WorkspaceSnapshot = {
 };
 
 describe('GlobalAssistant', () => {
+  afterEach(() => vi.restoreAllMocks());
   beforeEach(() => {
     localStorage.clear();
     sendAssistantChatMock.mockReset();
@@ -52,7 +82,38 @@ describe('GlobalAssistant', () => {
     return ref;
   };
 
+  it('keeps a tool question in history after answering and completes the same run', async () => {
+    sendAssistantChatMock.mockResolvedValueOnce(JSON.stringify({ kind: 'tool', name: 'ask_user', input: { question: 'Which home pose?' } })).mockResolvedValueOnce('Current pose selected.');
+    renderOpenAssistant();
+    fireEvent.change(screen.getByLabelText('Ask the assistant'), { target: { value: 'Prepare Home' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(await screen.findByText('Which home pose?')).toBeVisible();
+    fireEvent.change(screen.getByLabelText('Continue the conversation'), { target: { value: 'Current measured pose' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(await screen.findByText('Current pose selected.')).toBeVisible();
+    expect(document.querySelectorAll('.assistant-message.user')).toHaveLength(2);
+    expect(screen.getByText('Which home pose?')).toBeVisible();
+    expect(localStorage.getItem('robo-boy-assistant-conversation-v1')).toContain('Which home pose?');
+  });
+  it('renames and deletes the last chat without resurrecting its legacy history', async () => {
+    sendAssistantChatMock.mockResolvedValue('Done.');
+    renderOpenAssistant();
+    fireEvent.change(screen.getByLabelText('Ask the assistant'), { target: { value: 'Inspect joints' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await screen.findByText('Done.');
+    fireEvent.click(screen.getByRole('button', { name: 'Chats' }));
+    fireEvent.click(screen.getByLabelText('Rename chat Inspect joints'));
+    fireEvent.change(screen.getByLabelText('Chat name'), { target: { value: 'Daily check' } });
+    fireEvent.click(screen.getByText('Save name'));
+    expect(await screen.findByRole('button', { name: 'Daily check Current' })).toBeVisible();
+    fireEvent.click(screen.getByLabelText('Delete chat Daily check'));
+    fireEvent.click(screen.getByText('Delete permanently'));
+    expect(await screen.findByRole('button', { name: 'New chat Current' })).toBeVisible();
+    expect(localStorage.getItem('robo-boy-assistant-conversation-v1')).not.toContain('Inspect joints');
+  });
   it('docks on a tall phone and takes over short or keyboard-reduced viewports', () => {
+    expect(resolveCompactAssistantFrame({ viewportTop: 0, viewportHeight: 210, viewportWidth: 390, toolbarBottom: 48 }))
+      .toEqual({ top: 48, height: 162, workspaceInset: 0, takeover: true });
     expect(resolveCompactAssistantFrame({ viewportTop: 0, viewportHeight: 844, viewportWidth: 390, toolbarBottom: 40 }))
       .toEqual({ top: 313.36, height: 530.64, workspaceInset: 530.64, takeover: false });
     expect(resolveCompactAssistantFrame({ viewportTop: 0, viewportHeight: 844, viewportWidth: 390, toolbarBottom: 40, requestedHeight: 650 }))
@@ -65,7 +126,7 @@ describe('GlobalAssistant', () => {
       .toEqual({ top: 208, height: 360, workspaceInset: 360, takeover: false });
   });
 
-  it('asks rosapi only for Pad-bindable topic types on a Pad turn, never the whole graph', async () => {
+  it('does not introspect unrelated graph types before the model has requested an interface', async () => {
     discoveryMock.discoverAllROSResources.mockResolvedValue({
       topics: [
         { name: '/cmd_vel', type: 'geometry_msgs/msg/Twist' },
@@ -86,7 +147,42 @@ describe('GlobalAssistant', () => {
 
     await waitFor(() => expect(screen.getByText('Pad idea.')).toBeInTheDocument());
     const askedTypes = discoveryMock.fetchMessageSchema.mock.calls.map(call => call[1]).sort();
-    expect(askedTypes).toEqual(['geometry_msgs/msg/Twist', 'sensor_msgs/msg/Joy']);
+    expect(askedTypes).toEqual([]);
+  });
+
+  it('reads current joints and goal schema, repairs a dead Home binding, and retains the capture for a short follow-up', async () => {
+    const type = 'control_msgs/action/FollowJointTrajectory';
+    discoveryMock.discoverAllROSResources.mockResolvedValue({ topics: [{ name: '/joint_states', type: 'sensor_msgs/msg/JointState' }], services: [], actions: [{ name: '/home', type, namespace: '/' }] });
+    const duration = { name: 'time_from_start', rosType: 'builtin_interfaces/msg/Duration', arrayLen: -1, subfields: [{ name: 'sec', rosType: 'int32', arrayLen: -1 }, { name: 'nanosec', rosType: 'uint32', arrayLen: -1 }] };
+    const points = { name: 'points', rosType: 'trajectory_msgs/msg/JointTrajectoryPoint', arrayLen: 0, subfields: [{ name: 'positions', rosType: 'float64', arrayLen: 0 }, duration] };
+    discoveryMock.fetchActionGoalDetails.mockResolvedValue({ fields: [{ name: 'trajectory', rosType: 'trajectory_msgs/msg/JointTrajectory', arrayLen: -1, subfields: [{ name: 'joint_names', rosType: 'string', arrayLen: 0 }, points] }], defaults: {} });
+    const sample = vi.spyOn(rosContext, 'sampleRosTopic').mockResolvedValue({ topic: '/joint_states', messageType: 'sensor_msgs/msg/JointState', samples: [{ receivedAt: Date.now(), value: { name: ['joint_verified_A'], position: [0.42] } }], timedOut: false, limits: { maxMessages: 1, maxBytesPerMessage: 24576, timeoutMs: 1800 } });
+    const proposal = (seconds: number) => ({ kind: 'padProposal', layout: { name: 'Captured Home', components: [{ type: 'button', label: 'Home', eventOperations: { press: { kind: 'action', name: '/home', messageType: type, payload: { trajectory: { joint_names: ['joint_verified_A'], points: [{ positions: [0.42], time_from_start: { sec: seconds, nanosec: 0 } }] } } } } }] } });
+    sendAssistantChatMock.mockImplementationOnce(async request => {
+      request.onThinking?.('Reading current pose.');
+      return JSON.stringify({ kind: 'contextRequest', reads: [{ kind: 'topic', name: '/joint_states' }, { kind: 'schema', resource: 'action', name: '/home' }] });
+    }).mockResolvedValueOnce(JSON.stringify({ kind: 'padProposal', layout: { name: 'Captured Home', components: [{ type: 'button', action: { type: 'action', name: '/home', messageType: type }, config: {} }] } }))
+      .mockResolvedValueOnce(JSON.stringify(proposal(10))).mockResolvedValueOnce('Home ready for review.').mockResolvedValueOnce(JSON.stringify(proposal(20)));
+    const review = vi.fn();
+    renderOpenAssistant({ ros: { isConnected: true, getTopics: vi.fn(), callOnConnection: vi.fn() } as never, isConnected: true, onReviewPadProposal: review });
+    fireEvent.change(screen.getByLabelText('Ask the assistant'), { target: { value: 'Use the current joint pose as Home and add its button to the Pad' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Review in Pad editor' }));
+    expect(review.mock.calls[0][0].components[0].eventOperations.press.payload.trajectory.points[0].positions).toEqual([0.42]);
+    expect(sample).toHaveBeenCalledOnce();
+    expect(document.querySelectorAll('.assistant-message.user')).toHaveLength(1);
+    fireEvent.click(await screen.findByText('Thinking', { exact: true }));
+    await waitFor(() => expect(document.querySelector('.assistant-message.assistant .assistant-thinking')).toHaveTextContent('Reading current pose.'));
+    expect(JSON.stringify(sendAssistantChatMock.mock.calls[2][0].observation)).toContain('no payload');
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled());
+    fireEvent.change(screen.getByLabelText('Continue the conversation'), { target: { value: 'Make that 20 seconds' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Review in Pad editor' })).toBeInTheDocument());
+    const followUp = sendAssistantChatMock.mock.calls[4][0];
+    expect(followUp.systemPrompt).toContain('joint_verified_A');
+    expect(followUp.systemPrompt).toContain('## Authoring formats');
+    expect(sample).toHaveBeenCalledOnce();
+    expect(localStorage.getItem('robo-boy-assistant-conversation-v1')).not.toContain('joint_verified_A');
   });
 
   it('opens as a desktop complementary panel through its application-toolbar handle', () => {
@@ -171,6 +267,28 @@ describe('GlobalAssistant', () => {
     expect(request.messages[request.messages.length - 1]).toMatchObject({ role: 'user', content: 'Why can I not see a camera feed?' });
   });
 
+  it('keeps disabled scheduled monitoring out of the native tool catalog while live panel watching remains available', async () => {
+    sendAssistantChatMock.mockResolvedValue('Live topic watching uses Data Explorer.');
+    renderOpenAssistant();
+    fireEvent.change(screen.getByLabelText('Ask the assistant'), { target: { value: 'Watch joint states in logs' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await screen.findByText('Live topic watching uses Data Explorer.');
+    const tools = sendAssistantChatMock.mock.calls[0][0].tools;
+    expect(tools.definitions.some((tool: { name: string }) => tool.name === 'start_monitor')).toBe(false);
+    expect(tools.definitions.some((tool: { name: string }) => tool.name === 'edit_workspace')).toBe(true);
+  });
+  it('consolidates workspace receipts within one task without replaying successful edits', async () => {
+    const apply = vi.fn((operations: WorkspaceEditOperation[]) => operations.map(operation => ({ operation, ok: true, message: `Added ${'panelType' in operation ? operation.panelType : operation.op}.` })));
+    sendAssistantChatMock.mockResolvedValueOnce(JSON.stringify({ kind: 'workspaceEdit', operations: [{ op: 'addPanel', panelType: 'behaviorTree' }] })).mockResolvedValueOnce(JSON.stringify({ kind: 'workspaceEdit', operations: [{ op: 'addPanel', panelType: 'camera' }] })).mockResolvedValueOnce('Both panels verified.');
+    renderOpenAssistant({ onApplyWorkspaceEdit: apply });
+    fireEvent.change(screen.getByLabelText('Ask the assistant'), { target: { value: 'Add a BT and camera' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await screen.findByText('Both panels verified.');
+    expect(screen.getAllByTestId('assistant-workspace-edit-card')).toHaveLength(1);
+    expect(screen.getByTestId('assistant-workspace-edit-card')).toHaveTextContent('Added behaviorTree.');
+    expect(screen.getByTestId('assistant-workspace-edit-card')).toHaveTextContent('Added camera.');
+    expect(apply).toHaveBeenCalledTimes(2);
+  });
   it('applies a workspace edit through the host at once and shows each outcome', async () => {
     sendAssistantChatMock.mockResolvedValue(JSON.stringify({
       kind: 'workspaceEdit',
@@ -198,7 +316,7 @@ describe('GlobalAssistant', () => {
     expect(screen.getByText('No open panel with id "nope".')).toBeInTheDocument();
     expect(screen.getByText('Operation 3: unknown op "bogus".')).toBeInTheDocument();
     // The tool was offered to the model because the request talks about the layout.
-    expect(sendAssistantChatMock.mock.calls[0][0].systemPrompt).toContain('## Workspace tool');
+    expect(sendAssistantChatMock.mock.calls[0][0].systemPrompt).toContain('## Native workspace operations');
   });
 
   it('sends the rest of a request as the next turn once the workspace change is applied', async () => {
@@ -221,8 +339,9 @@ describe('GlobalAssistant', () => {
     await waitFor(() => expect(screen.getByText('Here is the tree plan.')).toBeInTheDocument());
     expect(sendAssistantChatMock).toHaveBeenCalledTimes(2);
     const secondRequest = sendAssistantChatMock.mock.calls[1][0];
-    expect(secondRequest.messages[secondRequest.messages.length - 1]).toMatchObject({ role: 'user', content: 'Build a tree that moves the robot 0.1 m left and then right.' });
-    expect(screen.getByText('Build a tree that moves the robot 0.1 m left and then right.')).toBeInTheDocument();
+    expect(secondRequest.messages.at(-1)).toMatchObject({ role: 'user', content: 'add a bt panel with a bt that moves the robot left and right' });
+    expect(JSON.stringify(secondRequest.observation)).toContain('Added a Behavior tree panel.');
+    expect(screen.queryByText('Build a tree that moves the robot 0.1 m left and then right.')).not.toBeInTheDocument();
   });
 
   it('continues an explicit second task when the model omits followUp', async () => {
@@ -245,7 +364,7 @@ describe('GlobalAssistant', () => {
     expect(sendAssistantChatMock).toHaveBeenCalledTimes(2);
     expect(sendAssistantChatMock.mock.calls[1][0].messages.at(-1)).toMatchObject({
       role: 'user',
-      content: 'Create a BT to move the robot',
+      content: 'add the BT panel and create a BT to move the robot',
     });
   });
 
@@ -355,7 +474,7 @@ describe('GlobalAssistant', () => {
     expect(screen.getByText('Found 2 matching messages.')).toBeInTheDocument();
     expect(screen.getByText('✗ The inspector is unavailable.')).toBeInTheDocument();
     const followUp = sendAssistantChatMock.mock.calls[1][0];
-    expect(followUp.messages.at(-1)).toMatchObject({ role: 'user', content: 'Summarise the errors in the recording.' });
+    expect(followUp.messages.at(-1)).toMatchObject({ role: 'user', content: 'what errors are in this rosbag' });
     expect(followUp.systemPrompt).toContain('No path found');
   });
 
@@ -381,10 +500,12 @@ describe('GlobalAssistant', () => {
     expect(oldApply).not.toHaveBeenCalled();
     expect(host).toHaveBeenCalledOnce();
     expect(screen.getByText('Ask again to save once the changes above are on screen.')).toBeInTheDocument();
-    expect(sendAssistantChatMock).toHaveBeenCalledOnce();
+    await waitFor(() => expect(sendAssistantChatMock).toHaveBeenCalledTimes(2));
+    // Retrying the model must not repeat the already-successful panel mutation.
+    expect(host).toHaveBeenCalledOnce();
   });
 
-  it('cancels settings waiting on a new panel when the assistant closes', async () => {
+  it('continues settings waiting on a new panel when the assistant is hidden', async () => {
     sendAssistantChatMock.mockResolvedValue(JSON.stringify({ kind: 'workspaceEdit', operations: [
       { op: 'addPanel', panelType: 'timeSeries' },
       { op: 'configurePanel', panelType: 'timeSeries', settings: { paused: true } },
@@ -398,7 +519,60 @@ describe('GlobalAssistant', () => {
     const apply = vi.fn();
     act(() => ref.current?.registerPanelSettingsBridge('new-plot', { panelType: 'timeSeries', settingsHelp: '', describe: () => ({}), apply }));
     await waitFor(() => expect(screen.queryByTestId('assistant-panel')).not.toBeInTheDocument());
-    expect(apply).not.toHaveBeenCalled();
+    await waitFor(() => expect(apply).toHaveBeenCalledOnce());
+  });
+
+  it('keeps a model turn running while hidden and shows its completed answer on reopening', async () => {
+    let finish!: (answer: string) => void;
+    sendAssistantChatMock.mockImplementationOnce(request => new Promise<string>(resolve => { finish = resolve; request.onThinking?.('Inspecting the requested data.'); }));
+    renderOpenAssistant();
+    fireEvent.change(screen.getByLabelText('Ask the assistant'), { target: { value: 'Inspect my workspace' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await waitFor(() => expect(sendAssistantChatMock).toHaveBeenCalledOnce());
+    const signal = sendAssistantChatMock.mock.calls[0][0].signal as AbortSignal;
+    fireEvent.click(screen.getByRole('button', { name: 'Close assistant' }));
+    await waitFor(() => expect(screen.queryByTestId('assistant-panel')).not.toBeInTheDocument());
+    expect(signal.aborted).toBe(false);
+    await act(async () => finish('Inspection completed while the panel was hidden.'));
+    fireEvent.click(screen.getByLabelText('Open Robo-Boy assistant'));
+    expect(await screen.findByText('Inspection completed while the panel was hidden.')).toBeVisible();
+    expect(screen.getByText('Thinking')).toBeInTheDocument();
+  });
+
+  it('preserves partial assistant output and thinking when a provider fails', async () => {
+    sendAssistantChatMock.mockImplementationOnce(async request => { request.onThinking?.('Inspecting interfaces.'); request.onToken?.('Partial analysis.'); throw new Error('Host tool read_node timed out.'); });
+    renderOpenAssistant();
+    fireEvent.change(screen.getByLabelText('Ask the assistant'), { target: { value: 'Inspect controller state' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await waitFor(() => expect(document.querySelector('.assistant-message.assistant')).toHaveTextContent('Partial analysis.'));
+    expect(document.querySelector('.assistant-message.assistant')).toHaveTextContent('Host tool read_node timed out.');
+    fireEvent.click(screen.getByText('Thinking'));
+    expect(screen.getByText('Inspecting interfaces.')).toBeVisible();
+    expect(document.querySelector('.assistant-message.user')).not.toHaveTextContent('Inspecting interfaces.');
+  });
+  it('coalesces token bursts without losing final answer or thinking', async () => {
+    let finish!: (value: string) => void;
+    sendAssistantChatMock.mockImplementationOnce(() => new Promise<string>(resolve => { finish = resolve; }));
+    renderOpenAssistant();
+    fireEvent.change(screen.getByLabelText('Ask the assistant'), { target: { value: 'Inspect state' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await waitFor(() => expect(sendAssistantChatMock).toHaveBeenCalledOnce());
+    const request = sendAssistantChatMock.mock.calls[0][0];
+    vi.useFakeTimers();
+    try {
+      const baseline = vi.getTimerCount();
+      act(() => {
+        for (let token = 0; token < 500; token++) { request.onToken?.('part '); request.onThinking?.('evidence '); }
+      });
+      expect(vi.getTimerCount()).toBe(baseline + 1);
+      expect(document.querySelector('[aria-label="Assistant activity"] .assistant-message-content')).toBeNull();
+      await act(async () => { await vi.advanceTimersByTimeAsync(50); });
+      expect(document.querySelector('[aria-label="Assistant activity"]')).toHaveTextContent('part part part');
+      await act(async () => { finish('part '.repeat(500)); });
+      expect(document.querySelector('.assistant-message.assistant')).toHaveTextContent('part '.repeat(500).trim());
+      fireEvent.click(screen.getByText('Thinking'));
+      expect(document.querySelector('.assistant-thinking')).toHaveTextContent('evidence '.repeat(500).trim());
+    } finally { vi.useRealTimers(); }
   });
 
   it('recovers the joint-state plotting task when the model only adds the panel', async () => {
@@ -411,7 +585,7 @@ describe('GlobalAssistant', () => {
     fireEvent.change(screen.getByLabelText('Ask the assistant'), { target: { value: 'add a timeserie panel with the joints states showing in the ui' } });
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
     await waitFor(() => expect(screen.getByText('Plotting task continued.')).toBeInTheDocument());
-    expect(sendAssistantChatMock.mock.calls[1][0].messages.at(-1).content).toContain('do not add another panel');
+    expect(JSON.stringify(sendAssistantChatMock.mock.calls[1][0].observation)).toContain('Added plot.');
     expect(sendAssistantChatMock.mock.calls[1][0].messages.at(-1).content).toContain('joints states showing in the ui');
   });
 
@@ -497,7 +671,7 @@ describe('GlobalAssistant', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save & resend' }));
 
     await waitFor(() => expect(screen.getByText('Second answer.')).toBeInTheDocument());
-    expect(screen.getByText('a better question')).toBeInTheDocument();
+    expect(document.querySelector('.assistant-message.user')).toHaveTextContent('a better question');
     expect(screen.queryByText('first question')).not.toBeInTheDocument();
     expect(screen.queryByText('First answer.')).not.toBeInTheDocument();
   });
@@ -549,9 +723,7 @@ describe('GlobalAssistant', () => {
 
 
 
-  /** Everything the app holds goes in every turn, so a question about any Pad or tree is answerable
-   * without the user fetching one first. */
-  it('carries every saved Pad and Behavior Tree, in full, without being asked', async () => {
+  it('offers all saved documents through catalogs and native retrieval without manual tagging', async () => {
     sendAssistantChatMock.mockResolvedValue(JSON.stringify({ kind: 'explanation', message: 'Seen.' }));
     renderOpenAssistant();
     const textarea = screen.getByRole('textbox', { name: 'Ask the assistant' });
@@ -560,9 +732,9 @@ describe('GlobalAssistant', () => {
 
     await waitFor(() => expect(screen.getByText('Seen.')).toBeInTheDocument());
     const prompt = sendAssistantChatMock.mock.calls[0][0].systemPrompt;
-    expect(prompt).toContain('### Every saved Pad, complete');
-    // "Complete" means the layout itself, not a count of its parts.
-    expect(prompt).toMatch(/### Every saved Pad, complete\n.*"components":\[/);
+    expect(prompt).toContain('## Document catalogs');
+    expect(prompt).not.toContain('### Every saved Pad, complete');
+    expect(sendAssistantChatMock.mock.calls[0][0].tools.definitions).toEqual(expect.arrayContaining([expect.objectContaining({ name: 'read_document' })]));
     // No bar to open and nothing to choose: it is all already there.
     expect(screen.queryByRole('button', { name: /^Context/ })).not.toBeInTheDocument();
   });
