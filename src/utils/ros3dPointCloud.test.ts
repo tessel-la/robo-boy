@@ -13,7 +13,7 @@ vi.mock('roslib', () => ({
 
 describe('live ROS3D PointCloud2', () => {
   let client: PointCloud2;
-  let requestRender: ReturnType<typeof vi.fn>;
+  let requestRender = vi.fn(() => {});
   let lookupTransform: ReturnType<typeof vi.fn>;
   let scheduledFrames: Map<number, FrameRequestCallback>;
   let message: (value: unknown) => void;
@@ -33,7 +33,7 @@ describe('live ROS3D PointCloud2', () => {
       'cancelAnimationFrame',
       vi.fn((id: number) => scheduledFrames.delete(id))
     );
-    requestRender = vi.fn();
+    requestRender = vi.fn(() => {});
     lookupTransform = vi.fn(() => ({
       translation: new THREE.Vector3(4, 5, 6),
       rotation: new THREE.Quaternion(),

@@ -141,32 +141,9 @@ const EntrySection: React.FC<EntrySectionProps> = ({ onConnect, embedded = false
     animateAdvancedForm(formRef.current, showAdvanced);
   }, [showAdvanced]);
 
-  // Helper function to convert hex to rgb (kept for potential future use)
-  const _hexToRgb = (hex: string): string => {
-    // Default fallback in case of parsing issues
-    if (!hex || !hex.startsWith('#')) return '50, 205, 50';
-
-    const shorthandRegex = /^#?([a-f\d])([a-f\d])([a-f\d])$/i;
-    const fullHex = hex.replace(shorthandRegex, (_m, r, g, b) => r + r + g + g + b + b);
-
-    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(fullHex);
-    if (!result) return '50, 205, 50';
-
-    const r = parseInt(result[1], 16);
-    const g = parseInt(result[2], 16);
-    const b = parseInt(result[3], 16);
-
-    return `${r}, ${g}, ${b}`;
-  };
-
   // Animate the dash character - re-run animation when theme changes
   useEffect(() => {
     if (!dashRef.current || prefersReducedMotion()) return;
-
-    // Get theme colors for animation
-    const style = getComputedStyle(document.documentElement);
-    const _primaryColor = style.getPropertyValue('--primary-color').trim();
-    const _hoverColor = style.getPropertyValue('--primary-hover-color').trim();
 
     // Clear any inline styles
     dashRef.current.style.removeProperty('color');
