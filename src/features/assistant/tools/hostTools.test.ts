@@ -186,6 +186,99 @@ describe('native host tools', () => {
     controller.abort();
     await expect(tools.execute('read_topic', { name: '/x' }, 'b')).rejects.toMatchObject({ name: 'AbortError' });
   });
+  it('routes document staging and undo to the owning review boundary and replays receipts once', async () => {
+    const { host } = setup();
+    const saveDocument = vi.fn(async () => ({ status: 'awaiting-review', id: pad.id }));
+    const undoDocument = vi.fn(async () => ({ restored: true }));
+    const tools = createHostTools({ ...host, saveDocument, undoDocument });
+    const input = { kind: 'pad', document: pad };
+    const receipt = await tools.execute('save_document', input, 'save');
+    expect(receipt).toEqual({ ok: true, value: { status: 'awaiting-review', id: pad.id } });
+    expect(await tools.execute('save_document', input, 'save')).toEqual(receipt);
+    expect(saveDocument).toHaveBeenCalledExactlyOnceWith('pad', pad, undefined);
+    await expect(tools.execute('undo_document', { checkpointId: 'checkpoint' }, 'undo')).resolves.toEqual({
+      ok: true, value: { restored: true },
+    });
+    expect(undoDocument).toHaveBeenCalledExactlyOnceWith('checkpoint');
+    expect(host.execute).not.toHaveBeenCalled();
+    expect(host.present).not.toHaveBeenCalled();
+    const unsupported = createHostTools(host);
+    await expect(unsupported.execute('save_document', input, 'save')).resolves.toMatchObject({ ok: false, error: expect.stringContaining('cannot save') });
+    await expect(unsupported.execute('undo_document', { checkpointId: 'checkpoint' }, 'undo')).resolves.toMatchObject({ ok: false, error: expect.stringContaining('cannot restore') });
+  });
+  it('patches a tree against its exact revision, preserving unrelated nodes without running it', async () => {
+    const { host } = setup();
+    const tree = {
+      id: 'tree', name: 'Home',
+      nodes: [{ id: 'root', label: 'Keep' }, { id: 'old', label: 'Replace' }],
+      edges: [{ id: 'old-edge', source: 'root', target: 'old' }],
+    };
+    host.document.mockReturnValue(tree);
+    const saveDocument = vi.fn(async () => ({ status: 'awaiting-review' }));
+    const tools = createHostTools({ ...host, saveDocument });
+    const baseRevision = await documentRevision(tree);
+    const input = {
+      id: tree.id, baseRevision,
+      upsertNodes: [{ id: 'next', label: 'Next' }], removeNodeIds: ['old'],
+      upsertEdges: [{ id: 'new-edge', source: 'root', target: 'next' }], removeEdgeIds: ['old-edge'],
+    };
+    await expect(tools.execute('patch_tree', input, 'patch')).resolves.toEqual({ ok: true, value: { status: 'awaiting-review' } });
+    expect(saveDocument).toHaveBeenCalledExactlyOnceWith('behaviorTree', {
+      ...tree, nodes: [tree.nodes[0], input.upsertNodes[0]], edges: input.upsertEdges,
+    }, baseRevision);
+    expect(tree.nodes.map(node => node.id)).toEqual(['root', 'old']);
+    expect(tree.edges[0].id).toBe('old-edge');
+    expect(await tools.execute('patch_tree', input, 'patch')).toMatchObject({ ok: true });
+    expect(saveDocument).toHaveBeenCalledOnce();
+    for (const [index, changes] of [
+      { baseRevision: 'stale' }, { removeNodeIds: ['missing'] }, { removeEdgeIds: ['missing'] },
+      { upsertNodes: [{}] }, { upsertEdges: [{}] },
+    ].entries()) {
+      await expect(tools.execute('patch_tree', { ...input, ...changes }, `invalid-${index}`)).resolves.toMatchObject({ ok: false });
+    }
+    expect(saveDocument).toHaveBeenCalledOnce();
+    expect(host.execute).not.toHaveBeenCalled();
+    expect(host.present).not.toHaveBeenCalled();
+  });
+  it('bounds independent investigations and prevents a read-only child from editing or delegating', async () => {
+    const { host } = setup();
+    const delegate = vi.fn(async task => ({ observed: task }));
+    const tools = createHostTools({ ...host, delegate });
+    await expect(tools.execute('delegate_read', { task: 'Inspect TF' }, 'first')).resolves.toEqual({ ok: true, value: { observed: 'Inspect TF' } });
+    await tools.execute('delegate_read', { task: 'Inspect logs' }, 'second');
+    await expect(tools.execute('delegate_read', { task: 'Inspect again' }, 'third')).resolves.toMatchObject({ ok: false });
+    expect(delegate).toHaveBeenCalledTimes(2);
+    const child = createHostTools({ ...host, delegate, readOnly: true });
+    expect(child.scope).toBe('read-only');
+    expect(child.definitions.every(tool => tool.name.startsWith('read_'))).toBe(true);
+    await expect(child.execute('delegate_read', { task: 'Nested' }, 'nested')).resolves.toMatchObject({ ok: false });
+    await expect(child.execute('save_document', { kind: 'pad', document: pad }, 'write')).resolves.toMatchObject({ ok: false });
+    expect(delegate).toHaveBeenCalledTimes(2);
+  });
+  it('routes plans and questions through coordination while rejecting unavailable or ungranted tools', async () => {
+    const { host } = setup();
+    const agentTool = vi.fn(async () => ({ answer: 'operator response' }));
+    const tools = createHostTools({ ...host, agentTool, allowedTools: ['ask_user', 'update_plan'] });
+    const question = { question: 'Which frame should the draft use?' };
+    await expect(tools.execute('ask_user', question, 'question')).resolves.toEqual({ ok: true, value: { answer: 'operator response' } });
+    expect(agentTool).toHaveBeenCalledExactlyOnceWith('ask_user', question);
+    const plan = { tasks: [{ id: 'review', label: 'Review draft', status: 'waiting' }] };
+    await tools.execute('update_plan', plan, 'plan');
+    expect(agentTool).toHaveBeenLastCalledWith('update_plan', plan);
+    await expect(tools.execute('read_topic', { name: '/joint_states' }, 'ungranted')).resolves.toMatchObject({ ok: false });
+    await expect(createHostTools(host).execute('ask_user', question, 'unsupported')).resolves.toMatchObject({ ok: false, error: expect.stringContaining('coordination') });
+    expect(host.execute).not.toHaveBeenCalled();
+  });
+  it('stops repeated identical failures at the next inference boundary, but resets on new evidence', async () => {
+    const { tools, host } = setup();
+    host.execute.mockResolvedValue([{ ok: false, error: 'No sample.' }]);
+    for (let index = 0; index < 3; index++) await tools.execute('read_topic', { name: '/missing' }, `failure-${index}`);
+    expect(() => tools.checkpoint?.()).toThrow(/failed three times/);
+    host.execute.mockResolvedValue([{ ok: true, value: 'new observation' }]);
+    await tools.execute('read_topic', { name: '/joint_states' }, 'recovery');
+    expect(() => tools.checkpoint?.()).not.toThrow();
+    await tools.drain?.();
+  });
   it('bounds native call count', async () => {
     const { tools } = setup();
     for (let index = 0; index < 150; index++) await tools.execute('read_tf', {}, String(index));
