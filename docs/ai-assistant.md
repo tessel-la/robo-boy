@@ -130,6 +130,7 @@ credential proxy. Older desktop shells also need an update before the sign-in co
   configuration directory, separate from the user's ordinary Claude Code setup. Choose Sonnet,
   Opus or Haiku; availability and usage follow the account. Robo-Boy launches the unmodified native
   binary without a shell and without API keys or gateway credentials inherited from its environment.
+  Robo-Boy sets `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1` for discovery, login, and inference.
   The runtime's tools, skills, plugins, hooks, Chrome integration and inherited MCP configuration are
   disabled. It receives the full conversation as JSON context plus the final turn's images, rather
   than adopting a persistent Claude Code project session. Its output goes through the existing

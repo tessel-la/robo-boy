@@ -1,6 +1,7 @@
 services:
   # React App Development Server
   app:
+    restart: unless-stopped
     build:
       context: .
       dockerfile: infra/docker/Dockerfile.dev
@@ -45,6 +46,7 @@ services:
       - RECORDINGS_UPSTREAM=${RECORDINGS_UPSTREAM:-unix//run/roboboy-recordings/recordings.sock}
     volumes:
       - ./infra/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./infra/caddy/Routes.caddy:/etc/caddy/Routes.caddy:ro
       - ./infra/caddy/certs:/etc/caddy/certs:ro # Mount the certs directory (read-only)
       - ollama-relay-socket:/run/ollama-relay
       - webrtc-relay-socket:/run/webrtc-relay
@@ -114,6 +116,7 @@ services:
       - ${CYCLONEDDS_CONFIG_PATH:-./config/cyclonedds/default.xml}:/etc/cyclonedds/config.xml:ro
       - ${ROBOBOY_RECORDINGS_PATH:-./recordings}:/recordings:rw
       - recordings-socket:/run/roboboy-recordings
+      - control-journal:/var/lib/roboboy-control
     environment:
       - DISPLAY=${DISPLAY}
       - ROS_DISTRO=${ROS_DISTRO:-jazzy}
@@ -124,13 +127,19 @@ services:
       - ROBOBOY_RECORDINGS_SOCKET=/run/roboboy-recordings/recordings.sock
       - ROBOBOY_RECORDINGS_PORT=${ROBOBOY_RECORDINGS_PORT:-}
       - ROSBRIDGE_PORT=${ROSBRIDGE_PORT:-9090}
+      - ROBOBOY_CONTROL_ALLOWED_ORIGINS=${ROBOBOY_CONTROL_ALLOWED_ORIGINS:-}
+      - ROBOBOY_CONTROL_LOCKING_ENABLED=${ROBOBOY_CONTROL_LOCKING_ENABLED:-true}
+      - ROBOBOY_CONTROL_IDLE_SECONDS=${ROBOBOY_CONTROL_IDLE_SECONDS:-120}
+      - ROBOBOY_CONTROL_OBSERVER_SERVICES=${ROBOBOY_CONTROL_OBSERVER_SERVICES:-}
+      - ROBOBOY_EXTERNAL_CONTROL_LOCK=${ROBOBOY_EXTERNAL_CONTROL_LOCK:-false}
       # rosbridge load tuning; see docs/performance.md ("rosbridge load").
       - ROSBRIDGE_USE_EVENTS_EXECUTOR=${ROSBRIDGE_USE_EVENTS_EXECUTOR:-true}
       - ROSBRIDGE_USE_COMPRESSION=${ROSBRIDGE_USE_COMPRESSION:-true}
       - ROBOBOY_TF_RELAY_HZ=${ROBOBOY_TF_RELAY_HZ:-60}
       - VIDEO_STREAM_PORT=${VIDEO_STREAM_PORT:-8080}
       - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-0}
-      - ROS_LOCALHOST_ONLY=${ROS_LOCALHOST_ONLY:-0}
+      # Legacy opt-in for Humble/existing deployments; empty avoids Jazzy deprecation warnings.
+      - ROS_LOCALHOST_ONLY=${ROS_LOCALHOST_ONLY:-}
       - ROS_AUTOMATIC_DISCOVERY_RANGE=${ROS_AUTOMATIC_DISCOVERY_RANGE:-SUBNET}
       - ROS_STATIC_PEERS=${ROS_STATIC_PEERS:-}
       # Switch between Fast DDS and Cyclone DDS by setting RMW_IMPLEMENTATION.
@@ -146,6 +155,7 @@ volumes:
   ollama-relay-socket:
   webrtc-relay-socket:
   recordings-socket:
+  control-journal:
 
 networks:
   app-net:

@@ -1,0 +1,4 @@
+[
+  { "id": "assembly", "name": "Assembly robot", "upstream": "http://127.0.0.1:4181" },
+  { "id": "inspection", "name": "Inspection robot", "upstream": "http://127.0.0.1:4183" }
+]

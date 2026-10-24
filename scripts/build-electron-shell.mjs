@@ -10,12 +10,16 @@
  * scripts as CommonJS whatever the package type says, and the app declares `"type": "module"`.
  */
 import { build } from 'esbuild';
-import { mkdir } from 'node:fs/promises';
+import { loadEnv } from 'vite';
+import { enabled } from '../infra/enterprise/config.mjs';
+import { mkdir, writeFile } from 'node:fs/promises';
+import { createThirdPartyNotices } from './third-party-notices.mjs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const outDir = path.join(projectRoot, 'dist-electron', 'shell');
+const environment = { ...loadEnv('electron', projectRoot, ''), ...process.env };
 
 // Electron ships its own Node; bundling either would produce a second copy that cannot talk to
 // the running process.
@@ -23,10 +27,11 @@ const external = ['electron'];
 
 await mkdir(outDir, { recursive: true });
 
-await build({
+const main = await build({
   entryPoints: [path.join(projectRoot, 'electron', 'main.ts')],
   outfile: path.join(outDir, 'main.js'),
   bundle: true,
+  metafile: true,
   platform: 'node',
   target: 'node22',
   format: 'esm',
@@ -34,6 +39,13 @@ await build({
   // built-in imports need Node's actual loader, not esbuild's unsupported-require shim.
   banner: { js: "import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);" },
   external,
+  define: {
+    __ROBOBOY_ENTERPRISE_LOGIN__: JSON.stringify(enabled(environment.VITE_ENTERPRISE_LOGIN)),
+    // The system browser may only open this build's own gateway, matching the renderer's origin.
+    __ROBOBOY_ENTERPRISE_ORIGIN__: JSON.stringify(
+      environment.VITE_ENTERPRISE_SERVER_URL ? new URL(environment.VITE_ENTERPRISE_SERVER_URL).origin : ''
+    ),
+  },
   sourcemap: true,
 });
 
@@ -49,3 +61,5 @@ await build({
 });
 
 console.log(`[electron-shell] wrote ${path.relative(projectRoot, outDir)}/{main.js,preload.cjs}`);
+
+await writeFile(path.join(outDir, 'licenses.txt'), await createThirdPartyNotices(Object.keys(main.metafile.inputs)));

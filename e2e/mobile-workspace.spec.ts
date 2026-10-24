@@ -6,6 +6,47 @@ async function addPanel(page: Page, name: string) {
   await page.getByRole('button', { name, exact: true }).click();
 }
 
+for (const width of [320, 1280]) {
+  test(`Add Panel stays readable in a light company workspace at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 844 });
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await installRosMock(page);
+    await page.addInitScript(() => {
+      localStorage.setItem('appTheme', 'company');
+      localStorage.setItem('customThemes', JSON.stringify([{
+        id: 'company',
+        name: 'Company',
+        colors: {
+          primary: '#ff524a', secondary: '#888888', background: '#f4f7fb',
+          text: '#142c43', cardBg: '#ffffff', border: '#d5dfe9', buttonText: '#ffffff',
+        },
+      }]));
+    });
+    await page.goto('/');
+    await page.getByRole('button', { name: /Quick Connect/ }).click();
+    await expect(page.getByLabel('Status: Connected')).toBeVisible();
+    const emptyAdd = page.getByRole('button', { name: 'Add workspace panel', exact: true });
+    await expect(emptyAdd).toHaveCSS('color', 'rgb(0, 0, 0)');
+    await expect(emptyAdd).toHaveCSS('background-color', 'rgb(255, 82, 74)');
+    await emptyAdd.hover();
+    await expect(emptyAdd).toHaveCSS('opacity', '1');
+    await emptyAdd.click();
+    await page.getByRole('button', { name: 'TF tree', exact: true }).click();
+    await expect(page.getByTestId('tf-tree-panel')).toBeVisible();
+    const toolbarAdd = page.locator('.workspace-add-button');
+    await expect(toolbarAdd).toBeEnabled();
+    // The toolbar has a white background; its icon must use the dark navigation foreground.
+    await expect(toolbarAdd).toHaveCSS('color', 'rgb(20, 44, 67)');
+    await expect(toolbarAdd.locator('svg')).toHaveCSS('color', 'rgb(20, 44, 67)');
+    await toolbarAdd.hover();
+    await expect(toolbarAdd).toHaveCSS('color', 'rgb(20, 44, 67)');
+    await toolbarAdd.focus();
+    await expect(toolbarAdd).toBeFocused();
+    await toolbarAdd.click();
+    await expect(page.locator('.workspace-add-menu')).toBeVisible();
+  });
+}
+
 test('uses the unified empty multiview workspace on mobile', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await installRosMock(page, { topics: [{ name: '/camera/image_raw', type: 'sensor_msgs/Image' }] });

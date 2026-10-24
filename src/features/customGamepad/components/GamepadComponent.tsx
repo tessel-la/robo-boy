@@ -1,4 +1,4 @@
-import React, { useRef, useCallback, useState, useEffect, useLayoutEffect } from 'react';
+import React, { useRef, useCallback, useState, useLayoutEffect } from 'react';
 import { FiSettings, FiTrash2 } from 'react-icons/fi';
 import type { Ros } from 'roslib';
 import { GamepadComponentConfig, JoyAxesPublisher, TwistAxesPublisher } from '../types';

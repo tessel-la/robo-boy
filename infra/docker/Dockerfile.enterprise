@@ -1,0 +1,16 @@
+FROM node:22-alpine AS builder
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci
+COPY LICENSE THIRD_PARTY_NOTICES.md ./
+COPY scripts/build-enterprise.mjs scripts/third-party-notices.mjs ./scripts/
+# Keep in sync with gateway.mjs's local imports; gateway.test.mjs checks this list.
+COPY infra/enterprise/gateway.mjs infra/enterprise/config.mjs infra/enterprise/providers.mjs infra/enterprise/session-store.mjs ./infra/enterprise/
+RUN node scripts/build-enterprise.mjs
+
+FROM node:22-alpine
+WORKDIR /app
+COPY --from=builder /app/dist-enterprise/ ./
+RUN mkdir -p /var/lib/roboboy-auth && chown node:node /var/lib/roboboy-auth && chmod 700 /var/lib/roboboy-auth
+USER node
+CMD ["node", "gateway.mjs"]

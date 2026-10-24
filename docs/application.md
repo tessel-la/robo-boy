@@ -1,5 +1,10 @@
 # Application
 
+An optional [enterprise build](enterprise.md) adds company branding and system-browser OIDC
+sign-in. Those builds use the configured HTTPS enterprise gateway instead of the direct robot
+ports described below. Authentication is independent of robot ownership; ordinary builds keep
+the existing direct-host workflow.
+
 Robo-Boy's packaged application is a thin Tauri shell around the same React application used by the web deployment. It runs on Linux, macOS, Windows and iPhone, and the runtime contract below is the same on all of them. It does not bundle, install, start, or stop ROS. Run the ROS stack separately on the local computer or on a reachable robot computer.
 
 Everything past the runtime contract is about the desktop build. See [iOS application](ios.md) for building, signing and installing on a phone.
@@ -31,6 +36,11 @@ origin, add `tauri://*,http://tauri.localhost,https://tauri.localhost` to `OLLAM
 The packaged app asks for a host on its first launch and offers no default: it was served from nowhere, and its ROS stack is as likely to be on a robot as on the machine it runs on. Enter `localhost` when ROS runs on the same computer. Every host that connects is remembered, and the most recent one becomes what **Quick Connect** offers, so the question is asked once. The web app keeps offering the host that served the page.
 
 Configure `ROS_DOMAIN_ID`, DDS middleware, and robot overlays on the ROS container; those settings are not owned by the frontend.
+
+Desktop control sessions use the local account name when available. You can replace it in
+**Session name**, and the app remembers that confirmed label. Web/mobile sessions keep a
+generated label until you choose one. See [Shared robot control](robot-control.md#session-names)
+for identity limits and the optional robot-side ROS control switch.
 
 The existing `ros-stack` Compose service satisfies the local contract on its own. Neither Caddy nor the web
 frontend is needed, so no certificate has to be created:
@@ -285,6 +295,19 @@ app behaves as the same code does over http. Tauri solves this the same way, wit
 `data-runtime`, which names the shell, and `data-desktop`, which only says the app is in a packaged
 window; the rules working around WebKitGTK stay keyed to the former so Chromium does not inherit
 them.
+
+## Licenses and microphone access
+
+The repository's [third-party notices](../THIRD_PARTY_NOTICES.md) document icon attribution.
+Production builds carry `licenses.txt` with the project license, icon credits, and upstream
+license/NOTICE text for their bundled JavaScript.
+Electron also ships a shell-side `licenses.txt`; keep both files when redistributing it. Native
+runtime and system-library licenses remain separate obligations.
+
+Electron asks before granting microphone access to the main app. The grant ends on a page reload
+or navigation. Panel capture also requires the host's manifest-derived permissions and a separate
+native approval; grants are not shared across panels. Arbitrary embedded pages cannot request
+capture. Playback of robot camera streams does not require access to this device's camera.
 
 ## Build An Installer
 

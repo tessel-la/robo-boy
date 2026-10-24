@@ -1,6 +1,26 @@
 mod updater;
 mod robot_resources;
 
+#[tauri::command]
+fn enterprise_open_login(app: tauri::AppHandle, window: tauri::WebviewWindow, url: String) -> Result<(), String> {
+  use tauri_plugin_opener::OpenerExt;
+  let target = tauri::Url::parse(&url).map_err(|_| "Invalid sign-in address")?;
+  let native = target.query_pairs().find(|(key, _)| key == "native").map(|(_, value)| value.into_owned()).unwrap_or_default();
+  if window.label() != "main" || target.scheme() != "https" || !target.username().is_empty() || target.password().is_some()
+      || target.path() != "/auth/login" || native.len() != 43 || !native.bytes().all(|c| c.is_ascii_alphanumeric() || c == b'_' || c == b'-') {
+    return Err("Sign-in address rejected".into());
+  }
+  app.opener().open_url(url, None::<&str>).map_err(|_| "Could not open sign-in browser".into())
+}
+
+/// Display name only. Mobile apps do not have a useful operator account name.
+#[tauri::command]
+fn session_username(window: tauri::WebviewWindow) -> Option<String> {
+  if window.label() != "main" || cfg!(mobile) { return None; }
+  std::env::var(if cfg!(target_os = "windows") { "USERNAME" } else { "USER" })
+    .ok().filter(|name| !name.trim().is_empty())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   configure_linux_webkit_runtime();
@@ -23,8 +43,11 @@ pub fn run() {
     // bundles as GitHub release assets, which send no CORS headers and are therefore
     // unreachable from the webview. This client performs those requests natively instead.
     .plugin(tauri_plugin_http::init())
+    .plugin(tauri_plugin_opener::init())
     .manage(updater::UpdateState::default())
     .invoke_handler(tauri::generate_handler![
+      session_username,
+      enterprise_open_login,
       updater::update_target,
       updater::update_download,
       updater::update_cancel,

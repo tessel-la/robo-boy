@@ -41,8 +41,6 @@ export function useCameraInfoVisualizer({
   // Effect 1: Manage Frustum Container and LineSegments Object
   useEffect(() => {
     const viewer = ros3dViewer.current;
-    let _containerCreated = false;
-    // let linesCreated = false; // Not strictly needed for cleanup logic
 
     // Only create if connected and topic selected (TF handled separately)
     if (isRosConnected && viewer && selectedCameraInfoTopic) {
@@ -51,7 +49,6 @@ export function useCameraInfoVisualizer({
         frustumContainerRef.current = new THREE.Group();
         frustumContainerRef.current.visible = false; // Initially hidden until TF is applied
         viewer.scene.add(frustumContainerRef.current);
-        _containerCreated = true;
 
         // Create the LineSegments object ONCE
         if (!frustumLinesRef.current) {

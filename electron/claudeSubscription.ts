@@ -36,6 +36,9 @@ export function claudeEnvironment(configDir: string, hostTools = false): NodeJS.
   }
   result.CLAUDE_CONFIG_DIR = configDir;
   if (!hostTools) result.CLAUDE_CODE_SAFE_MODE = '1';
+  // This is also used for login/discovery, not only inference. Do not inherit an opt-in from
+  // the user's ordinary CLI environment or depend on safe mode's tool restrictions.
+  result.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC = '1';
   return result;
 }
 

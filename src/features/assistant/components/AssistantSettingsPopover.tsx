@@ -325,13 +325,18 @@ const AssistantSettingsPopover: React.FC<AssistantSettingsPopoverProps> = ({
         </details>
       </section>
       <p className="assistant-key-note">
+        Sending a message shares conversation history, workspace settings, saved pads and behavior trees, and available
+        robot context with the selected provider. Camera frames, files, logs and audio are included when used. Browser
+        speech recognition may use a separate remote service.
+      </p>
+      <p className="assistant-key-note">
         {settings.authMode === 'subscription'
           ? 'Subscription credentials stay in the desktop runtime. ChatGPT credentials use the OS credential store; Claude Code manages its own sign-in. Conversation history stays in this browser.'
           : getDesktopBridge()?.assistant?.setApiKey
             ? getDesktopBridge()?.assistant?.getApiKeyStorage
               ? 'API keys use OS encryption when available; storage failures do not prevent use. Your OS may request keychain access. This session only and unencrypted saving avoid keychain access. Conversation history stays on this device.'
               : 'This desktop version saves API keys locally without encryption. Update Robo-Boy to use secure storage. Conversation history stays on this device.'
-            : 'API keys and conversation history are stored in this browser. For shared deployments, use a server-side proxy instead of storing production keys here.'}
+            : 'API keys are saved unencrypted in this browser. For shared deployments, use a server-side proxy instead of storing production keys here.'}
       </p>
     </div>
   </div>

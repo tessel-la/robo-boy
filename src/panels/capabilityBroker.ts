@@ -1,4 +1,5 @@
 import ROSLIB from 'roslib';
+import { enterpriseFetch } from '../features/enterprise/session';
 import type { Ros, Service, Topic } from 'roslib';
 import type { PanelHostToSandboxMessage, PanelSandboxToHostMessage } from './sandboxProtocol';
 import { isJsonObject, type ResolvedPanelManifest, type RoboBoyJsonObject, type RoboBoyPanelRuntime } from './types';
@@ -141,8 +142,7 @@ const isBeneathEndpoint = (endpoint: string, url: URL, path: RegExp): boolean =>
   return url.pathname.startsWith(prefix) && path.test(url.pathname.slice(prefix.length));
 };
 
-const isEndpoint = (endpoint: string, url: URL): boolean =>
-  url.href === new URL(endpoint, document.baseURI).href;
+const isEndpoint = (endpoint: string, url: URL): boolean => url.href === new URL(endpoint, document.baseURI).href;
 
 export const isGrantedHostEndpointUrl = (
   manifest: ResolvedPanelManifest,
@@ -155,8 +155,7 @@ export const isGrantedHostEndpointUrl = (
     (webrtcDiscovery ? isEndpoint(webrtcDiscovery, url) : false);
 
   return (manifest.permissions?.network?.hostEndpoints || []).some(endpoint => {
-    if (endpoint === 'webrtcWhep')
-      return webrtcWhep ? isBeneathEndpoint(webrtcWhep, url, GATEWAY_WHEP_PATH) : false;
+    if (endpoint === 'webrtcWhep') return webrtcWhep ? isBeneathEndpoint(webrtcWhep, url, GATEWAY_WHEP_PATH) : false;
     if (endpoint === 'webrtcDiscovery') return webrtcDiscovery ? isEndpoint(webrtcDiscovery, url) : false;
     if (endpoint === 'webrtcHls') return webrtcHls ? isBeneathEndpoint(webrtcHls, url, GATEWAY_HLS_PATH) : false;
     // Panels published before the gateway had endpoints of its own ask for the video server and
@@ -425,7 +424,7 @@ const handleRequest = async (
       controller.abort();
     }, NETWORK_TIMEOUT_MS);
     try {
-      const response = await fetch(url, {
+      const response = await enterpriseFetch(url, {
         method,
         headers: normalizeHeaders(params.headers),
         body: method === 'GET' ? undefined : (params.body as string | undefined),

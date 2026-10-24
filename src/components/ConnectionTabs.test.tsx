@@ -8,6 +8,28 @@ const tabs = [
 ];
 
 describe('ConnectionTabs', () => {
+  it('keeps the add action in the dropdown without a duplicate toolbar button', () => {
+    const onAdd = vi.fn();
+    const onClose = vi.fn();
+    render(
+      <ConnectionTabs
+        tabs={tabs}
+        activeTabId="alpha"
+        isAdding={false}
+        onSelect={vi.fn()}
+        onClose={onClose}
+        onAdd={onAdd}
+      />
+    );
+    expect(screen.getByTitle('2 open connections')).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Add connection' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Switch connections, current/ }));
+    expect(screen.queryByText(/Powered by/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Open another connection' }));
+    expect(onAdd).toHaveBeenCalledOnce();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
   it('selects, closes, and opens connections independently', () => {
     const onSelect = vi.fn();
     const onClose = vi.fn();

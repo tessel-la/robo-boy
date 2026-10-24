@@ -3,7 +3,7 @@ import { normalizeConnectionHost } from './connectionHost';
 import { getDefaultServicePorts, normalizeRuntimeServicePorts } from './runtimeConfig';
 
 export const RECENT_CONNECTIONS_STORAGE_KEY = 'robo-boy-recent-connections';
-export const MAX_RECENT_CONNECTIONS = 5;
+export const MAX_RECENT_CONNECTIONS = 20;
 
 export interface RecentConnection {
   host: string;

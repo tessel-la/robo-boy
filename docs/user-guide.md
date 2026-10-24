@@ -8,11 +8,23 @@
 
 ## Connect To A Robot
 
-Open Robo-Boy and submit the connection form. Quick Connect and Domain ID use the current Robo-Boy host's proxy routes. When you select **Host or IP**, the host entered on the connection screen is used as the ROS backend host for rosbridge, video, and mesh endpoints. Use **Ports** when rosbridge, video, or mesh resources are listening somewhere other than the defaults.
+Open Robo-Boy and use **Quick Connect** for the current Robo-Boy host's proxy routes, or **Choose another robot** to enter a host or IP address. In the desktop app's first launch, the address field is shown directly. The address identifies the ROS backend for rosbridge, video, and mesh endpoints. Expand **Connection ports** when those services use ports other than the defaults. ROS domain IDs are configured on the robot, not in Robo-Boy's connection form.
 
-Successful Host or IP connections are saved on the landing page as recent machines, including the service ports used for that machine. Use a recent entry to reconnect, or remove it from the list when it is no longer useful.
+Successful Host or IP connections are saved on the landing page as recent machines, including the service ports used for that machine. Robo-Boy keeps the 20 most recent hosts; scroll the list to reach older entries. Use a recent entry to reconnect, or remove it from the list when it is no longer useful. Existing saved connections are preserved when upgrading; entries already discarded by an older version cannot be recovered.
 
 After rosbridge connects, the main control view discovers available ROS resources and enables the camera, 3D, behavior-tree, and control-pad interfaces.
+
+## Shared Control
+
+Connections start read-only. Open **Read-only** in the top bar and select **Request control** before
+using pads or running a tree. One session controls the whole robot endpoint; other sessions retain
+telemetry and editing. The menu shows the owner, blocked-command reasons, release, and transfer.
+A persistent tree keeps its reservation across disconnects; reconnect and select **Manage running tree**
+to pause, resume, or stop it before sending other commands.
+See [Shared robot control](robot-control.md) for leases, recovery, and deployment requirements.
+An optional robot-side ROS switch can enable or disable control globally. When configured,
+the control menu shows its status; only the robot's native ROS operator can enable access.
+Once enabled, sessions use the normal Request control workflow.
 
 ## Main Views
 

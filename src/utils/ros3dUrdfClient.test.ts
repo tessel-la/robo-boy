@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as THREE from 'three';
+import { UrdfClient } from './ros3d';
 
 const roslibMock = vi.hoisted(() => ({
   topicInstances: [] as Array<{
@@ -78,13 +79,11 @@ describe('UrdfClient cache', () => {
   `;
 
   beforeEach(() => {
-    vi.resetModules();
     vi.clearAllMocks();
     roslibMock.topicInstances = [];
   });
 
   it('loads companion OBJ materials for name-only URDF materials', async () => {
-    const { UrdfClient } = await import('./ros3d');
     const rootObject = new THREE.Scene();
     const tfClient = {
       subscribe: vi.fn(),
@@ -125,7 +124,6 @@ describe('UrdfClient cache', () => {
   });
 
   it('reuses only the cached description and builds an independent panel model', async () => {
-    const { UrdfClient } = await import('./ros3d');
     const rootObject = new THREE.Scene();
     const tfClient = {
       subscribe: vi.fn(),
@@ -170,10 +168,10 @@ describe('UrdfClient cache', () => {
     expect(secondModel).toBeDefined();
     expect(secondModel).not.toBe(firstModel);
     expect(rootObject.children).toContain(secondClient);
+    secondClient.dispose();
   }, 10000);
 
   it('does not reuse a description across replacement ROS instances with the same URL', async () => {
-    const { UrdfClient } = await import('./ros3d');
     const tfClient = {
       subscribe: vi.fn(),
       unsubscribe: vi.fn(),
@@ -198,7 +196,6 @@ describe('UrdfClient cache', () => {
   });
 
   it('disposes the GPU resources owned by its independent model', async () => {
-    const { UrdfClient } = await import('./ros3d');
     const tfClient = {
       subscribe: vi.fn(),
       unsubscribe: vi.fn(),
@@ -225,7 +222,6 @@ describe('UrdfClient cache', () => {
   });
 
   it('invalidates rendering for TF motion and releases losing frame candidates', async () => {
-    const { UrdfClient } = await import('./ros3d');
     const rootObject = new THREE.Scene();
     const callbacks = new Map<string, (transform: any) => void>();
     const tfClient = {
@@ -269,7 +265,6 @@ describe('UrdfClient cache', () => {
   });
 
   it('composes URDF fixed-axis roll, pitch, yaw for joints and visuals', async () => {
-    const { UrdfClient } = await import('./ros3d');
     const rootObject = new THREE.Scene();
     const tfClient = {
       subscribe: vi.fn(),

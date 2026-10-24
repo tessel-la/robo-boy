@@ -2,6 +2,7 @@ import { LoadingManager } from 'three';
 import { convertFileSrc } from '@tauri-apps/api/core';
 import { getDesktopBridge } from './desktopBridge';
 import { isRobotResourceUrl } from './robotResourceScope';
+import { enterpriseMediaUrl, isEnterpriseEndpoint } from '../features/enterprise/session';
 
 /**
  * Three's file AND image loaders use this manager, including nested MTL/Collada textures.
@@ -10,6 +11,10 @@ import { isRobotResourceUrl } from './robotResourceScope';
  */
 export function createRobotResourceManager(baseUrl: string): LoadingManager {
   const manager = new LoadingManager();
+  if (isEnterpriseEndpoint(baseUrl)) {
+    manager.setURLModifier(url => (isRobotResourceUrl(baseUrl, url) ? enterpriseMediaUrl(url) : url));
+    return manager;
+  }
   const electron = getDesktopBridge()?.robotResourceProtocol;
   const tauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
   if (!electron && !tauri) return manager;

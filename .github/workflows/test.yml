@@ -36,6 +36,12 @@ jobs:
         base: ${{ github.ref_name }}
         filters: |
           frontend:
+            - 'infra/enterprise/**'
+            - 'infra/caddy/**'
+            - 'infra/compose/enterprise.yml'
+            - 'infra/docker/Dockerfile.enterprise'
+            - 'infra/docker/Dockerfile'
+            - 'docker-compose.yml'
             - 'src/**'
             - 'electron/**'
             # src/panels/types.ts imports '../../panel-sdk' by relative path, so the type-only SDK
@@ -46,6 +52,9 @@ jobs:
             - 'config/**'
             - 'public/**'
             - 'scripts/**'
+            - 'LICENSE'
+            - 'THIRD_PARTY_NOTICES.md'
+            - 'third-party/**'
             - 'package.json'
             - 'package-lock.json'
             - 'index.html'
@@ -56,11 +65,14 @@ jobs:
             - '.github/workflows/test.yml'
             - '.github/scripts/**'
           e2e:
+            - 'enterprise-e2e/**'
             - 'e2e/**'
             - 'config/playwright.config.ts'
             - '.github/workflows/test.yml'
             - '.github/scripts/**'
           ros:
+            - 'infra/docker/ros_entrypoint.sh'
+            - 'infra/docker/Dockerfile.ros'
             - 'infra/ros/**'
             - '.github/workflows/test.yml'
 
@@ -133,6 +145,13 @@ jobs:
         echo "status=${status}" >> "$GITHUB_OUTPUT"
         .github/scripts/write-log-summary.sh "Build" "${status}" build-output.log "npm run build" 160
         exit "${status}"
+
+    - name: Test enterprise authentication gateway
+      if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.frontend == 'true' || needs.changes.outputs.e2e == 'true'
+      run: |
+        npm run test:notices
+        npm run build:enterprise
+        npm run test:enterprise
 
     - name: Run tests with coverage
       if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.frontend == 'true' || needs.changes.outputs.e2e == 'true'
@@ -344,6 +363,12 @@ jobs:
         .github/scripts/write-log-summary.sh "E2E Tests" "${status}" playwright-output.log "xvfb-run --auto-servernum npm run e2e" 260
         exit 0
 
+    - name: Test enterprise login in web and packaged-app mode
+      if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.frontend == 'true' || needs.changes.outputs.e2e == 'true'
+      env:
+        LIBGL_ALWAYS_SOFTWARE: '1'
+      run: xvfb-run --auto-servernum npm run e2e:enterprise
+
     - name: Upload Playwright report
       uses: actions/upload-artifact@v4
       if: always() && steps.e2e_tests.outputs.status != ''
@@ -390,5 +415,5 @@ jobs:
     - name: Test the recording service
       if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.ros == 'true'
       run: |
-        python -m pip install pyyaml
+        python -m pip install pyyaml tornado
         python -m unittest discover -s infra/ros -v

@@ -25,6 +25,7 @@ Before implementation:
 | Run or connect Robo-Boy               | [User guide](user-guide.md), [Development guide](development.md)                   | `docker-compose.yml`, `infra/`, `src/runtime/`, `src/hooks/useRos.ts`                |
 | Change application structure          | [Application architecture](architecture.md)                                        | `src/App.tsx`, `src/components/MainControlView.tsx`, owning feature module and tests |
 | Change web/desktop endpoints          | [Application](application.md), [Application architecture](architecture.md)     | `src/runtime/`, `config/vite.config.ts`, Caddy files, Compose files                  |
+| Change enterprise access or branding | [Enterprise login and branding](enterprise.md), [Application architecture](architecture.md) | `src/features/enterprise/`, `infra/enterprise/`, runtime URLs and native browser openers |
 | Add robot interfaces                  | [Robot workspace overlays](robot-overlays.md)                                      | `infra/docker/ros_entrypoint.sh`, Compose override, robot workspace install tree     |
 | Create or edit control-pad layouts    | [Custom gamepads](custom-gamepads.md)                                              | `src/features/customGamepad/`, `src/components/gamepads/custom/`                     |
 | Add a built-in gamepad component      | [Custom gamepads](custom-gamepads.md), [Application architecture](architecture.md) | component types, palette, editor, renderer, storage, ROS helpers, tests              |
@@ -62,14 +63,14 @@ Browser or Tauri webview
         | Web: same-origin proxy or selected backend host
         | Desktop: selected backend host and direct ports
         v
-rosapi + rosbridge + web_video_server
+control gateway -> private rosbridge + rosapi; web_video_server
         |
         | ROS 2 DDS on the host network
         v
 robot or simulation nodes
 ```
 
-Robo-Boy has no application server or user database. `App` owns connection and global theme state.
+Robo-Boy has no user database. Its robot-host control gateway arbitrates sessions before private rosbridge; see [Shared robot control](robot-control.md). `App` owns connection and global theme state.
 `MainControlView` coordinates the active ROS connection, workspace, built-in and external panel catalog, primary view,
 control area, and cross-feature controls. Large feature behavior belongs below the shell in its feature module,
 services, hooks, persistence layer, or renderer.

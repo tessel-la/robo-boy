@@ -6,7 +6,6 @@ import {
   useRef,
   useState,
   useSyncExternalStore,
-  type CSSProperties,
 } from 'react';
 import {
   FiActivity,
@@ -23,7 +22,6 @@ import {
   FiRefreshCw,
   FiSearch,
   FiStar,
-  FiX,
 } from 'react-icons/fi';
 import type { Ros } from 'roslib';
 import type { RoboBoyJsonObject } from '../../panels/types';

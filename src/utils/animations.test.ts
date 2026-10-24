@@ -1,20 +1,40 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import anime from 'animejs'
 import { animateLandingPage, animateAdvancedForm, animateButtonPress } from './animations'
 
 // Mock anime.js
 vi.mock('animejs', () => ({
-  default: vi.fn(() => ({
-    finished: Promise.resolve(),
-  })),
+  default: Object.assign(vi.fn(() => ({ finished: Promise.resolve() })), { remove: vi.fn() }),
 }))
 
 describe('animations', () => {
+  afterEach(() => vi.unstubAllGlobals())
   let mockAnime: ReturnType<typeof vi.fn>
 
   beforeEach(() => {
     mockAnime = anime as unknown as ReturnType<typeof vi.fn>
     mockAnime.mockClear()
+  })
+
+  it('keeps the landing and connection form usable without motion', () => {
+    vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: true })))
+    const container = document.createElement('div')
+    const entry = document.createElement('div')
+    entry.className = 'entry-section'
+    container.appendChild(entry)
+    const logo = document.createElement('div')
+    const form = document.createElement('form')
+    animateLandingPage(container, logo)
+    animateAdvancedForm(form, true)
+    animateButtonPress(document.createElement('button'))
+    expect(entry.style.opacity).toBe('1')
+    expect(logo.style.opacity).toBe('1')
+    expect(form.inert).toBe(false)
+    expect(form.classList.contains('visible')).toBe(true)
+    expect(mockAnime).not.toHaveBeenCalled()
+    animateAdvancedForm(form, false)
+    expect(form.inert).toBe(true)
+    expect(form.classList.contains('visible')).toBe(false)
   })
 
   describe('animateLandingPage', () => {

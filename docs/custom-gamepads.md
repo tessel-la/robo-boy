@@ -63,7 +63,7 @@ Each standard button—including triggers, stick clicks, D-pad directions, cente
 | Component dispatch and editor shell      | `src/features/customGamepad/components/GamepadComponent.tsx`    |
 | Main-view adapter                        | `src/components/gamepads/custom/CustomGamepadWrapper.tsx`       |
 
-The `standard`, `gameboy`, and `voice` directories under `src/components/gamepads/` are legacy standalone implementations. New runtime controls belong in the configurable custom-gamepad system.
+Runtime controls belong in the configurable custom-gamepad system. The shell renders saved layouts through `CustomGamepadWrapper`; it does not select standalone pad implementations.
 
 ## Adding A Component Type
 

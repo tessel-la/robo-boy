@@ -7,6 +7,7 @@ import { ReplaySession } from '../features/recordReplay/ReplaySession';
 import RecordedCameraView from '../features/recordReplay/RecordedCameraView';
 import React, { useState, useEffect, useRef, useMemo, useCallback, useSyncExternalStore } from 'react';
 import { FiActivity, FiDisc, FiSearch, FiSettings, FiX } from 'react-icons/fi';
+import { RobotControl } from '../features/robotControl/RobotControl';
 import ConnectionTabs, { type ConnectionTabsProps } from './ConnectionTabs';
 import { describeConnectionTarget, type ConnectionParams, type ConnectionStatus } from '../runtime/connections';
 import {
@@ -1026,7 +1027,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({
   const [mobileSecondaryEverMounted, setMobileSecondaryEverMounted] = useState(isMobileSplitView);
   const [workspaceLayout, setWorkspaceLayout] = useState<WorkspaceLayoutState>(() => loadWorkspaceLayout(storageScope));
   const [workspaceTileOrder, setWorkspaceTileOrder] = useState<string[]>(() => loadWorkspaceTileOrder(storageScope));
-  const [customWorkspaceSnapTemplates, setCustomWorkspaceSnapTemplates] = useState<WorkspaceSnapTemplate[]>(() =>
+  const [customWorkspaceSnapTemplates] = useState<WorkspaceSnapTemplate[]>(() =>
     loadWorkspaceCustomTemplates(storageScope)
   );
   const [savedWorkspaceLayouts, setSavedWorkspaceLayouts] = useState<SavedWorkspaceLayout[]>(() =>
@@ -1156,9 +1157,6 @@ const MainControlView: React.FC<MainControlViewProps> = ({
   // Ref for the Add Panel button (+)
   const addButtonRef = useRef<HTMLButtonElement>(null);
   // --- End New State ---
-
-  // Ref to prevent multiple connection attempts (kept for potential future use)
-  const _isConnecting = useRef(false);
 
   const viewPanelRef = useRef<HTMLDivElement>(null);
   const workspaceRef = useRef<HTMLDivElement>(null);
@@ -1304,7 +1302,6 @@ const MainControlView: React.FC<MainControlViewProps> = ({
   const isActiveWorkspaceLayoutDirty = Boolean(
     activeWorkspaceLayout && activeWorkspaceLayoutSignature !== currentWorkspaceLayoutSignature
   );
-  const getWorkspaceTileIndex = (_rowIndex: number, columnIndex: number) => columnIndex;
   const workspaceSnapTileCount = workspaceTiles.length + (workspaceDragKind === 'new' ? 1 : 0);
   const allWorkspaceSnapTemplates = useMemo(
     () => [...WORKSPACE_SNAP_TEMPLATES, ...customWorkspaceSnapTemplates],
@@ -1924,17 +1921,6 @@ const MainControlView: React.FC<MainControlViewProps> = ({
     setIsWorkspaceTemplateMenuOpen(false);
     setWorkspaceReplaceMenuStyle(null);
     return newPanel.id;
-  };
-
-  const handleReturnToSplitView = () => {
-    setIsWorkspaceOpen(false);
-    setIsWorkspaceAddMenuOpen(false);
-    setIsWorkspaceTemplateMenuOpen(false);
-    setIsWorkspaceDragActive(false);
-    setWorkspaceDragKind(null);
-    setWorkspaceSnapTarget(null);
-    setIsWorkspaceResizing(false);
-    setWorkspaceDropPlacement(null);
   };
 
   const handleWorkspaceDragStart = (event: React.DragEvent<HTMLButtonElement>, type: WorkspacePanelType) => {
@@ -4442,6 +4428,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({
           )}
         </div>
         <div className="status-controls">
+          <RobotControl ros={ros} />
           <button
             type="button"
             className={`connection-status-icon ${connectionStatus}`}

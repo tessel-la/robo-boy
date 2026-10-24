@@ -15,6 +15,7 @@ import path from 'node:path';
  * and installed only from the path this module wrote.
  */
 
+declare const __ROBOBOY_ENTERPRISE_LOGIN__: boolean;
 const REPOSITORY = 'tessel-la/robo-boy';
 const TAG = /^robo-boy-v\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
 /** What an Electron install can update itself from: its own package, by system and architecture. */
@@ -41,7 +42,12 @@ const macBundle = () => {
  * from its app bundle. A development or unpacked build cannot.
  */
 const target = async () => {
-  if (!app.isPackaged) return null;
+  // The upstream release cannot preserve a company's identity provider, server or branding.
+  if (
+    !app.isPackaged ||
+    app.getName() !== 'Robo-Boy' ||
+    (typeof __ROBOBOY_ENTERPRISE_LOGIN__ !== 'undefined' && __ROBOBOY_ENTERPRISE_LOGIN__)
+  ) return null;
   const arch = process.arch === 'arm64' ? ('arm64' as const) : ('x64' as const);
   if (process.platform === 'darwin') return macBundle() ? { shell: 'electron' as const, os: 'macos' as const, arch, package: 'dmg' as const } : null;
   if (process.platform !== 'linux') return null;
@@ -67,6 +73,7 @@ async function lookUp(tag: string, name: string, signal: AbortSignal): Promise<A
 }
 
 async function download(sender: WebContents, tag: string, name: string) {
+  if (!(await target())) throw new Error('Install an updated package from your application administrator.');
   controller?.abort();
   const current = (controller = new AbortController());
   verified = undefined;

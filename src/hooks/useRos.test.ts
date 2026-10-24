@@ -41,6 +41,8 @@ describe('useRos', () => {
     });
   });
 
+  afterEach(() => vi.useRealTimers());
+
   it('should initialize with disconnected state', () => {
     const { result } = renderHook(() => useRos());
     expect(result.current.ros).toBeNull();
@@ -251,10 +253,15 @@ describe('useRos', () => {
     unmount();
 
     expect(closeMock).toHaveBeenCalled();
-    expect(offMock.mock.calls.map(call => call[0])).toEqual(['connection', 'error', 'close']);
+    expect(offMock.mock.calls.map(call => call[0])).toEqual([
+      '/roboboy/control/status',
+      'connection',
+      'error',
+      'close',
+    ]);
   });
 
-  it('reconnects with the same parameters after returning from standby', () => {
+  it('reconnects with the same parameters when returning without fresh gateway status', () => {
     const rosInstances: Array<{ on: ReturnType<typeof vi.fn>; close: ReturnType<typeof vi.fn> }> = [];
     (ROSLIB.Ros as any).mockImplementation(function () {
       const instance = { on: vi.fn(), close: vi.fn() };
@@ -278,5 +285,62 @@ describe('useRos', () => {
     expect(ROSLIB.Ros).toHaveBeenCalledTimes(2);
     expect(ROSLIB.Ros).toHaveBeenLastCalledWith({ url: 'ws://localhost/websocket' });
     expect(rosInstances[0].close).toHaveBeenCalled();
+  });
+
+  it('preserves a healthy controller on tab switches and reconnects only after status becomes stale', () => {
+    vi.useFakeTimers();
+    const instances: Array<{
+      on: ReturnType<typeof vi.fn>;
+      close: ReturnType<typeof vi.fn>;
+      callOnConnection: ReturnType<typeof vi.fn>;
+    }> = [];
+    const wireSends: Array<ReturnType<typeof vi.fn>> = [];
+    (ROSLIB.Ros as any).mockImplementation(function () {
+      const instance = { on: vi.fn(), close: vi.fn(), callOnConnection: vi.fn() };
+      wireSends.push(instance.callOnConnection);
+      instances.push(instance);
+      return instance;
+    });
+    const { result, unmount } = renderHook(() => useRos());
+    act(() => result.current.connect(mockParams));
+    act(() => instances[0].on.mock.calls.find(call => call[0] === 'connection')?.[1]());
+    act(() =>
+      instances[0].on.mock.calls.find(call => call[0] === '/roboboy/control/status')?.[1]({
+        data: JSON.stringify({
+          version: 1,
+          selfId: 'a',
+          owner: 'a',
+          token: 'lease',
+          state: 'owned',
+          ready: true,
+          leaseMs: 10000,
+          pending: 0,
+          adoptable: false,
+          managing: false,
+          reason: '',
+          error: '',
+          clients: [{ id: 'a', label: 'Alice' }],
+        }),
+      })
+    );
+    const switchTabs = () => {
+      Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' });
+      document.dispatchEvent(new Event('visibilitychange'));
+      Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' });
+      document.dispatchEvent(new Event('visibilitychange'));
+    };
+    act(switchTabs);
+    expect(ROSLIB.Ros).toHaveBeenCalledTimes(1);
+    expect(instances[0].close).not.toHaveBeenCalled();
+    expect(result.current.connectionGeneration).toBe(1);
+    act(() => vi.advanceTimersByTime(11000));
+    act(switchTabs);
+    expect(ROSLIB.Ros).toHaveBeenCalledTimes(2);
+    expect(instances[0].close).toHaveBeenCalledOnce();
+    expect(result.current.connectionGeneration).toBe(2);
+    act(() => instances[1].on.mock.calls.find(call => call[0] === 'connection')?.[1]());
+    expect(wireSends[1]).toHaveBeenCalledWith({ op: 'roboboy_control', action: 'status' });
+    expect(wireSends[1]).not.toHaveBeenCalledWith(expect.objectContaining({ action: 'acquire' }));
+    unmount();
   });
 });

@@ -26,6 +26,7 @@ on:
       - 'panel-sdk/**'
       - 'public/**'
       - 'scripts/**'
+      - 'third-party/**'
       - 'config/**'
       - 'src-tauri/icons/**'
       - 'package.json'
@@ -73,6 +74,9 @@ jobs:
         run: npm ci
 
       # esbuild transpiles the shell without type-checking it, and the renderer's tsc excludes it.
+      - name: Verify company packages cannot install stock updates
+        run: npm run test:electron-updater
+
       - name: Type-check the Electron shell
         run: npm run typecheck:electron
 
@@ -122,6 +126,9 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Verify company packages cannot install stock updates
+        run: npm run test:electron-updater
 
       - name: Type-check the Electron shell
         run: npm run typecheck:electron

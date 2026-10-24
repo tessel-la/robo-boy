@@ -1,3 +1,4 @@
+import { brand } from '../enterprise/config';
 // src/features/theme/themeUtils.ts
 
 // Define the structure for a custom theme
@@ -20,6 +21,7 @@ export interface CustomTheme {
 // Default themes (cannot be edited/deleted in this basic setup)
 export const DEFAULT_THEMES = ['light', 'dark', 'solarized'];
 export const THEME_STORAGE_KEY = 'appTheme';
+export const themeStorageKey = () => (brand.theme ? `${THEME_STORAGE_KEY}:${brand.theme.id}` : THEME_STORAGE_KEY);
 export const CUSTOM_THEMES_STORAGE_KEY = 'customThemes';
 export const SYSTEM_UI_FONT_FAMILY =
   "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif";
@@ -29,8 +31,8 @@ export const FONT_OPTIONS = [
   { label: 'Courier', value: DEFAULT_THEME_FONT_FAMILY },
   { label: 'System UI', value: SYSTEM_UI_FONT_FAMILY },
   { label: 'Arial', value: "Arial, 'Helvetica Neue', Helvetica, sans-serif" },
-  { label: 'Verdana', value: "Verdana, Geneva, sans-serif" },
-  { label: 'Tahoma', value: "Tahoma, Geneva, sans-serif" },
+  { label: 'Verdana', value: 'Verdana, Geneva, sans-serif' },
+  { label: 'Tahoma', value: 'Tahoma, Geneva, sans-serif' },
   { label: 'Trebuchet', value: "'Trebuchet MS', 'Segoe UI', sans-serif" },
   { label: 'Georgia', value: "Georgia, 'Times New Roman', serif" },
 ] as const;
@@ -38,9 +40,7 @@ export const FONT_OPTIONS = [
 const FONT_OPTION_VALUES = new Set<string>(FONT_OPTIONS.map(option => option.value));
 
 export const resolveThemeFontFamily = (fontFamily?: string): string => {
-  return fontFamily && FONT_OPTION_VALUES.has(fontFamily)
-    ? fontFamily
-    : DEFAULT_THEME_FONT_FAMILY;
+  return fontFamily && FONT_OPTION_VALUES.has(fontFamily) ? fontFamily : DEFAULT_THEME_FONT_FAMILY;
 };
 
 export const DEFAULT_THEME_ID = 'dark';
@@ -67,7 +67,8 @@ export const readStoredTheme = (): { themeId: string; customThemes: CustomTheme[
       console.error('Failed to parse custom themes from localStorage', error);
     }
   }
-  return { themeId: readStorage(THEME_STORAGE_KEY) || DEFAULT_THEME_ID, customThemes };
+  if (brand.theme) customThemes = [...customThemes.filter(theme => theme.id !== brand.theme!.id), brand.theme];
+  return { themeId: readStorage(themeStorageKey()) || brand.theme?.id || DEFAULT_THEME_ID, customThemes };
 };
 
 /**
@@ -108,7 +109,7 @@ export const generateThemeCss = (theme: CustomTheme): string => {
   const text = colors.text || (isColorDark(background) ? '#ffffff' : '#000000');
   const border = colors.border || (isColorDark(background) ? '#555555' : '#cccccc');
   const cardBg = colors.cardBg || (isColorDark(background) ? '#333333' : '#f8f8f8');
-  const buttonText = colors.buttonText || (isColorDark(primary) ? '#ffffff' : '#000000');
+  const buttonText = readableButtonText(primary, colors.buttonText);
   const fontFamily = resolveThemeFontFamily(theme.fontFamily);
 
   // Basic hover/darker logic (placeholder - replace with library)
@@ -117,7 +118,6 @@ export const generateThemeCss = (theme: CustomTheme): string => {
   const errorColor = '#dc322f'; // Example error color
   const errorHover = lightenDarkenColor(errorColor, -15);
   const errorRgb = hexToRgb(errorColor)?.join(', ') || '220, 50, 47';
-
 
   return `
     :root[data-theme="${theme.id}"] {
@@ -133,6 +133,8 @@ export const generateThemeCss = (theme: CustomTheme): string => {
       --card-bg: ${cardBg};
       --card-border: ${lightenDarkenColor(border, isColorDark(border) ? 10 : -10)}; /* Slightly adjust card border */
       --button-text-color: ${buttonText};
+      --navbar-bg: ${cardBg};
+      --navbar-text: ${text};
       --font-family-ui: ${fontFamily};
       --error-color: ${errorColor};
       --error-hover-color: ${errorHover};
@@ -143,51 +145,70 @@ export const generateThemeCss = (theme: CustomTheme): string => {
 
 // --- Simple Color Helper Functions (Replace with a library like tinycolor2 later) ---
 
+// Keep configured text when it meets WCAG AA; otherwise choose the stronger black/white pair.
+function readableButtonText(background: string, preferred?: string): string {
+  const luminance = (hex: string): number => {
+    const rgb = hexToRgb(hex) ?? [0, 0, 0];
+    const linear = rgb.map(channel => {
+      const value = channel / 255;
+      return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+    });
+    return linear[0] * 0.2126 + linear[1] * 0.7152 + linear[2] * 0.0722;
+  };
+  const surface = luminance(background);
+  if (preferred) {
+    const text = luminance(preferred);
+    if ((Math.max(surface, text) + 0.05) / (Math.min(surface, text) + 0.05) >= 4.5) return preferred;
+  }
+  return (surface + 0.05) / 0.05 >= 1.05 / (surface + 0.05) ? '#000000' : '#ffffff';
+}
+
 function lightenDarkenColor(col: string, amt: number): string {
-    col = col.startsWith('#') ? col.substring(1) : col;
-    let usePound = true;
-    if (col.length === 3) { // Handle shorthand hex
-        col = col[0] + col[0] + col[1] + col[1] + col[2] + col[2];
-    }
-    if (col.length !== 6) {
-        console.warn("Invalid hex color for lighten/darken:", col); 
-        return '#000000'; // Return black on error
-    }
+  col = col.startsWith('#') ? col.substring(1) : col;
+  let usePound = true;
+  if (col.length === 3) {
+    // Handle shorthand hex
+    col = col[0] + col[0] + col[1] + col[1] + col[2] + col[2];
+  }
+  if (col.length !== 6) {
+    console.warn('Invalid hex color for lighten/darken:', col);
+    return '#000000'; // Return black on error
+  }
 
-    const num = parseInt(col, 16);
-    let r = (num >> 16) + amt;
-    if (r > 255) r = 255;
-    else if (r < 0) r = 0;
+  const num = parseInt(col, 16);
+  let r = (num >> 16) + amt;
+  if (r > 255) r = 255;
+  else if (r < 0) r = 0;
 
-    let b = ((num >> 8) & 0x00FF) + amt;
-    if (b > 255) b = 255;
-    else if (b < 0) b = 0;
+  let b = ((num >> 8) & 0x00ff) + amt;
+  if (b > 255) b = 255;
+  else if (b < 0) b = 0;
 
-    let g = (num & 0x0000FF) + amt;
-    if (g > 255) g = 255;
-    else if (g < 0) g = 0;
+  let g = (num & 0x0000ff) + amt;
+  if (g > 255) g = 255;
+  else if (g < 0) g = 0;
 
-    return (usePound ? "#" : "") + (g | (b << 8) | (r << 16)).toString(16).padStart(6, '0');
+  return (usePound ? '#' : '') + (g | (b << 8) | (r << 16)).toString(16).padStart(6, '0');
 }
 
 function hexToRgb(hex: string): [number, number, number] | null {
-    hex = hex.startsWith('#') ? hex.substring(1) : hex;
-    if (hex.length === 3) {
-        hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2];
-    }
-    if (hex.length !== 6) return null;
-    const bigint = parseInt(hex, 16);
-    const r = (bigint >> 16) & 255;
-    const g = (bigint >> 8) & 255;
-    const b = bigint & 255;
-    return [r, g, b];
+  hex = hex.startsWith('#') ? hex.substring(1) : hex;
+  if (hex.length === 3) {
+    hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2];
+  }
+  if (hex.length !== 6) return null;
+  const bigint = parseInt(hex, 16);
+  const r = (bigint >> 16) & 255;
+  const g = (bigint >> 8) & 255;
+  const b = bigint & 255;
+  return [r, g, b];
 }
 
 // Basic check for perceived brightness (doesn't account for color nuances)
 function isColorDark(hex: string): boolean {
-    const rgb = hexToRgb(hex);
-    if (!rgb) return false; // Assume light if invalid
-    // Formula for perceived brightness (YIQ)
-    const yiq = ((rgb[0] * 299) + (rgb[1] * 587) + (rgb[2] * 114)) / 1000;
-    return yiq < 128;
-} 
+  const rgb = hexToRgb(hex);
+  if (!rgb) return false; // Assume light if invalid
+  // Formula for perceived brightness (YIQ)
+  const yiq = (rgb[0] * 299 + rgb[1] * 587 + rgb[2] * 114) / 1000;
+  return yiq < 128;
+}

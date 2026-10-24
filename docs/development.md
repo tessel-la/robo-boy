@@ -24,6 +24,20 @@ Set `FRONTEND_PORT` to use a different local Vite port:
 FRONTEND_PORT=3000 npm run dev
 ```
 
+## Icons and release notices
+
+Run `npm run icons:generate` to regenerate manifest-listed web icons from `images/logo.png`.
+Maskable assets retain their declared pixel sizes and use an opaque safe area. Android builds
+copy the native icons from `src-tauri/icons/android/` into the generated project.
+
+Vite, Electron-shell, and enterprise builds generate `licenses.txt` from the JavaScript packages
+in their application and worker build inputs. Missing license material fails the build. `THIRD_PARTY_NOTICES.md` supplies
+icon credits and upstream notices that package metadata alone does not capture. Run
+`npm run test:notices` after changing this pipeline.
+
+The enterprise image ships the gateway bundle and its notices instead of installing the frontend's
+production dependency tree. `npm run build:enterprise` builds that payload locally.
+
 ## Complete Development Stack
 
 Generate the certificate as described in the root README and start the stack. Every ROS and DDS setting has a
@@ -58,6 +72,9 @@ The default ports are defined in the copied `.env` file. The main knobs are:
 | `HTTPS_PORT`                    | `443`                    | Caddy HTTPS and HTTP/3 listener                            |
 | `BACKEND_HOST`                  | `host.docker.internal`   | Caddy upstream host for ROS services                       |
 | `ROSBRIDGE_PORT`                | `9090`                   | rosbridge and Caddy `/websocket` upstream                  |
+| `ROBOBOY_CONTROL_LOCKING_ENABLED` | `true` | Gateway session ownership; `false` permits shared control |
+| `ROBOBOY_CONTROL_IDLE_SECONDS` | `120` | Idle ownership timeout in seconds; `0` disables idle expiry |
+| `ROBOBOY_CONTROL_OBSERVER_SERVICES` | empty | Read-only services callable without control (`*`/`**` patterns) |
 | `ROSBRIDGE_USE_EVENTS_EXECUTOR` | `true`                   | rosbridge on rclpy's events executor (less CPU)            |
 | `ROSBRIDGE_USE_COMPRESSION`     | `true`                   | permessage-deflate for clients that offer it               |
 | `ROBOBOY_TF_RELAY_HZ`           | `60`                     | `/tf` coalesced into `/roboboy/tf`; `0` disables it        |
@@ -79,6 +96,10 @@ The default ports are defined in the copied `.env` file. The main knobs are:
 | `VITE_OLLAMA_PORT`              | `11434`                  | Desktop direct-connect Ollama URL                          |
 | `VITE_WEB_BACKEND_MODE`         | `auto`                   | `auto`, `proxy`, or `direct` for web IP connections        |
 
+Configure ownership on the ROS host, rather than in individual clients. See
+[Shared robot control](robot-control.md#configure-control-at-setup) for setup examples and the
+independent robot-side switch. Recreate `ros-stack` after changing these settings.
+
 For a frontend/proxy laptop talking to a backend laptop, set `BACKEND_HOST` to the backend laptop's hostname or IP before starting Caddy:
 
 ```bash
@@ -95,7 +116,7 @@ The Tauri app uses the host selected on the connection screen (including VPN hos
 VPN interface, so remote desktop clients can reach it. If a desktop webview receives
 a CORS rejection, include `tauri://*,http://tauri.localhost,https://tauri.localhost` in `OLLAMA_ORIGINS`.
 
-In the browser app, Quick Connect and Domain ID use the Caddy proxy. The advanced Host or IP field accepts any hostname, DNS name, VPN name, IPv4 address, IPv6 address, or URL that resolves from the client machine. The Ports fields control rosbridge, video, and mesh ports for direct host connections and default to the matching `VITE_*_PORT` values. It connects directly to that host in `auto` mode when it differs from the frontend host. Use `VITE_WEB_BACKEND_MODE=proxy` to force all browser connections through Caddy.
+In the browser app, Quick Connect uses the Caddy proxy. The Host or IP field accepts any hostname, DNS name, VPN name, IPv4 address, IPv6 address, or URL that resolves from the client machine. Expand **Connection ports** to change rosbridge, video, and mesh ports for direct host connections; these default to the matching `VITE_*_PORT` values. It connects directly to that host in `auto` mode when it differs from the frontend host. Use `VITE_WEB_BACKEND_MODE=proxy` to force all browser connections through Caddy.
 
 The camera gateway is external. Robo-Boy starts no media server and does not care which one you run: a
 simulator provides one, or you run your own. **The packaged desktop and mobile apps never go through Robo-Boy
@@ -173,6 +194,10 @@ changes must not make an otherwise unchanged Robo-Boy commit fail.
 If the frontend is opened over HTTPS, direct browser connections use `wss://` and `https://` backend URLs. For a plain ROS backend, use the HTTP frontend URL or set `VITE_WEB_BACKEND_MODE=proxy` with `BACKEND_HOST`.
 
 ## Desktop Frontend
+
+For optional employee login and company branding, see [Enterprise login and branding](enterprise.md).
+The default development build has login disabled; enterprise build flags are public configuration,
+while OIDC client secrets belong only to the optional gateway.
 
 The Tauri application packages only the frontend and expects the ROS stack to run separately. After installing the Tauri platform prerequisites and Rust, start it with:
 

@@ -1,8 +1,13 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useId } from 'react';
+import { FiChevronDown, FiSliders } from 'react-icons/fi';
 import type { ConnectionParams } from '../runtime/connections';
 import './EntrySection.css';
+import { companyBranded } from '../features/enterprise/config';
+import { getEnterpriseSession, hasEnterpriseRobots } from '../features/enterprise/session';
+import BrandMark from '../features/enterprise/BrandMark';
+import RoboBoyAttribution from './RoboBoyAttribution';
 import anime from 'animejs';
-import { animateLandingPage, animateAdvancedForm, animateButtonPress } from '../utils/animations';
+import { animateLandingPage, animateAdvancedForm, animateButtonPress, prefersReducedMotion } from '../utils/animations';
 import {
   getDefaultConnectionHost,
   getDefaultServicePorts,
@@ -18,21 +23,18 @@ interface EntrySectionProps {
 
 type PortKey = keyof RuntimeServicePorts;
 
-// Simple gear icon component for the advanced options
-const GearIcon = () => (
+const ConnectionPlusIcon = () => (
   <svg
-    xmlns="http://www.w3.org/2000/svg"
-    width="16"
-    height="16"
+    width="18"
+    height="18"
     viewBox="0 0 24 24"
     fill="none"
     stroke="currentColor"
-    strokeWidth="2"
+    strokeWidth="1.8"
     strokeLinecap="round"
-    strokeLinejoin="round"
+    aria-hidden="true"
   >
-    <circle cx="12" cy="12" r="3"></circle>
-    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+    <path d="M12 5v14M5 12h14" />
   </svg>
 );
 
@@ -56,26 +58,9 @@ const TrashIcon = () => (
   </svg>
 );
 
-// Dropdown caret icon component (kept for potential future use)
-const _CaretIcon = ({ isOpen }: { isOpen: boolean }) => (
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    width="12"
-    height="12"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    style={{ transform: isOpen ? 'rotate(180deg)' : 'rotate(0)', transition: 'transform 0.3s ease' }}
-  >
-    <polyline points="6 9 12 15 18 9"></polyline>
-  </svg>
-);
-
 const EntrySection: React.FC<EntrySectionProps> = ({ onConnect, embedded = false }) => {
-  const [ros2Option, setRos2Option] = useState<'domain' | 'ip'>('ip');
+  const fleet = hasEnterpriseRobots() ? (getEnterpriseSession()?.robots ?? []) : [];
+  const [robotId, setRobotId] = useState(fleet[0]?.id ?? '');
   const [ros2Value, setRos2Value] = useState<string>('');
   const [servicePorts, setServicePorts] = useState<RuntimeServicePorts>(() => getDefaultServicePorts());
   const [isTransitioning, setIsTransitioning] = useState(false);
@@ -90,6 +75,7 @@ const EntrySection: React.FC<EntrySectionProps> = ({ onConnect, embedded = false
   const needsConnectionTarget = !currentHostname;
 
   const [showAdvanced, setShowAdvanced] = useState(needsConnectionTarget);
+  const formId = useId();
   const logoRef = useRef<HTMLDivElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -153,45 +139,11 @@ const EntrySection: React.FC<EntrySectionProps> = ({ onConnect, embedded = false
   // Handle advanced form animation when its visibility changes
   useEffect(() => {
     animateAdvancedForm(formRef.current, showAdvanced);
-
-    // Animate gear icon rotation
-    const gearIcon = document.querySelector('.advanced-toggle-content svg') as HTMLElement | null;
-    if (gearIcon) {
-      anime({
-        targets: gearIcon as HTMLElement,
-        rotate: showAdvanced ? 180 : 0,
-        duration: 500,
-        easing: 'easeInOutQuad',
-      });
-    }
   }, [showAdvanced]);
-
-  // Helper function to convert hex to rgb (kept for potential future use)
-  const _hexToRgb = (hex: string): string => {
-    // Default fallback in case of parsing issues
-    if (!hex || !hex.startsWith('#')) return '50, 205, 50';
-
-    const shorthandRegex = /^#?([a-f\d])([a-f\d])([a-f\d])$/i;
-    const fullHex = hex.replace(shorthandRegex, (_m, r, g, b) => r + r + g + g + b + b);
-
-    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(fullHex);
-    if (!result) return '50, 205, 50';
-
-    const r = parseInt(result[1], 16);
-    const g = parseInt(result[2], 16);
-    const b = parseInt(result[3], 16);
-
-    return `${r}, ${g}, ${b}`;
-  };
 
   // Animate the dash character - re-run animation when theme changes
   useEffect(() => {
-    if (!dashRef.current) return;
-
-    // Get theme colors for animation
-    const style = getComputedStyle(document.documentElement);
-    const _primaryColor = style.getPropertyValue('--primary-color').trim();
-    const _hoverColor = style.getPropertyValue('--primary-hover-color').trim();
+    if (!dashRef.current || prefersReducedMotion()) return;
 
     // Clear any inline styles
     dashRef.current.style.removeProperty('color');
@@ -248,8 +200,8 @@ const EntrySection: React.FC<EntrySectionProps> = ({ onConnect, embedded = false
 
     const selectedPorts = normalizeSelectedPorts();
     const params: ConnectionParams = {
-      ros2Option,
-      ros2Value: ros2Option === 'domain' ? parseInt(ros2Value, 10) || 0 : ros2Value,
+      ros2Option: 'ip',
+      ros2Value,
       ...selectedPorts,
     };
     onConnect(params);
@@ -259,6 +211,19 @@ const EntrySection: React.FC<EntrySectionProps> = ({ onConnect, embedded = false
     if (isTransitioning) return;
 
     setIsTransitioning(true);
+    const complete = () => {
+      const selectedPorts = normalizeRuntimeServicePorts(quickConnectHistory ?? servicePorts, defaultServicePorts);
+      onConnect({
+        ros2Option: 'ip',
+        ros2Value: currentHostname,
+        ...selectedPorts,
+        ...(robotId ? { enterpriseRobotId: robotId } : {}),
+      });
+    };
+    if (prefersReducedMotion()) {
+      complete();
+      return;
+    }
     const button = quickConnectRef.current;
     if (!button) return;
 
@@ -285,16 +250,7 @@ const EntrySection: React.FC<EntrySectionProps> = ({ onConnect, embedded = false
     // Create a timeline for the animation sequence
     const timeline = anime.timeline({
       easing: 'easeInOutQuad',
-      complete: () => {
-        // Call onConnect after animation completes
-        const selectedPorts = normalizeRuntimeServicePorts(quickConnectHistory ?? servicePorts, defaultServicePorts);
-        const params: ConnectionParams = {
-          ros2Option: 'ip',
-          ros2Value: currentHostname,
-          ...selectedPorts,
-        };
-        onConnect(params);
-      },
+      complete,
     });
 
     // First shrink to a dot
@@ -346,17 +302,37 @@ const EntrySection: React.FC<EntrySectionProps> = ({ onConnect, embedded = false
     <div className={`entry-section-container ${embedded ? 'is-embedded' : ''}`} ref={containerRef}>
       <div className="entry-section card" data-testid="entry-section">
         <div className="logo-container" ref={logoRef}>
-          <h1 className="app-title">
-            <span className="title-robo">Robo</span>
-            <span className="title-dash" ref={dashRef}>
-              -
-            </span>
-            <span className="title-boy">Boy</span>
-          </h1>
+          {companyBranded ? (
+            <h1 className="app-title">
+              <BrandMark />
+            </h1>
+          ) : (
+            <h1 className="app-title">
+              <span className="title-robo">Robo</span>
+              <span className="title-dash" ref={dashRef}>
+                -
+              </span>
+              <span className="title-boy">Boy</span>
+            </h1>
+          )}
         </div>
 
+        <h2 className="connection-heading">Connect your robots</h2>
+        <p className="connection-intro">Each connection has its own workspace. Add more as you go.</p>
         <div className="connection-options">
-          <button type="button" className="advanced-toggle" onClick={() => onConnect({ offline: true, ros2Option: 'ip', ros2Value: 'localhost' })}>Open local recordings</button>
+          {fleet.length > 0 && (
+            <label className="enterprise-robot-picker">
+              Robot
+              <select aria-label="Robot" value={robotId} onChange={event => setRobotId(event.target.value)}>
+                {fleet.map(robot => (
+                  <option key={robot.id} value={robot.id}>
+                    {robot.name}
+                  </option>
+                ))}
+              </select>
+              <span>Choose a robot. Each connection has its own workspace and control.</span>
+            </label>
+          )}
           {needsConnectionTarget ? (
             <p className="connection-prompt">
               Enter the address of the computer running the ROS stack. It is remembered for next time.
@@ -379,58 +355,54 @@ const EntrySection: React.FC<EntrySectionProps> = ({ onConnect, embedded = false
               </button>
 
               {/* Nothing to collapse back to while the form is the only way to connect. */}
-              <button
-                type="button"
-                className="advanced-toggle"
-                onClick={toggleAdvanced}
-                title="Advanced Options"
-                style={{
-                  padding: '12px 16px',
-                  minWidth: '48px',
-                  display: 'flex',
-                  justifyContent: 'center',
-                  alignItems: 'center',
-                }}
-              >
-                <span className="advanced-toggle-content">
-                  <GearIcon />
-                </span>
-              </button>
+              {!hasEnterpriseRobots() && (
+                <button
+                  type="button"
+                  className="advanced-toggle connection-disclosure"
+                  onClick={toggleAdvanced}
+                  title="Advanced Options"
+                  aria-expanded={showAdvanced}
+                  aria-controls={formId}
+                >
+                  <span className={`connection-disclosure-icon ${showAdvanced ? 'is-open' : ''}`}>
+                    <ConnectionPlusIcon />
+                  </span>
+                  <span className="connection-disclosure-copy">
+                    <strong>{showAdvanced ? 'Hide connection details' : 'Choose another robot'}</strong>
+                    <span>Enter a host or IP address</span>
+                  </span>
+                </button>
+              )}
             </>
           )}
 
-          <form onSubmit={handleSubmit} ref={formRef} className={`advanced-form ${showAdvanced ? 'visible' : ''}`}>
+          <form
+            id={formId}
+            aria-hidden={!showAdvanced}
+            onSubmit={handleSubmit}
+            ref={formRef}
+            className={`advanced-form ${showAdvanced ? 'visible' : ''}`}
+          >
             <div className="form-group">
-              <label>Connection Method:</label>
-              <div className="radio-group">
-                <label>
-                  <input
-                    type="radio"
-                    value="domain"
-                    checked={ros2Option === 'domain'}
-                    onChange={() => setRos2Option('domain')}
-                  />
-                  Domain ID
-                </label>
-                <label>
-                  <input type="radio" value="ip" checked={ros2Option === 'ip'} onChange={() => setRos2Option('ip')} />
-                  Host or IP
-                </label>
-              </div>
-            </div>
-            <div className="form-group">
-              <label htmlFor="ros2Value">{ros2Option === 'domain' ? 'Domain ID:' : 'Host or IP:'}</label>
+              <label htmlFor="ros2Value">Host or IP:</label>
               <input
-                type={ros2Option === 'domain' ? 'number' : 'text'}
+                type="text"
                 id="ros2Value"
                 value={ros2Value}
                 onChange={e => setRos2Value(e.target.value)}
-                placeholder={ros2Option === 'domain' ? 'e.g., 0' : 'e.g., robot.tailnet.ts.net'}
+                placeholder="e.g., 192.168.1.42 or robot.local"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
                 required
               />
             </div>
-            <div className="form-group">
-              <label>Ports:</label>
+            <details className="connection-ports">
+              <summary>
+                <FiSliders className="connection-ports-icon" aria-hidden="true" />
+                <span>Connection ports</span>
+                <FiChevronDown className="connection-ports-chevron" aria-hidden="true" />
+              </summary>
               <div className="port-grid">
                 <label className="port-field" htmlFor="rosbridgePort">
                   <span>ROS</span>
@@ -475,15 +447,25 @@ const EntrySection: React.FC<EntrySectionProps> = ({ onConnect, embedded = false
                   />
                 </label>
               </div>
-            </div>
+            </details>
             <button type="submit" className="connect-btn">
               Connect
             </button>
           </form>
+          <button
+            type="button"
+            className="advanced-toggle"
+            onClick={() => onConnect({ offline: true, ros2Option: 'ip', ros2Value: 'localhost' })}
+          >
+            Open local recordings
+          </button>
 
-          {recentConnections.length > 0 && (
+          {!hasEnterpriseRobots() && recentConnections.length > 0 && (
             <div className="recent-connections" aria-label="Recent connections">
-              <div className="recent-connections-title">Recent</div>
+              <div className="recent-connections-title">
+                <span>Recent</span>
+                <span>{recentConnections.length} saved</span>
+              </div>
               <div className="recent-connections-list">
                 {recentConnections.map(connection => (
                   <div key={connection.host} className="recent-connection-row">
@@ -512,6 +494,7 @@ const EntrySection: React.FC<EntrySectionProps> = ({ onConnect, embedded = false
             </div>
           )}
         </div>
+        <RoboBoyAttribution className="entry-attribution" />
       </div>
       <div
         ref={transitionOverlayRef}

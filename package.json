@@ -1,7 +1,7 @@
 {
   "name": "robot-web-controller",
   "private": true,
-  "version": "0.18.0-alpha",
+  "version": "0.19.0-alpha",
   "description": "Web, desktop and mobile interface for controlling and visualizing ROS 2 robots.",
   "homepage": "https://github.com/tessel-la/robo-boy",
   "desktopName": "robo-boy.desktop",
@@ -30,9 +30,9 @@
     "ios:init": "tauri ios init && cp -f src-tauri/icons/ios/*.png src-tauri/gen/apple/Assets.xcassets/AppIcon.appiconset/",
     "ios:dev": "tauri ios dev",
     "ios:build": "tauri ios build",
-    "android:init": "tauri android init",
+    "android:init": "tauri android init && node scripts/generate-icons.cjs --android",
     "android:dev": "tauri android dev",
-    "android:build": "tauri android build --apk",
+    "android:build": "node scripts/generate-icons.cjs --android && tauri android build --apk",
     "tauri": "tauri",
     "lint": "eslint . --ext ts,tsx --max-warnings 0",
     "format": "prettier --write \"src/**/*.{ts,tsx,css}\"",
@@ -42,8 +42,11 @@
     "test:panel-installer": "node --test scripts/install-panels.test.mjs",
     "test:robot-resources": "node scripts/test-robot-resources.mjs",
     "test:embed-proxy": "node scripts/test-embed-proxy.mjs",
+    "test:electron-updater": "node scripts/test-electron-updater.mjs",
     "test:electron-tls": "node scripts/test-electron-tls.mjs",
     "test:assistant-desktop": "node scripts/test-assistant-desktop.mjs",
+    "test:enterprise": "node --test infra/enterprise/*.test.mjs",
+    "e2e:enterprise": "playwright test --config config/playwright.enterprise.config.ts",
     "test:run": "vitest run --config config/vitest.config.ts",
     "test:coverage": "vitest run --config config/vitest.config.ts --coverage",
     "e2e": "playwright test --config config/playwright.config.ts",
@@ -52,7 +55,10 @@
     "e2e:report": "playwright show-report playwright-report",
     "profile:frontend": "ROBOBOY_PROFILE=1 playwright test e2e/performance-profile.spec.ts --config config/playwright.config.ts --workers=1 --reporter=line",
     "panels:sandbox": "node scripts/build-panel-sandbox.mjs",
-    "check:release-panels": "node scripts/check-release-panels.mjs"
+    "check:release-panels": "node scripts/check-release-panels.mjs",
+    "icons:generate": "node scripts/generate-icons.cjs",
+    "test:notices": "node --test scripts/third-party-notices.test.mjs",
+    "build:enterprise": "node scripts/build-enterprise.mjs"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^4.0.75",
@@ -73,10 +79,13 @@
     "ai": "^7.0.131",
     "animejs": "^3.2.1",
     "fzstd": "^0.1.1",
+    "http-proxy": "^1.18.1",
     "jose": "^6.2.12",
     "lodash-es": "^4.17.21",
     "ollama-ai-provider-v2": "^4.0.1",
+    "openid-client": "^6.8.8",
     "png-to-ico": "^2.1.8",
+    "proper-lockfile": "^4.1.2",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-icons": "^5.2.1",
@@ -87,7 +96,8 @@
     "roslib": "^1.4.1",
     "semver": "^7.8.5",
     "three": "^0.160.0",
-    "uuid": "^14.0.0"
+    "uuid": "^14.0.0",
+    "ws": "^8.22.0"
   },
   "overrides": {
     "roslib": {
@@ -102,24 +112,21 @@
     "@testing-library/react": "^16.1.0",
     "@types/react": "^18.2.66",
     "@types/react-dom": "^18.2.22",
-    "@types/uuid": "^9.0.8",
     "@typescript-eslint/eslint-plugin": "^8.71.0",
     "@typescript-eslint/parser": "^8.71.0",
     "@vitejs/plugin-react": "^4.2.1",
-    "@vitest/coverage-istanbul": "^4.1.11",
-    "@vitest/coverage-v8": "^4.1.11",
-    "electron": "^44.4.3",
+    "@vitest/coverage-istanbul": "^4.1.12",
+    "electron": "^44.9.3",
     "electron-builder": "^26.15.3",
     "eslint": "^8.57.0",
     "eslint-plugin-react-hooks": "^4.6.0",
-    "eslint-plugin-react-refresh": "^0.4.6",
     "jsdom": "^25.0.1",
     "prettier": "^3.7.4",
-    "sharp": "^0.35.4",
+    "sharp": "^0.35.5",
     "typescript": "^5.2.2",
-    "vite": "^6.3.5",
-    "vite-plugin-mkcert": "^1.17.8",
+    "vite": "^6.4.4",
     "vite-plugin-pwa": "^1.0.0",
-    "vitest": "^4.1.11"
-  }
+    "vitest": "^4.1.12"
+  },
+  "license": "Apache-2.0"
 }
