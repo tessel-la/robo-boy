@@ -23,7 +23,7 @@ host internals through its contract.
 | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `Navbar`, the standalone standard/Game Boy/voice pads, and `useThreePanelLayout` have only test callers. `App` retains a commented Navbar import. The shell uses configurable pads and the recursive workspace layout instead. | Duplicate UI and lifecycle code; tests exercise unreachable implementations. The voice prototype sends placeholder data. | High: imports, runtime dispatch, stored panel types, SDK, and guides checked.                       | Remove these components, private styles/types, and their obsolete tests. Keep the live configurable joystick/physical-pad implementations and their dependencies.                                                        |
 | `src/utils/ros3d/index.ts` and its Viewer, URDF, PointCloud2, Grid, and Axes implementations form a shadow graph. Imports of `utils/ros3d` resolve to `src/utils/ros3d.ts`.                                                    | Competing 3D implementations and misleading tests.                                                                       | High: TypeScript resolution, import graph, build entry points, hooks, and architecture guide agree. | Remove the shadow graph. Keep `visualizers/LaserScan.ts`, imported by the live entry point. Move primitive coverage onto the live exports; retain live viewer, URDF, point-cloud, TF, disposal, and browser regressions. |
-| `vite-plugin-mkcert` is commented out; `@types/uuid` duplicates uuid's own declarations; coverage uses Istanbul; the React Refresh ESLint rule is explicitly disabled.                                                         | Unnecessary direct tooling dependencies and lockfile entries.                                                            | High for direct usage; transitive retention must be checked.                                        | Remove these four direct dependencies and stale configuration comments/disabled registration. Do not upgrade other packages.                                                                                             |
+| `vite-plugin-mkcert` is commented out; `@types/uuid` duplicates uuid's own declarations; coverage uses Istanbul; the React Refresh ESLint rule is explicitly disabled.                                                         | Unnecessary direct tooling dependencies and lockfile entries.                                                            | High for direct usage; transitive retention must be checked.                                        | Remove these four direct dependencies and stale configuration comments/disabled registration. Apply the security updates recorded below after completing the initial cleanup.                                            |
 | Entry/workspace code contains unused local helpers and abandoned handlers. Several imports are unused.                                                                                                                         | Maintenance noise and unnecessary render-time work.                                                                      | High only for compiler-confirmed local references.                                                  | Remove pure, unused computations/helpers and imports; preserve live initializers, side effects, and lifecycle behavior.                                                                                                  |
 | Navigation E2E assertions can pass without checking anything; the old Viewer tests mostly check Three.js itself.                                                                                                               | False confidence in application coverage.                                                                                | High: assertions inspected.                                                                         | Replace vacuous navigation/manifest assertions with application expectations. Keep meaningful live 3D lifecycle checks.                                                                                                  |
 | Native HTTP/window/Tauri stubs have no relative import callers.                                                                                                                                                                | A naive dead-file scan would break web/Electron builds.                                                                  | High: Vite and TypeScript aliases select them.                                                      | Retain.                                                                                                                                                                                                                  |
@@ -51,9 +51,10 @@ polling resolves browser validation, and profiling uses saved production builds.
 The proposed removals above are complete. No production dependency is removed: ROS/MCAP,
 Three.js, joystick, Lodash, UUID, native networking, and enterprise authentication packages have
 verified consumers. Removed direct development dependencies are `vite-plugin-mkcert`,
-`@types/uuid`, `@vitest/coverage-v8`, and `eslint-plugin-react-refresh`. The V8 provider remains
-locked as an optional Vitest peer. Seven lockfile package entries disappear (1,009 → 1,002),
-with no version changes among retained packages. An isolated `npm ci --ignore-scripts` succeeds;
+`@types/uuid`, `@vitest/coverage-v8`, and `eslint-plugin-react-refresh`. The initial cleanup leaves the V8 provider
+locked as an optional Vitest peer and removes seven lockfile package entries (1,009 → 1,002),
+with no version changes among retained packages. The subsequent security update removes the
+remaining unused V8 provider subtree and updates the vulnerable dependencies, as recorded below. An isolated `npm ci --ignore-scripts` succeeds;
 its clean source snapshot passes the full unit suite, build, lint, and Electron typecheck.
 
 Nine obsolete test files are removed along with their unreachable implementations. Two new files
@@ -69,7 +70,7 @@ and TypeScript aliases and are retained. The opt-in unused-local diagnostic coun
 106 to 73. Remaining findings include unused state readouts, test mocks/parameters, and imports;
 there is no blanket compiler-rule enablement or repository-wide formatting change.
 
-## Validation
+## Initial cleanup validation
 
 | Check                                                                                       | Baseline                                                     | Cleanup                                    |
 | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------ | ------------------------------------------ |
@@ -142,20 +143,71 @@ LaserScan's settled transform loop still schedules approximately 60 callbacks/s,
 draws, in both builds. Replacing that polling loop requires a separate lifecycle/performance change;
 it is intentionally retained in this cleanup.
 
+## Security update and final validation
+
+The dependency security update is included before publishing this branch. `npm audit`
+now reports **zero vulnerabilities**, down from eight affected packages (two high, five moderate,
+one low). A fresh RustSec audit finds nine vulnerable-crate advisories and a fixable Tokio
+soundness warning; targeted compatible updates resolve those too. Electron stays on major 44,
+Vitest/Istanbul stay on the matching 4.1 line, and Rust dependencies stay in their existing
+compatible version ranges:
+
+| Dependency                   | Before          | Patched         |
+| ---------------------------- | --------------- | --------------- |
+| Electron                     | 44.4.3          | 44.9.3          |
+| Vitest and Istanbul provider | 4.1.11          | 4.1.12          |
+| Undici                       | 7.29.1 / 6.28.1 | 7.30.1 / 6.29.1 |
+| fast-uri                     | 3.1.8           | 3.1.9           |
+| serialize-javascript         | 7.0.5           | 7.1.4           |
+| quinn-proto                  | 0.11.17         | 0.11.18         |
+| rustls                       | 0.23.45         | 0.23.46         |
+| rustls-webpki                | 0.103.15        | 0.103.16        |
+| webpki-roots                 | 1.0.9           | 1.0.10          |
+| Tokio                        | 1.52.3          | 1.53.3          |
+
+Vitest's matching internal packages and compatible Chai/std-env/tinyrainbow dependencies update
+with it. npm 11 resolves the documented npm 9 `edgesOut` failure. No new overrides or major-version
+upgrades are introduced. The lockfile now contains 997 package entries; a fresh `npm ci` passes,
+and Electron's official installer supplies and verifies the actual 44.9.3 binary.
+
+After these updates, the full coverage run with `--maxWorkers=4` passes 1,735 tests with 10 skips;
+line coverage remains 80.62% (statements 78.11%, branches 69.17%, functions 77.35%). The initial
+unbounded run overlapped builds and hit a 1 s subprocess-startup wait; bounded workers resolve it
+without weakening assertions. All 75 Node tests, lint, frontend/Electron typechecks, web/Tauri
+frontend/Electron/enterprise builds, updater checks, and 12 enterprise browser tests pass.
+The final isolated Chromium/Firefox run passes 250 tests with 26 expected skips. It uses
+`FRONTEND_PORT=5178 PLAYWRIGHT_BASE_URL=http://127.0.0.1:5178` and `--workers=2`
+with the same CI-pinned panel artifacts. The earlier parallel run had two timing-sensitive
+connection/status assertion failures (248 passed); a focused attempt that reused the first
+server was invalidated by that server shutting down. The isolated full run resolves those
+validation conditions without changing application code, relaxing assertions, or adding retries.
+
+RustSec 0.22.2 runs from `/tmp` using the official release binary and verified SHA-256 digest,
+with an isolated advisory database. The final audit reports zero vulnerable-crate advisories;
+the glib soundness warning and nine unmaintained-crate warnings remain unsuppressed. `cargo test
+--manifest-path src-tauri/Cargo.toml --locked --lib` compiles the native stack and passes 14 tests,
+with one live-release download test intentionally ignored. Only five crate versions change.
+Cargo also normalizes six existing platform/getrandom dependency edges among already locked
+versions; there are no additional crate-version upgrades or Rust source/manifest changes.
+
+The patched native runtime also passes `test:robot-resources`, `test:embed-proxy`, and
+`test:electron-tls` under Xvfb: meshes/materials/textures/cache replacement, sandbox isolation,
+embed host/port restrictions, local robot HTTPS/WSS, rejection of fake public TLS, and opaque-panel
+WebRTC signaling. The TLS fixture now waits for its `app://robo-boy/index.html` navigation before
+renderer assertions; it previously raced that navigation. The earlier Electron attachment timeout
+is a baseline limitation, not an outstanding final failure.
+
+The security update emits byte-identical web JavaScript and CSS to the measured cleanup build.
+The preceding bundle/performance tables therefore still describe the final web assets. Native
+Electron/Tauri performance and platform installers are not benchmarked here.
+
 ## Retained risks and follow-up coverage
 
-- `npm audit` reports the same eight affected packages in both lockfiles: two high, five moderate,
-  and one low. High entries are Electron 44.4.3 and transitive Undici. Electron is a shipped runtime,
-  despite its development-dependency classification. Vitest/mocker, fast-uri, and serialize-javascript
-  account for the other entries. Track a separate tested security update; this cleanup does not fix
-  or suppress advisories. See the companion measurements for advisory URLs and dependency paths.
-- `cargo audit --file src-tauri/Cargo.lock` cannot run because `cargo-audit` is not installed.
-  The Rust lockfile is unchanged. The earlier security guide's zero-vulnerability statement is
-  historical and does not describe this audit's current npm result.
-- Native Electron integration (`test:robot-resources`, `test:embed-proxy`, `test:electron-tls`)
-  times out during Playwright's Electron debugger attachment. A temporary Xvfb display does not
-  resolve the baseline robot-resource timeout. Renderer/shell builds and mocked native tests pass;
-  actual desktop integration remains unverified. No native runtime code changes in this branch.
+- RustSec still reports `RUSTSEC-2024-0429` for glib 0.18.5 and nine unmaintained crates
+  (`proc-macro-error`, five `unic-*` crates, `zbus_names`, `zvariant`, and `zvariant_derive`).
+  GTK3/WebKitGTK uses glib 0.18; the fix requires glib 0.20 or newer. Adding a second glib version
+  would not fix the affected dependency. A compatible upstream desktop-stack migration is needed;
+  this cleanup does not force one or suppress its warnings.
 - Ten existing unit skips remain: eight application-shell scenarios and two PointCloud mobile/color
   scenarios. Browser lifecycle coverage is retained, but it does not establish every skipped case.
   Real robot control, reconnects under hardware/network failure, actual camera decode, physical

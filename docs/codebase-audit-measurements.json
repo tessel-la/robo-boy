@@ -1578,6 +1578,587 @@
         ]
       }
     ],
-    "cargoAudit": "Unavailable: cargo-audit is not installed; Rust lockfile unchanged."
+    "cargoAudit": "Unavailable: cargo-audit is not installed; Rust lockfile unchanged.",
+    "phase": "Original cleanup before the authorized dependency security update",
+    "followUp": {
+      "sourceBase": "ae0fc10",
+      "npmAudit": {
+        "info": 0,
+        "low": 0,
+        "moderate": 0,
+        "high": 0,
+        "critical": 0,
+        "total": 0
+      },
+      "changedVersions": [
+        {
+          "package": "node_modules/@vitest/coverage-istanbul",
+          "before": "4.1.11",
+          "after": "4.1.12"
+        },
+        {
+          "package": "node_modules/@vitest/expect",
+          "before": "4.1.11",
+          "after": "4.1.12"
+        },
+        {
+          "package": "node_modules/@vitest/mocker",
+          "before": "4.1.11",
+          "after": "4.1.12"
+        },
+        {
+          "package": "node_modules/@vitest/pretty-format",
+          "before": "4.1.11",
+          "after": "4.1.12"
+        },
+        {
+          "package": "node_modules/@vitest/runner",
+          "before": "4.1.11",
+          "after": "4.1.12"
+        },
+        {
+          "package": "node_modules/@vitest/snapshot",
+          "before": "4.1.11",
+          "after": "4.1.12"
+        },
+        {
+          "package": "node_modules/@vitest/spy",
+          "before": "4.1.11",
+          "after": "4.1.12"
+        },
+        {
+          "package": "node_modules/@vitest/utils",
+          "before": "4.1.11",
+          "after": "4.1.12"
+        },
+        {
+          "package": "node_modules/chai",
+          "before": "6.2.2",
+          "after": "6.3.0"
+        },
+        {
+          "package": "node_modules/electron",
+          "before": "44.4.3",
+          "after": "44.9.3"
+        },
+        {
+          "package": "node_modules/fast-uri",
+          "before": "3.1.8",
+          "after": "3.1.9"
+        },
+        {
+          "package": "node_modules/node-gyp/node_modules/undici",
+          "before": "6.28.1",
+          "after": "6.29.1"
+        },
+        {
+          "package": "node_modules/serialize-javascript",
+          "before": "7.0.5",
+          "after": "7.1.4"
+        },
+        {
+          "package": "node_modules/std-env",
+          "before": "4.2.0",
+          "after": "4.3.0"
+        },
+        {
+          "package": "node_modules/tinyrainbow",
+          "before": "3.1.1",
+          "after": "3.2.0"
+        },
+        {
+          "package": "node_modules/undici",
+          "before": "7.29.1",
+          "after": "7.30.1"
+        },
+        {
+          "package": "node_modules/vitest",
+          "before": "4.1.11",
+          "after": "4.1.12"
+        }
+      ],
+      "removedLockEntries": [
+        "node_modules/@bcoe/v8-coverage",
+        "node_modules/@vitest/coverage-v8",
+        "node_modules/ast-v8-to-istanbul",
+        "node_modules/ast-v8-to-istanbul/node_modules/estree-walker",
+        "node_modules/ast-v8-to-istanbul/node_modules/js-tokens"
+      ],
+      "cleanInstall": "npm ci succeeds; actual Electron binary is 44.9.3",
+      "coverage": {
+        "lines": {
+          "total": 22779,
+          "covered": 18366,
+          "skipped": 0,
+          "pct": 80.62
+        },
+        "statements": {
+          "total": 26654,
+          "covered": 20822,
+          "skipped": 0,
+          "pct": 78.11
+        },
+        "functions": {
+          "total": 6195,
+          "covered": 4792,
+          "skipped": 0,
+          "pct": 77.35
+        },
+        "branches": {
+          "total": 21331,
+          "covered": 14755,
+          "skipped": 0,
+          "pct": 69.17
+        },
+        "branchesTrue": {
+          "total": 0,
+          "covered": 0,
+          "skipped": 0,
+          "pct": 100
+        }
+      },
+      "webBundle": {
+        "assets": [
+          {
+            "name": "MainControlView-BEM00_vj.css",
+            "bytes": 400177,
+            "gzip": 62167,
+            "sha256": "b33deec97ec5e59d6323c0b59c2189ca55420a342f2698cc8efad250d5f6c484"
+          },
+          {
+            "name": "MainControlView-CmZ_zjkO.js",
+            "bytes": 1859895,
+            "gzip": 535005,
+            "sha256": "8831b31ba69ccfc0c48213b5d35c58132ffbb12cbbe925e66ab55a878955ecef"
+          },
+          {
+            "name": "ThemeCreator-CLEMWQjw.js",
+            "bytes": 5069,
+            "gzip": 1775,
+            "sha256": "8f173f10c345fc24653817c8bc9819c0b214b5da8b84d0efafd5b60486457089"
+          },
+          {
+            "name": "ThemeCreator-CPkNLH2P.css",
+            "bytes": 3365,
+            "gzip": 953,
+            "sha256": "f06ef8ccd60a907034a311da86d43d362eb4301e6e7012bc7b1f87b5459c298d"
+          },
+          {
+            "name": "index-Ci03sDms.css",
+            "bytes": 44311,
+            "gzip": 8331,
+            "sha256": "12e24f8d71ac4f7de98d5788a50a6f57bedd9ea2dfeaef4d56e568cca7376e16"
+          },
+          {
+            "name": "index-D2HyXmF-.js",
+            "bytes": 274752,
+            "gzip": 86803,
+            "sha256": "a3ff252379ac6ea485de218d6273a09a4378aa75d2b1444a3164bea520f54a59"
+          },
+          {
+            "name": "nativeTauri.web-PN7VtCTE.js",
+            "bytes": 317,
+            "gzip": 180,
+            "sha256": "2d2bdf7ebba968f0ea5714dc42c83178f0abe016fd5499b7fd8cc3c28df437a4"
+          },
+          {
+            "name": "nativeWindow.web-MUhE9LgO.js",
+            "bytes": 120,
+            "gzip": 127,
+            "sha256": "a5bec49ee8dc627792f7422c3ace8b627a27c88f31363814111846f12537fcd5"
+          },
+          {
+            "name": "replay.worker-D5XyVUDF.js",
+            "bytes": 144473,
+            "gzip": 40417,
+            "sha256": "ce524670b8f970fe9a471321fb53b1f5241392a2307c1c1ccc75ec0f4f972aa8"
+          },
+          {
+            "name": "v4-DoFEyIon.js",
+            "bytes": 732,
+            "gzip": 443,
+            "sha256": "3c74e1f104da2df741a101472d51e023640ee153e8f68b91c731aae55afec4e7"
+          }
+        ],
+        "js": {
+          "bytes": 2285358,
+          "gzip": 664750
+        },
+        "css": {
+          "bytes": 447853,
+          "gzip": 71451
+        }
+      },
+      "webAssetsIdenticalToCleanup": true,
+      "nativeChecks": {
+        "robotResources": "pass",
+        "embedProxy": "pass",
+        "tls": "pass after waiting for the app navigation"
+      },
+      "remainingLimitations": [
+        "Upstream GTK/glib soundness warning and nine unmaintained-crate warnings remain",
+        "Platform installers and hardware/mobile devices not exercised",
+        "Existing formatting debt and test skips"
+      ],
+      "commit": "a6d25e4",
+      "rust": {
+        "auditor": {
+          "version": "0.22.2",
+          "url": "https://github.com/rustsec/rustsec/releases/download/cargo-audit/v0.22.2/cargo-audit-x86_64-unknown-linux-musl-v0.22.2.tgz",
+          "sha256": "7fb9497f8594b389e5fce5ef9b92db08432996895b2e0c5a0167a69ed445c428"
+        },
+        "before": {
+          "vulnerabilities": {
+            "count": 9,
+            "list": [
+              {
+                "package": "quinn-proto",
+                "version": "0.11.17",
+                "id": "RUSTSEC-2026-0343",
+                "title": "Outgoing datagram buffer accounting can panic the sender in quinn-proto",
+                "url": "https://github.com/quinn-rs/quinn/pull/2806",
+                "patched": [">=0.11.18"]
+              },
+              {
+                "package": "quinn-proto",
+                "version": "0.11.17",
+                "id": "RUSTSEC-2026-0340",
+                "title": "Peer minimum ACK delay can panic quinn-proto when ACK_FREQUENCY transmission is enabled",
+                "url": "https://github.com/quinn-rs/quinn/pull/2868",
+                "patched": [">=0.11.18"]
+              },
+              {
+                "package": "quinn-proto",
+                "version": "0.11.17",
+                "id": "RUSTSEC-2026-0338",
+                "title": "Remote peer can panic quinn-proto with zero-length STREAM frames during unordered reads",
+                "url": "https://github.com/quinn-rs/quinn/pull/2868",
+                "patched": [">=0.11.18"]
+              },
+              {
+                "package": "rustls",
+                "version": "0.23.45",
+                "id": "RUSTSEC-2026-0349",
+                "title": "Unauthenticated ServerHello can downgrade later connections to classical key exchange",
+                "url": "https://github.com/rustls/rustls/pull/3355",
+                "patched": [">=0.23.46"]
+              },
+              {
+                "package": "rustls",
+                "version": "0.23.45",
+                "id": "RUSTSEC-2026-0348",
+                "title": "Brotli certificate decompression can allocate up to 1 GiB before authentication",
+                "url": "https://github.com/rustls/rustls/pull/3297",
+                "patched": [">=0.23.46"]
+              },
+              {
+                "package": "rustls",
+                "version": "0.23.45",
+                "id": "RUSTSEC-2026-0347",
+                "title": "Buffered application data sent to outer server after ECH rejection",
+                "url": "https://github.com/rustls/rustls/pull/3300",
+                "patched": [">=0.23.46"]
+              },
+              {
+                "package": "rustls",
+                "version": "0.23.45",
+                "id": "RUSTSEC-2026-0346",
+                "title": "`Debug` impls for client session values expose TLS secrets",
+                "url": "https://github.com/rustls/rustls/pull/3299",
+                "patched": [">=0.23.46"]
+              },
+              {
+                "package": "rustls-webpki",
+                "version": "0.103.15",
+                "id": "RUSTSEC-2026-0382",
+                "title": "Certificate verification may accept distrusted intermediates",
+                "url": "https://github.com/rustls/webpki/pull/546",
+                "patched": [">=0.103.16, <0.104.0-alpha.1", ">=0.104.0-alpha.8"]
+              },
+              {
+                "package": "webpki-roots",
+                "version": "1.0.9",
+                "id": "RUSTSEC-2026-0381",
+                "title": "Bundled root certificates allow trust in distrusted emSign intermediates",
+                "url": "https://github.com/rustls/webpki-roots/pull/133",
+                "patched": [">=1.0.10"]
+              }
+            ]
+          },
+          "warnings": {
+            "unmaintained": [
+              {
+                "package": "proc-macro-error",
+                "version": "1.0.4",
+                "id": "RUSTSEC-2024-0370",
+                "title": "proc-macro-error is unmaintained",
+                "url": "https://gitlab.com/CreepySkeleton/proc-macro-error/-/issues/20",
+                "patched": []
+              },
+              {
+                "package": "unic-char-property",
+                "version": "0.9.0",
+                "id": "RUSTSEC-2025-0081",
+                "title": "`unic-char-property` is unmaintained",
+                "url": "https://github.com/rustsec/advisory-db/issues/2414",
+                "patched": []
+              },
+              {
+                "package": "unic-char-range",
+                "version": "0.9.0",
+                "id": "RUSTSEC-2025-0075",
+                "title": "`unic-char-range` is unmaintained",
+                "url": "https://github.com/rustsec/advisory-db/issues/2414",
+                "patched": []
+              },
+              {
+                "package": "unic-common",
+                "version": "0.9.0",
+                "id": "RUSTSEC-2025-0080",
+                "title": "`unic-common` is unmaintained",
+                "url": "https://github.com/rustsec/advisory-db/issues/2414",
+                "patched": []
+              },
+              {
+                "package": "unic-ucd-ident",
+                "version": "0.9.0",
+                "id": "RUSTSEC-2025-0100",
+                "title": "`unic-ucd-ident` is unmaintained",
+                "url": "https://github.com/rustsec/advisory-db/issues/2414",
+                "patched": []
+              },
+              {
+                "package": "unic-ucd-version",
+                "version": "0.9.0",
+                "id": "RUSTSEC-2025-0098",
+                "title": "`unic-ucd-version` is unmaintained",
+                "url": "https://github.com/rustsec/advisory-db/issues/2414",
+                "patched": []
+              },
+              {
+                "package": "zbus_names",
+                "version": "4.3.4",
+                "id": "RUSTSEC-2026-0371",
+                "title": "`zbus_names` is unmaintained",
+                "url": "https://github.com/z-galaxy/zbus/issues/2043",
+                "patched": []
+              },
+              {
+                "package": "zvariant",
+                "version": "5.15.0",
+                "id": "RUSTSEC-2026-0370",
+                "title": "`zvariant` is unmaintained",
+                "url": "https://github.com/z-galaxy/zbus/issues/2043",
+                "patched": []
+              },
+              {
+                "package": "zvariant_derive",
+                "version": "5.15.0",
+                "id": "RUSTSEC-2026-0372",
+                "title": "`zvariant_derive` is unmaintained",
+                "url": "https://github.com/z-galaxy/zbus/issues/2043",
+                "patched": []
+              }
+            ],
+            "unsound": [
+              {
+                "package": "glib",
+                "version": "0.18.5",
+                "id": "RUSTSEC-2024-0429",
+                "title": "Unsoundness in `Iterator` and `DoubleEndedIterator` impls for `glib::VariantStrIter`",
+                "url": "https://github.com/gtk-rs/gtk-rs-core/pull/1343",
+                "patched": [">=0.20.0"]
+              },
+              {
+                "package": "tokio",
+                "version": "1.52.3",
+                "id": "RUSTSEC-2026-0386",
+                "title": "`AsyncFd::new` and related constructors violate I/O safety",
+                "url": "https://github.com/tokio-rs/tokio/pull/8587",
+                "patched": [">=1.51.6, <1.52.0", ">=1.53.3"]
+              }
+            ]
+          }
+        },
+        "after": {
+          "vulnerabilities": {
+            "count": 0,
+            "list": []
+          },
+          "warnings": {
+            "unmaintained": [
+              {
+                "package": "proc-macro-error",
+                "version": "1.0.4",
+                "id": "RUSTSEC-2024-0370",
+                "title": "proc-macro-error is unmaintained",
+                "url": "https://gitlab.com/CreepySkeleton/proc-macro-error/-/issues/20",
+                "patched": []
+              },
+              {
+                "package": "unic-char-property",
+                "version": "0.9.0",
+                "id": "RUSTSEC-2025-0081",
+                "title": "`unic-char-property` is unmaintained",
+                "url": "https://github.com/rustsec/advisory-db/issues/2414",
+                "patched": []
+              },
+              {
+                "package": "unic-char-range",
+                "version": "0.9.0",
+                "id": "RUSTSEC-2025-0075",
+                "title": "`unic-char-range` is unmaintained",
+                "url": "https://github.com/rustsec/advisory-db/issues/2414",
+                "patched": []
+              },
+              {
+                "package": "unic-common",
+                "version": "0.9.0",
+                "id": "RUSTSEC-2025-0080",
+                "title": "`unic-common` is unmaintained",
+                "url": "https://github.com/rustsec/advisory-db/issues/2414",
+                "patched": []
+              },
+              {
+                "package": "unic-ucd-ident",
+                "version": "0.9.0",
+                "id": "RUSTSEC-2025-0100",
+                "title": "`unic-ucd-ident` is unmaintained",
+                "url": "https://github.com/rustsec/advisory-db/issues/2414",
+                "patched": []
+              },
+              {
+                "package": "unic-ucd-version",
+                "version": "0.9.0",
+                "id": "RUSTSEC-2025-0098",
+                "title": "`unic-ucd-version` is unmaintained",
+                "url": "https://github.com/rustsec/advisory-db/issues/2414",
+                "patched": []
+              },
+              {
+                "package": "zbus_names",
+                "version": "4.3.4",
+                "id": "RUSTSEC-2026-0371",
+                "title": "`zbus_names` is unmaintained",
+                "url": "https://github.com/z-galaxy/zbus/issues/2043",
+                "patched": []
+              },
+              {
+                "package": "zvariant",
+                "version": "5.15.0",
+                "id": "RUSTSEC-2026-0370",
+                "title": "`zvariant` is unmaintained",
+                "url": "https://github.com/z-galaxy/zbus/issues/2043",
+                "patched": []
+              },
+              {
+                "package": "zvariant_derive",
+                "version": "5.15.0",
+                "id": "RUSTSEC-2026-0372",
+                "title": "`zvariant_derive` is unmaintained",
+                "url": "https://github.com/z-galaxy/zbus/issues/2043",
+                "patched": []
+              }
+            ],
+            "unsound": [
+              {
+                "package": "glib",
+                "version": "0.18.5",
+                "id": "RUSTSEC-2024-0429",
+                "title": "Unsoundness in `Iterator` and `DoubleEndedIterator` impls for `glib::VariantStrIter`",
+                "url": "https://github.com/gtk-rs/gtk-rs-core/pull/1343",
+                "patched": [">=0.20.0"]
+              }
+            ]
+          }
+        },
+        "updates": [
+          {
+            "package": "quinn-proto",
+            "before": "0.11.17",
+            "after": "0.11.18"
+          },
+          {
+            "package": "rustls",
+            "before": "0.23.45",
+            "after": "0.23.46"
+          },
+          {
+            "package": "rustls-webpki",
+            "before": "0.103.15",
+            "after": "0.103.16"
+          },
+          {
+            "package": "webpki-roots",
+            "before": "1.0.9",
+            "after": "1.0.10"
+          },
+          {
+            "package": "tokio",
+            "before": "1.52.3",
+            "after": "1.53.3"
+          }
+        ],
+        "test": {
+          "command": "CARGO_BUILD_JOBS=2 cargo test --manifest-path src-tauri/Cargo.toml --locked --lib",
+          "passed": 14,
+          "ignored": 1
+        },
+        "normalization": "Cargo re-resolves six existing Windows/getrandom dependency edges using versions already in the lockfile; no other crate versions change.",
+        "commit": "6b7f52c"
+      },
+      "validation": {
+        "unit": {
+          "passed": 1735,
+          "skipped": 10,
+          "files": 207,
+          "coverageWorkers": 4
+        },
+        "node": {
+          "passed": 75
+        },
+        "enterpriseBrowser": {
+          "passed": 12
+        },
+        "browser": {
+          "passed": 250,
+          "skipped": 26,
+          "workers": 2,
+          "baseUrl": "http://127.0.0.1:5178",
+          "minutes": 9.1
+        },
+        "earlierBrowserAttempts": [
+          {
+            "workers": 4,
+            "passed": 248,
+            "failed": 2,
+            "skipped": 26,
+            "failures": [
+              "Chromium assistant Data Explorer connection ready timeout",
+              "Firefox transient behavior-tree node success status"
+            ],
+            "applicationAssets": "identical to the previously passing cleanup build"
+          },
+          {
+            "kind": "focused repeated cases",
+            "valid": false,
+            "reason": "reused earlier server which shut down; connection refused",
+            "failed": 18
+          }
+        ],
+        "builds": ["web", "Tauri frontend and module check", "Electron renderer/shell", "enterprise gateway"],
+        "nativeIntegration": ["robot resources", "embed proxy", "TLS and opaque-panel WebRTC"],
+        "lint": "pass",
+        "electronTypes": "pass",
+        "npmAudit": {
+          "info": 0,
+          "low": 0,
+          "moderate": 0,
+          "high": 0,
+          "critical": 0,
+          "total": 0
+        }
+      }
+    }
   }
 }
