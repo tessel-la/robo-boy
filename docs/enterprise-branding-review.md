@@ -1,5 +1,11 @@
 # Enterprise branding architecture review
 
+> Current behavior update: `loginSlides` now supplies a surprise pool. One paired message is chosen
+> per login visit, with no carousel, timers or user navigation. The previous pair is remembered
+> per company to avoid an immediate repeat when possible. See [the current login-text guide](enterprise.md#edit-the-login-text).
+> The rotation findings and verification below describe the original implementation reviewed here.
+
+
 Reviewed on 2026-10-21 against Robo-Boy `dev` at `7506921` and the local
 `robo-boy-company-starter` checkout. The existing split is sound: Robo-Boy already owns the login
 feature, while the starter supplies company data and builds. Keep that split for maintained company

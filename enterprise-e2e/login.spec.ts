@@ -2,61 +2,56 @@ import { expect, test, type Page } from '@playwright/test';
 
 const openAccount = async (page: Page) => page.getByRole('button', { name: /Switch connections/ }).click();
 
+const welcomeTitle = /^(Your robotics workspace|Your robots\. One workspace\.)$/;
+
 for (const width of [1280, 320]) {
-  test(`company copy rotates without moving sign-in controls at ${width}px`, async ({ page, browserName }) => {
+  test(`company welcome is a stable surprise without navigation at ${width}px`, async ({ page, browserName }) => {
     await page.setViewportSize({ width, height: 844 });
-    // Headed Firefox can inherit an Xvfb pointer position over the copy, pausing rotation.
-    await page.mouse.move(10, 10);
     await page.clock.install();
     await page.goto('/');
-    const heading = page.getByRole('heading', { level: 1 });
+    const heading = page.locator('#enterprise-login-title');
     const signIn = page.getByRole('button', { name: 'Sign in with your company account' });
     await expect(signIn).toBeEnabled();
-    await expect(page.getByText('Company operations', { exact: true })).toBeVisible();
+    await expect(heading).toHaveText(welcomeTitle);
+    const first = await heading.innerText();
     const before = await signIn.boundingBox();
-    await page.clock.runFor(8000);
-    await expect(heading).toHaveText('Your robots. One workspace.');
-    await expect(page.getByText('Connect to your fleet and choose the tools for your next task.')).toBeVisible();
+    await page.clock.runFor(60000);
+    await expect(heading).toHaveText(first);
     expect((await signIn.boundingBox())!.y).toBeCloseTo(before!.y, 0);
-    const pause = page.getByRole('button', { name: 'Pause messages' });
-    await pause.focus();
-    await pause.press('Enter');
-    await page.clock.runFor(16000);
-    await expect(heading).toHaveText('Your robots. One workspace.');
-    await page.getByRole('button', { name: 'Next message' }).click();
-    await expect(heading).toHaveText('Your robotics workspace');
-    const play = page.getByRole('button', { name: 'Play messages' });
-    await play.focus();
-    await page.mouse.move(10, 10);
-    await play.press('Enter');
-    await expect(page.getByRole('button', { name: 'Pause messages' })).toBeVisible();
-    await page.clock.runFor(8000);
-    await expect(heading).toHaveText('Your robots. One workspace.');
+    await expect(
+      page.getByRole('button', { name: /Previous message|Next message|Pause messages|Play messages/ })
+    ).toHaveCount(0);
+    await page.reload();
+    await expect(signIn).toBeEnabled();
+    await expect(heading).toHaveText(welcomeTitle);
+    expect(await heading.innerText()).not.toBe(first);
+
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-    await page.screenshot({ path: `/tmp/roboboy-login-copy-${browserName}-${width}.png` });
-    // Copy navigation never grants access or replaces the provider flow.
+    await page.screenshot({ path: `/tmp/roboboy-login-surprise-${browserName}-${width}.png` });
     expect((await page.request.get('/recordings/list')).status()).toBe(401);
     await signIn.click();
     await expect(page.getByRole('button', { name: /Quick Connect/ })).toBeVisible();
   });
 }
 
-test('reduced motion keeps company messages manually selectable', async ({ page }) => {
+test('reduced motion keeps one welcome message with no playback controls', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.clock.install();
   await page.goto('/');
-  const heading = page.getByRole('heading', { level: 1 });
-  await expect(heading).toHaveText('Your robotics workspace');
-  await page.clock.runFor(16000);
-  await expect(heading).toHaveText('Your robotics workspace');
-  await expect(page.getByRole('button', { name: /Pause messages|Play messages/ })).toHaveCount(0);
-  await page.getByRole('button', { name: 'Next message' }).click();
-  await expect(heading).toHaveText('Your robots. One workspace.');
+  const heading = page.locator('#enterprise-login-title');
+  await expect(heading).toHaveText(welcomeTitle);
+  const first = await heading.innerText();
+  await page.clock.runFor(60000);
+  await expect(heading).toHaveText(first);
+  await expect(
+    page.getByRole('button', { name: /Previous message|Next message|Pause messages|Play messages/ })
+  ).toHaveCount(0);
 });
 
 test('branded company login protects the workspace and backend, then signs out', async ({ page, request }) => {
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'Your robotics workspace' })).toBeVisible();
+  await expect(page.locator('#enterprise-login-title')).toHaveText(welcomeTitle);
+  const firstWelcome = await page.locator('#enterprise-login-title').innerText();
   await expect(page.getByText('Example Manufacturing', { exact: true })).toBeVisible();
   await expect(page.locator('.enterprise-login-footer .robo-boy-attribution')).toHaveText('Powered by Robo-Boy');
   await expect(page.getByRole('button', { name: /Quick Connect/ })).toHaveCount(0);
@@ -76,7 +71,8 @@ test('branded company login protects the workspace and backend, then signs out',
   await openAccount(page);
   expect((await page.request.get('/recordings/list')).status()).toBe(200);
   await page.getByRole('button', { name: 'Sign out' }).click();
-  await expect(page.getByRole('heading', { name: 'Your robotics workspace' })).toBeVisible();
+  await expect(page.locator('#enterprise-login-title')).toHaveText(welcomeTitle);
+  expect(await page.locator('#enterprise-login-title').innerText()).not.toBe(firstWelcome);
   expect((await page.request.get('/recordings/list')).status()).toBe(401);
 });
 

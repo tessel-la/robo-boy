@@ -193,6 +193,7 @@ State is intentionally local to the browser:
 | Current view and open panels | `MainControlView`         | Memory only                                                      |
 | Mobile single/split panels   | `MainControlView`         | `localStorage`                                                   |
 | Panel split                  | `useResizablePanels`      | `localStorage`                                                   |
+| Last company welcome message | `enterprise/loginMessage` | Versioned, company-scoped `localStorage`; memory fallback |
 | Themes                       | `App` and theme utilities | `localStorage`                                                   |
 | Gamepad definitions          | `gamepadStorage.ts`       | Versioned `localStorage` and JSON                                |
 | Behavior trees               | `treeStorage.ts`          | Versioned `localStorage` and JSON                                |
