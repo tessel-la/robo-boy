@@ -201,6 +201,30 @@ The security update emits byte-identical web JavaScript and CSS to the measured 
 The preceding bundle/performance tables therefore still describe the final web assets. Native
 Electron/Tauri performance and platform installers are not benchmarked here.
 
+## ROS discovery deprecation follow-up
+
+Compose previously defaulted `ROS_LOCALHOST_ONLY` to `0` alongside the modern discovery variables.
+The [Jazzy initialization code](https://github.com/ros2/rcl/blob/jazzy/rcl/src/rcl/init.c)
+confirms that `0` emits warnings but still uses `ROS_AUTOMATIC_DISCOVERY_RANGE` and
+`ROS_STATIC_PEERS`. An explicit `1` forces localhost discovery and ignores both modern settings.
+The running Jazzy/Cyclone DDS stack uses `0`, `SUBNET`, and no static peers, so its current setting
+does not change discovery behavior.
+
+Compose now leaves the legacy variable empty by default and still forwards explicit values.
+This avoids Jazzy warnings while preserving localhost-only deployments. The upstream Jazzy parser
+treats empty as its default; Humble's parser treats empty as disabled, preserving its prior default.
+The overlay guide documents both distributions and the precedence/static-peer migration caveat.
+No entrypoint translation, middleware settings, ROS services, or live containers change.
+
+Validation passes seven rendered Compose cases: defaults, explicit legacy `0`/`1`, modern localhost,
+modern static peers, and Humble default/localhost build pairs. Fourteen isolated Jazzy node
+initialization/create/destroy/shutdown cases pass across Fast DDS and Cyclone DDS. Debug output
+confirms the discovery range, static-peer count, warning removal, legacy `1` precedence over `OFF`
+and peers, and preservation of explicit modern `LOCALHOST`, `SUBNET`, and `OFF` settings. Containers
+use `--network none --read-only --tmpfs /tmp`; no live stack is restarted. Humble runtime and actual
+cross-host discovery are not exercised. These focused checks cover the configuration-only follow-up;
+the earlier full frontend/native validation is unchanged.
+
 ## Retained risks and follow-up coverage
 
 - RustSec still reports `RUSTSEC-2024-0429` for glib 0.18.5 and nine unmaintained crates
