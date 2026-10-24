@@ -1,12 +1,4 @@
-import {
-  useCallback,
-  useEffect,
-  useId,
-  useMemo,
-  useRef,
-  useState,
-  useSyncExternalStore,
-} from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import {
   FiActivity,
   FiArrowLeft,
@@ -22,6 +14,7 @@ import {
   FiRefreshCw,
   FiSearch,
   FiStar,
+  FiSliders,
 } from 'react-icons/fi';
 import type { Ros } from 'roslib';
 import type { RoboBoyJsonObject } from '../../panels/types';
@@ -51,6 +44,7 @@ import TopicActions, { viewFor } from './TopicActions';
 import ResourceList, { BulkBar, type ListColumns } from './ResourceList';
 import ResourceGraph, { isInfrastructureNode } from './ResourceGraph';
 import HealthView, { downloadJson, type HealthSection } from './HealthView';
+import ParametersView from './ParametersView';
 import {
   applyExplorerSettings,
   DATA_EXPLORER_SETTINGS_HELP,
@@ -800,6 +794,12 @@ export default function DataExplorerPanel({
           )}
           {selected.kind === 'node' ? (
             <div className="de-related">
+              {!replay && (
+                <button onClick={() => change({ view: 'parameters', parameterNode: selected.name })}>
+                  <FiSliders />
+                  View parameters
+                </button>
+              )}
               {selected.instances && selected.instances > 1 && (
                 <p className="de-warning">{selected.instances} nodes share this name. Membership may be ambiguous.</p>
               )}
@@ -1091,10 +1091,13 @@ export default function DataExplorerPanel({
               ['resources', FiActivity, 'Resources'],
               ['graph', FiGitBranch, 'Graph'],
               ['health', FiHeart, 'Health'],
+              ['parameters', FiSliders, 'Parameters'],
             ] as const
           ).map(([view, Icon, label]) => (
             <button
               key={view}
+              aria-label={label}
+              title={label}
               aria-pressed={config.view === view}
               // On a narrow tile the inspector covers the view, so switching views closes it.
               onClick={() => change(narrow ? { view, selected: '' } : { view })}
@@ -1153,85 +1156,87 @@ export default function DataExplorerPanel({
           <FiRefreshCw className={snapshot.loading ? 'de-spin' : ''} />
         </button>
       </header>
-      <div className="de-filter-bar">
-        <div className="de-search-row">
-          <label className="de-search">
-            <FiSearch />
-            <input
-              type="search"
-              aria-label="Search resources"
-              placeholder={
-                config.view === 'health' ? 'Search diagnostics…' : compact ? 'Search…' : 'Search topics, nodes…'
-              }
-              value={config.query}
-              onChange={event => change({ query: event.target.value })}
-            />
-          </label>
-          {config.view !== 'health' &&
-            (compact ? (
-              // Narrow tiles fold the toggles into one menu so the search keeps its width.
-              <div className="de-filter-menu">
-                <button
-                  className="de-round"
-                  title="Filters"
-                  aria-label="Filters"
-                  aria-expanded={filtersOpen}
-                  data-active={filters.some(filter => filter.on)}
-                  onClick={() => setFiltersOpen(!filtersOpen)}
-                >
-                  <FiFilter />
-                </button>
-                {filtersOpen && (
-                  <div className="de-filter-popover" role="group" aria-label="Filters">
-                    {filters.map(filter => (
-                      <label key={filter.label}>
-                        <input type="checkbox" checked={filter.on} onChange={filter.toggle} />
-                        {filter.label}
-                      </label>
-                    ))}
-                  </div>
-                )}
-              </div>
-            ) : (
-              filters.map(({ label, Icon, on, toggle }) => (
-                <button
-                  key={label}
-                  className="de-round"
-                  title={label}
-                  aria-label={label}
-                  aria-pressed={on}
-                  onClick={toggle}
-                >
-                  <Icon />
-                </button>
-              ))
-            ))}
+      {config.view !== 'parameters' && (
+        <div className="de-filter-bar">
+          <div className="de-search-row">
+            <label className="de-search">
+              <FiSearch />
+              <input
+                type="search"
+                aria-label="Search resources"
+                placeholder={
+                  config.view === 'health' ? 'Search diagnostics…' : compact ? 'Search…' : 'Search topics, nodes…'
+                }
+                value={config.query}
+                onChange={event => change({ query: event.target.value })}
+              />
+            </label>
+            {config.view !== 'health' &&
+              (compact ? (
+                // Narrow tiles fold the toggles into one menu so the search keeps its width.
+                <div className="de-filter-menu">
+                  <button
+                    className="de-round"
+                    title="Filters"
+                    aria-label="Filters"
+                    aria-expanded={filtersOpen}
+                    data-active={filters.some(filter => filter.on)}
+                    onClick={() => setFiltersOpen(!filtersOpen)}
+                  >
+                    <FiFilter />
+                  </button>
+                  {filtersOpen && (
+                    <div className="de-filter-popover" role="group" aria-label="Filters">
+                      {filters.map(filter => (
+                        <label key={filter.label}>
+                          <input type="checkbox" checked={filter.on} onChange={filter.toggle} />
+                          {filter.label}
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                filters.map(({ label, Icon, on, toggle }) => (
+                  <button
+                    key={label}
+                    className="de-round"
+                    title={label}
+                    aria-label={label}
+                    aria-pressed={on}
+                    onClick={toggle}
+                  >
+                    <Icon />
+                  </button>
+                ))
+              ))}
+          </div>
+          {config.view !== 'health' && (
+            <>
+              <select
+                className="de-kind-select"
+                aria-label="Resource type"
+                value={config.kind}
+                onChange={event => change({ kind: event.target.value as ResourceKind, selected: '' })}
+              >
+                {(Object.keys(kindLabels) as ResourceKind[]).map(kind => (
+                  <option key={kind} value={kind}>
+                    {kindLabels[kind]} · {kindCounts[kind]}
+                  </option>
+                ))}
+              </select>
+              <nav className="de-kind-tabs" aria-label="Resource types">
+                {(Object.keys(kindLabels) as ResourceKind[]).map(kind => (
+                  <button key={kind} aria-pressed={config.kind === kind} onClick={() => change({ kind, selected: '' })}>
+                    {kindLabels[kind]}
+                    <small>{kindCounts[kind]}</small>
+                  </button>
+                ))}
+              </nav>
+            </>
+          )}
         </div>
-        {config.view !== 'health' && (
-          <>
-            <select
-              className="de-kind-select"
-              aria-label="Resource type"
-              value={config.kind}
-              onChange={event => change({ kind: event.target.value as ResourceKind, selected: '' })}
-            >
-              {(Object.keys(kindLabels) as ResourceKind[]).map(kind => (
-                <option key={kind} value={kind}>
-                  {kindLabels[kind]} · {kindCounts[kind]}
-                </option>
-              ))}
-            </select>
-            <nav className="de-kind-tabs" aria-label="Resource types">
-              {(Object.keys(kindLabels) as ResourceKind[]).map(kind => (
-                <button key={kind} aria-pressed={config.kind === kind} onClick={() => change({ kind, selected: '' })}>
-                  {kindLabels[kind]}
-                  <small>{kindCounts[kind]}</small>
-                </button>
-              ))}
-            </nav>
-          </>
-        )}
-      </div>
+      )}
       {snapshot.truncated && (
         <p className="de-warning de-inline-notice">Graph exceeds the discovery budget; this is a partial snapshot.</p>
       )}
@@ -1245,7 +1250,18 @@ export default function DataExplorerPanel({
           ))}
         </details>
       )}
-      {config.view === 'health' ? (
+      <div className="de-parameters-host" hidden={config.view !== 'parameters'}>
+        <ParametersView
+          key={generation}
+          ros={connected ? ros : null}
+          active={active && config.view === 'parameters'}
+          nodes={snapshot.resources.filter(item => item.kind === 'node')}
+          node={config.parameterNode}
+          onNodeChange={parameterNode => change({ parameterNode })}
+          replay={!!replay}
+        />
+      </div>
+      {config.view === 'parameters' ? null : config.view === 'health' ? (
         <HealthView
           snapshot={snapshot}
           config={config}

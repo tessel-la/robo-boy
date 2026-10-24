@@ -97,6 +97,48 @@ class AuthorityTests(unittest.TestCase):
             self.command(self.b, topic='/roboboy/recorder/command', msg=dict(data=json.dumps(dict(version=1, id=action, action=action))))
         self.assertEqual([json.loads(message['msg']['data'])['action'] for message in self.forwarded[self.b]], ['status', 'folders'])
 
+    def test_native_parameter_reads_are_observer_safe_even_without_a_ready_runner(self):
+        self.authority.runner_ready = False
+        for suffix, service_type in (('list_parameters', 'ListParameters'), ('get_parameters', 'GetParameters'),
+                                     ('describe_parameters', 'DescribeParameters'), ('get_parameter_types', 'GetParameterTypes')):
+            self.command(self.b, 'call_service', id=suffix, service='/controller/' + suffix,
+                         type='rcl_interfaces/srv/' + service_type, args={})
+        self.assertEqual(len(self.forwarded[self.b]), 4)
+        self.assertFalse(self.authority.pending)
+
+    def test_parameter_read_names_do_not_open_other_services_or_action_internals(self):
+        for index, (service, service_type) in enumerate((
+            ('/controller/get_parameters', 'std_srvs/srv/Trigger'),
+            ('/controller/get_parameters', None),
+            ('/controller/start', None),
+            ('/get_parameters', 'rcl_interfaces/srv/GetParameters'),
+            ('/move/_action/get_parameters', 'rcl_interfaces/srv/GetParameters'),
+            ('/controller/set_parameters', 'rcl_interfaces/srv/GetParameters'),
+        )):
+            self.command(self.b, 'call_service', id=str(index), service=service, type=service_type, args={})
+        self.assertFalse(self.forwarded[self.b])
+
+    def test_native_parameter_writes_require_ownership_and_remain_tracked(self):
+        self.reset(observer_services='/**')
+        for suffix, service_type in (('set_parameters', 'SetParameters'), ('set_parameters_atomically', 'SetParametersAtomically')):
+            self.command(self.b, 'call_service', id='observer-' + suffix, service='/controller/' + suffix,
+                         type='rcl_interfaces/srv/' + service_type, args={})
+        self.assertFalse(self.forwarded[self.b])
+        self.control(self.a, 'acquire')
+        self.command(self.a, 'call_service', id='update', service='/controller/set_parameters_atomically',
+                     type='rcl_interfaces/srv/SetParametersAtomically', args={})
+        self.assertIn((self.a, 'update'), self.authority.pending)
+        self.assertEqual(self.forwarded[self.a][-1]['id'], 'update')
+
+    def test_external_policy_parameters_can_be_read_but_never_changed_from_the_app(self):
+        self.control(self.a, 'acquire')
+        for client in (self.a, self.b):
+            self.command(client, 'call_service', id='read', service=EXTERNAL_PREFIX + 'controller/get_parameters',
+                         type='rcl_interfaces/srv/GetParameters', args={})
+            self.command(client, 'call_service', id='write', service=EXTERNAL_PREFIX + 'controller/set_parameters_atomically',
+                         type='rcl_interfaces/srv/SetParametersAtomically', args={})
+            self.assertEqual([m['id'] for m in self.forwarded[client]], ['read'])
+
     def test_release_transfer_and_stale_tokens(self):
         self.control(self.a, 'acquire')
         stale = self.authority.token
@@ -866,6 +908,13 @@ class FakeBridge(tornado.websocket.WebSocketHandler):
         self.received.append((self, message))
         if message['op'] == 'call_service' and message['service'] in ('/rosapi/topics', '/rosapi/get_time'):
             self.write_message(json.dumps(dict(op='service_response', id=message['id'], result=True, values=dict(topics=['/cmd_vel']))))
+        if message['op'] == 'call_service' and message['service'] == '/rosapi/service_type':
+            target = message.get('args', {}).get('service')
+            if target != '/slow/get_parameters':
+                actual_type = 'rcl_interfaces/srv/GetParameters' if target == '/controller/get_parameters' else 'std_srvs/srv/Trigger'
+                self.write_message(json.dumps(dict(op='service_response', id=message['id'], result=True, values=dict(type=actual_type))))
+        if message['op'] == 'call_service' and message['service'] == '/controller/get_parameters':
+            self.write_message(json.dumps(dict(op='service_response', id=message['id'], result=True, values=dict(values=[]))))
         if message['op'] == 'subscribe' and message['topic'] == BT_STATUS:
             self.write_message(json.dumps(dict(op='publish', topic=BT_STATUS, msg=dict(data=json.dumps(dict(protocolVersion=1, state='idle', activeWork=0, runnerId='runner'))))))
 
@@ -918,6 +967,46 @@ class SocketFixture(tornado.testing.AsyncHTTPTestCase):
 
 
 class SocketTests(SocketFixture):
+    @tornado.testing.gen_test
+    async def test_parameter_reads_verify_the_actual_upstream_type_and_hide_probes(self):
+        observer, _ = await self.connect()
+        for request_id, service, expected in (('read', '/controller/get_parameters', True), ('spoof', '/custom/get_parameters', False)):
+            await observer.write_message(json.dumps(dict(op='call_service', id=request_id, service=service,
+                                                        type='rcl_interfaces/srv/GetParameters', args=dict(names=[]))))
+            while True:
+                message = json.loads(await observer.read_message())
+                self.assertFalse(str(message.get('id', '')).startswith('private-parameter-type-'))
+                if message.get('op') == 'service_response' and message.get('id') == request_id:
+                    self.assertEqual(message['result'], expected)
+                    break
+        self.assertTrue(any(m.get('id') == 'read' for _, m in self.received))
+        self.assertFalse(any(m.get('id') == 'spoof' for _, m in self.received))
+        self.assertFalse(self.authority.pending)
+
+    @tornado.testing.gen_test(timeout=5)
+    async def test_parameter_type_probe_timeout_fails_closed_without_fencing_control(self):
+        observer, _ = await self.connect()
+        await observer.write_message(json.dumps(dict(op='call_service', id='slow', service='/slow/get_parameters',
+                                                    type='rcl_interfaces/srv/GetParameters', args=dict(names=[]))))
+        while True:
+            message = json.loads(await observer.read_message())
+            if message.get('op') == 'service_response' and message.get('id') == 'slow':
+                self.assertFalse(message['result'])
+                break
+        self.assertFalse(any(m.get('id') == 'slow' for _, m in self.received))
+        self.assertFalse(self.authority.fault)
+
+    @tornado.testing.gen_test
+    async def test_disconnect_cancels_parameter_type_probes(self):
+        observer, _ = await self.connect()
+        await observer.write_message(json.dumps(dict(op='call_service', id='closing', service='/slow/get_parameters',
+                                                    type='rcl_interfaces/srv/GetParameters', args=dict(names=[]))))
+        await self.until(lambda: any(m.get('service') == '/rosapi/service_type' for _, m in self.received))
+        observer.close()
+        await asyncio.sleep(.05)
+        self.assertFalse(any(m.get('id') == 'closing' for _, m in self.received))
+        self.assertFalse(self.authority.fault)
+
     @tornado.testing.gen_test
     async def test_origin_allowlist_rejects_unlisted_browser_origins_before_upstream_connect(self):
         allowed = frozenset(('https://roboboy.example', 'http://127.0.0.1:5173', 'tauri://localhost'))

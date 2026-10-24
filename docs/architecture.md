@@ -106,6 +106,11 @@ The editor owns graph state; an executor consumes a complete tree snapshot and e
 
 The Data Explorer keeps one inspection session per ROS connection (`src/features/dataExplorer/InspectionSession.ts`), shared by every Explorer tile and released when the last one closes. Graph discovery, endpoint counts, QoS and traffic measurement run on the ROS host in `infra/ros/inspection_runner.py`, which serves leased, expiring probes over `std_msgs/String` topics and never calls robot services. Without it the session falls back to the serialized rosapi queue and labels browser-side rates as such; see [Data Explorer](data-explorer.md).
 
+Its Parameters view owns tile-local drafts and uses `parameterClient.ts` for bounded native ROS 2 service calls
+through the same serialized queue. The control gateway verifies standard read-service types against the private ROS
+graph and retains ownership enforcement and pending-work tracking for writes. Parameters never flow through the
+read-only inspection companion or the assistant's settings bridge; drafts are not persisted.
+
 ### 3D Visualization
 
 The 3D stack has three layers:

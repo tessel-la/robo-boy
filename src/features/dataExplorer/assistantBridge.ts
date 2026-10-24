@@ -37,7 +37,7 @@ export const DATA_EXPLORER_SETTINGS_HELP = [
   'It accepts: "watch":["/topic",...] to start measuring rate, bandwidth and message age on the ROS host (at most 32 watched); "unwatch":["/topic"] or "all";',
   '"addRules":[{"topic":"/t","minHz":9,"maxHz":20,"silenceSec":2,"minPublishers":1,"minSubscribers":1}] to add or update health rules (any subset of thresholds; a rule topic is measured automatically; at most 32 rules); "removeRules":["/t"] or "all";',
   '"select":"/name" (or "service:/name", "action:/name", "node:/name") to inspect one resource, its latest message included on the next turn; "" clears;',
-  '"view":"resources"|"graph"|"health"; "kind":"topic"|"service"|"action"|"node"; "query":"text filter"; "showHidden":true|false; "pin"/"unpin":["/name"];',
+  '"view":"resources"|"graph"|"health"|"parameters"; "kind":"topic"|"service"|"action"|"node"; "query":"text filter"; "showHidden":true|false; "pin"/"unpin":["/name"]; Parameter editing is manual in the Parameters view; these settings cannot stage or apply parameter updates.',
   '"diagnosticTopic":"/diagnostics_agg"; "staleSec":10; "refresh":true to rediscover the graph; "source":"follow"|"live" while a recording is open.',
   '"logs":{"level":"warning","node":"name part","text":"words","limit":200} lists the /rosout entries kept since the panel opened (the newest 200) that match, in "logs.matching" on the next turn, so ask about them in "followUp"; "logs":true lists them all.',
   "Watching or a rule only observes: nothing is published to the robot's own topics. Counts include observers such as rosbridge and the inspector itself.",
@@ -533,7 +533,12 @@ export function applyExplorerSettings(
     }
   }
 
-  if (settings.view === 'resources' || settings.view === 'graph' || settings.view === 'health') {
+  if (
+    settings.view === 'resources' ||
+    settings.view === 'graph' ||
+    settings.view === 'health' ||
+    settings.view === 'parameters'
+  ) {
     patch.view = settings.view;
     outcomes.push({ ok: true, message: `Showing the ${settings.view} view.` });
   }
