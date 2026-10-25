@@ -1,0 +1,18 @@
+{
+	admin off
+	auto_https off
+}
+
+# Only a Unix listener: a browser reaches robot-owned assets through /mesh_resources,
+# while the external mesh server can remain bound to loopback on the robot host.
+:80 {
+	bind unix//run/mesh-relay/mesh.sock|0666
+	@read method GET HEAD
+	handle @read {
+		reverse_proxy {$BACKEND_HOST:127.0.0.1}:{$MESH_RESOURCES_PORT:8000} {
+			header_up -Cookie
+			header_up -Authorization
+		}
+	}
+	respond "Method not allowed" 405
+}

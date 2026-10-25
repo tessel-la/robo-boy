@@ -58,8 +58,12 @@ default. Localhost, remote hosts, VPN addresses, IPv6, and custom ports follow t
 The transport only performs HTTP(S) GETs within the selected resource-server origin and path,
 checks redirects against that scope, and sends no cookies or authorization headers. Assets on an
 unrelated absolute URL keep using normal browser fetching and need that server's CORS support.
-The web app continues to use `/mesh_resources` through Caddy, or ordinary CORS when configured to
-connect directly. Other services such as Ollama retain their existing origin requirements.
+The web app uses `/mesh_resources` through Caddy and its internal mesh relay, which also reaches
+servers bound only to host loopback. `BACKEND_HOST` and `MESH_RESOURCES_PORT` select the relay's
+backend; remote hosts remain supported. The relay exposes no host TCP listener and carries only
+GET/HEAD requests. Direct browser connections still require ordinary CORS. Other services such
+as Ollama retain their existing origin requirements. See [Development](development.md) for updating
+an existing deployment and testing the proxy transport.
 
 Meshes are cached but checked on every load. The Electron transport asks the server with
 `cache: 'no-cache'`, and Caddy marks `/mesh_resources` responses `Cache-Control: no-cache`, so an

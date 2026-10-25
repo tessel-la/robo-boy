@@ -55,6 +55,7 @@ The stack starts:
 - `caddy`: HTTP/HTTPS entry point and reverse proxy.
 - `ollama-relay`: transport-only adapter from Caddy's Unix socket to the configured external Ollama API.
 - `webrtc-relay`: part of the web deployment beside Caddy. A transport to a media gateway Robo-Boy does not run, needed only by browsers.
+- `mesh-relay`: read-only transport from Caddy to the robot's mesh server, including servers bound only to host loopback.
 - Ollama is external to the Compose stack and is reached through the same-origin `/ollama` proxy.
 
 Changes under `src/` should hot reload. Rebuild after changing files under `infra/`, Compose files, or ROS dependencies:
@@ -81,7 +82,8 @@ The default ports are defined in the copied `.env` file. The main knobs are:
 | `VIDEO_STREAM_PORT`             | `8080`                   | `web_video_server` and Caddy `/video_stream` upstream      |
 | `WEBRTC_BACKEND_URL`            | `http://127.0.0.1:8889`  | Host-network MediaMTX WHEP endpoint used by the relay      |
 | `WEBRTC_DISCOVERY_BACKEND_URL`  | `http://127.0.0.1:9997`  | Loopback MediaMTX API used only for active-path discovery  |
-| `MESH_RESOURCES_PORT`           | `8000`                   | Caddy `/mesh_resources` upstream                           |
+| `MESH_RESOURCES_PORT`           | `8000`                   | Mesh relay's backend port                                 |
+| `MESH_RESOURCES_UPSTREAM`       | mesh relay socket        | Caddy `/mesh_resources` upstream; override for a directly reachable server |
 | `ROBOBOY_RECORDINGS_PORT`       | unset                    | Optional TCP port for the recorder's file service          |
 | `RECORDINGS_UPSTREAM`           | recorder socket          | Caddy `/recordings` upstream                               |
 | `OLLAMA_BACKEND_URL`            | `http://127.0.0.1:11434` | Optional external Ollama API used by the same-origin relay |
@@ -103,8 +105,26 @@ independent robot-side switch. Recreate `ros-stack` after changing these setting
 For a frontend/proxy laptop talking to a backend laptop, set `BACKEND_HOST` to the backend laptop's hostname or IP before starting Caddy:
 
 ```bash
-BACKEND_HOST=192.168.1.20 docker compose up -d --build app caddy
+BACKEND_HOST=192.168.1.20 docker compose up -d --build app mesh-relay caddy
 ```
+
+The `/mesh_resources` route uses a host-network `mesh-relay` through a shared Unix socket. It
+keeps `BACKEND_HOST` and `MESH_RESOURCES_PORT` as the backend selection; an unset host or the
+`host.docker.internal` alias reaches local loopback. A remote backend hostname/IP continues to
+reach that remote server. The relay starts no mesh server and opens no host TCP port. It carries
+GET/HEAD requests, strips browser credentials, and preserves conditional requests and missing-file
+errors. Packaged apps continue to fetch the selected mesh server directly.
+
+For an existing web deployment, apply the new socket mount and relay without restarting ROS:
+
+```bash
+docker compose up -d --no-deps mesh-relay caddy
+```
+
+Recreating Caddy briefly reconnects browser transports. The ROS stack and packaged app stay running.
+If Caddy can reach the mesh server directly, `MESH_RESOURCES_UPSTREAM=robot.example:8000` selects
+that upstream instead. Run `npm run test:mesh-proxy` with Docker to check the actual Caddy/Unix
+socket path against a loopback-only fixture, including custom ports, cache validation and errors.
 
 Ollama remains external to Robo Boy. The application does not start Ollama or control its bind address,
 origins, models, or networking. The browser provider uses `/ollama` so discovery and generation remain
