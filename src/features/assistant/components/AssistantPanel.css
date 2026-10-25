@@ -2624,12 +2624,16 @@
 .assistant-task-plan .assistant-task-evidence {
   white-space: pre-wrap;
 }
-@media (pointer: coarse) {
+@media (pointer: coarse), (max-width: 767px) {
   .assistant-chat-controls select,
   .assistant-chat-controls input {
+    /* Native mobile selects need an explicit height to match text inputs. */
+    height: 44px;
     min-height: 44px;
     font-size: 16px;
   }
+}
+@media (pointer: coarse) {
   .assistant-session-list button,
   .assistant-session-row-actions button {
     min-height: 44px;
