@@ -51,6 +51,26 @@ test('a license declaration without source license material cannot silently pass
   }
 });
 
+test('omitted npm licenses use only reviewed release-specific source texts', async () => {
+  const root = await mkdtemp(path.join(tmpdir(), 'roboboy-source-notices-'));
+  const directory = path.join(root, 'node_modules/@ai-sdk/provider-utils');
+  const manifest = { name: '@ai-sdk/provider-utils', version: '5.0.56', license: 'Apache-2.0' };
+  const inputs = [path.join(directory, 'index.js')];
+  try {
+    await mkdir(directory, { recursive: true });
+    await writeFile(path.join(directory, 'package.json'), JSON.stringify(manifest));
+    assert.match(await createThirdPartyNotices(inputs), /Copyright 2023 Vercel, Inc\./);
+    await writeFile(path.join(directory, 'package.json'), JSON.stringify({ ...manifest, version: '5.0.57' }));
+    await assert.rejects(createThirdPartyNotices(inputs), /No license text found/);
+    await writeFile(path.join(directory, 'package.json'), JSON.stringify({ ...manifest, license: 'MIT' }));
+    await assert.rejects(createThirdPartyNotices(inputs), /No license text found/);
+    await writeFile(path.join(directory, 'package.json'), JSON.stringify({ name: '@cfworker/json-schema', version: '4.1.1', license: 'MIT' }));
+    assert.match(await createThirdPartyNotices(inputs), /Jeremy Danyow/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test('Vite includes a dependency used only by a worker in the app notice file', async () => {
   const { build } = await import('vite');
   const root = await mkdtemp(path.join(tmpdir(), 'roboboy-worker-notices-'));

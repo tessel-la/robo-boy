@@ -2469,7 +2469,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
     const bridge: BehaviorTreeAssistantBridge = {
       panelId,
       label: currentTree?.name ?? 'Behavior Tree',
-      getCurrentTree: () => currentTree,
+      getCurrentTree: () => currentTreeRef.current,
       getSelectedTreeContext: () => selectedTreeContext,
       getPreviewTree: () => agentPreviewTree,
       captureCheckpoint: () => createHistorySnapshot(),
@@ -2477,6 +2477,11 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
         setAgentPreviewTree(tree);
         setAgentPreviewDimensions({});
         if (tree) fitAgentPreviewInView();
+      },
+      applyDocument: tree => {
+        if (isExecuting) return false;
+        syncRootTreeAndEditor(tree, []);
+        return true;
       },
       restoreCheckpoint: checkpoint => restoreAgentCheckpoint(checkpoint),
       notify: notice => showSaveNotice(notice),
@@ -2487,6 +2492,8 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
     agentPreviewTree,
     createHistorySnapshot,
     currentTree,
+    isExecuting,
+    syncRootTreeAndEditor,
     fitAgentPreviewInView,
     onRegisterAssistantBridge,
     panelId,

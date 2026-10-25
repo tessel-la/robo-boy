@@ -123,4 +123,17 @@ describe('native assistant boundary', () => {
     finish('ok');
     await expect(pending).resolves.toBe('ok');
   });
+  it('reports the owning task deadline even when the transport only throws AbortError', async () => {
+    vi.useFakeTimers();
+    try {
+      registerAssistantSubscriptions('app://robo-boy');
+      native.send.mockImplementation((_request, signal: AbortSignal) => new Promise((_resolve, reject) => {
+        signal.addEventListener('abort', () => reject(new DOMException('This operation was aborted', 'AbortError')), { once: true });
+      }));
+      const pending = native.handlers.get('roboboy:assistant-send')!(event(), 'timed-out', chat);
+      const check = expect(pending).rejects.toThrow(/20-minute deadline.*preserved/);
+      await vi.advanceTimersByTimeAsync(20 * 60_000);
+      await check;
+    } finally { vi.useRealTimers(); }
+  });
 });

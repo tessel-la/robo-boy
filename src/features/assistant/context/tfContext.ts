@@ -50,7 +50,7 @@ export interface ParsedDistanceRequest extends ParsedTransformRequest {}
 export const TF_CAPABILITY: AssistantCapability = {
   id: 'tf-transform-distance',
   summary:
-    'Transforms and distances between two TF frames are computed for the user, live and exactly, from `/tf` and `/tf_static` — before this conversation is even consulted.',
+    'Use read_transform to compute observed transforms and distances between frames from `/tf` and `/tf_static`. This is a native read tool, not a separate shortcut conversation.',
   detail: [
     'When they ask whether that is possible without naming both frames, answer yes and tell them to ask for it by frame. Never describe writing a TF listener, a tf2_ros node, or a script.',
   ],

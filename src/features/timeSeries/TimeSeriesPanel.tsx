@@ -11,6 +11,7 @@ import '../treePanel/components/TreePanelChrome.css';
 import './TimeSeriesPanel.css';
 import type { PanelSettingsBridge } from '../assistant/types';
 import { applyTimeSeriesSettings, describeTimeSeries, TIME_SERIES_SETTINGS_HELP } from './assistantSettings';
+import { runSerializedRosapi } from '../../utils/rosapiQueue';
 
 interface Props {
   ros: Ros | null;
@@ -49,6 +50,7 @@ export default function TimeSeriesPanel({
   const clockRef = useRef(clock);
   clockRef.current = clock;
   const controllerRef = useRef<SubscriptionController | null>(null);
+  const subscribedEpochRef = useRef<{ ros: typeof ros; generation: number }>();
   const closeSettings = () => {
     setSettings(false);
     requestAnimationFrame(() => settingsButtonRef.current?.focus());
@@ -89,18 +91,24 @@ export default function TimeSeriesPanel({
 
   // Topic types for signals the assistant adds by topic name alone.
   const topicTypesRef = useRef<ReadonlyMap<string, string>>(new Map());
+  const topicTypesRequestRef = useRef<Promise<void>>();
+  const topicTypesAtRef = useRef(0);
   const connectionRef = useRef({ ros, connected, connectionGeneration });
   connectionRef.current = { ros, connected, connectionGeneration };
   const refreshTopicTypes = useCallback(() => {
     if (!ros || !connected || typeof ros.getTopics !== 'function') return;
-    ros.getTopics(result => {
+    if (topicTypesRequestRef.current || Date.now() - topicTypesAtRef.current < 10_000) return;
+    const pending = runSerializedRosapi(ros, () => new Promise<{ topics: string[]; types: string[] }>((resolve, reject) => ros.getTopics(resolve, reject))).then(result => {
       const current = connectionRef.current;
       if (current.ros !== ros || !current.connected || current.connectionGeneration !== connectionGeneration) return;
       topicTypesRef.current = new Map(result.topics.map((topic, index) => [topic, result.types[index]]));
-    });
+      topicTypesAtRef.current = Date.now();
+    }).catch(() => {}).finally(() => { if (topicTypesRequestRef.current === pending) topicTypesRequestRef.current = undefined; });
+    topicTypesRequestRef.current = pending;
   }, [ros, connected, connectionGeneration]);
   useEffect(() => {
     topicTypesRef.current = new Map();
+    topicTypesAtRef.current = 0; topicTypesRequestRef.current = undefined;
     refreshTopicTypes();
   }, [refreshTopicTypes]);
   useEffect(() => {
@@ -126,7 +134,11 @@ export default function TimeSeriesPanel({
 
   useEffect(() => {
     if (!ros || !connected || !active) return;
-    engine.reconnect();
+    // Visibility/assistant layout changes suspend rendering/subscriptions, not the source
+    // epoch. Preserve observed samples when resuming the same robot or replay source.
+    if (subscribedEpochRef.current?.ros !== ros || subscribedEpochRef.current?.generation !== connectionGeneration) {
+      engine.reconnect(); subscribedEpochRef.current = { ros, generation: connectionGeneration };
+    }
     setError('');
     const controller = new SubscriptionController(
       async (source, listener) => {

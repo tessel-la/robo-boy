@@ -85,6 +85,22 @@ it('saves visibility without losing config and restores a changed layout on the 
   await waitFor(() => expect(mocks.engine!.config.series[0].math.scale).toBe(3));
   expect(mocks.topics).toHaveLength(1);
 });
+it('preserves captured samples when the same source resumes after a presentation pause', async () => {
+  const p = props(), { rerender } = render(<TimeSeriesPanel {...p} />);
+  await act(async () => {});
+  act(() => mocks.topics[0].listener?.({ x: 1, y: 2 }));
+  const reconnect = vi.spyOn(mocks.engine!, 'reconnect');
+  const size = mocks.engine!.runtime.get('a')!.buffer.size;
+  rerender(<TimeSeriesPanel {...p} isActive={false} />);
+  await act(async () => {});
+  rerender(<TimeSeriesPanel {...p} />);
+  await act(async () => {});
+  expect(reconnect).not.toHaveBeenCalled();
+  expect(mocks.engine!.runtime.get('a')!.buffer.size).toBe(size);
+  rerender(<TimeSeriesPanel {...p} connectionGeneration={2} />);
+  await act(async () => {});
+  expect(reconnect).toHaveBeenCalledOnce();
+});
 it('lets the assistant read and change the plot through its settings bridge', async () => {
   const p = props();
   (p.ros.getTopics as ReturnType<typeof vi.fn>).mockImplementation((done: (result: { topics: string[]; types: string[] }) => void) =>
@@ -119,6 +135,7 @@ it('discards topic types returned by a previous connection and reports inactive 
   (p.ros.getTopics as ReturnType<typeof vi.fn>).mockImplementation(callback => { done = callback; });
   const register = vi.fn();
   const { rerender } = render(<TimeSeriesPanel {...p} panelId="plot" onRegisterAssistantBridge={register} />);
+  await act(async () => {});
   rerender(<TimeSeriesPanel {...p} connected={false} connectionGeneration={2} panelId="plot" onRegisterAssistantBridge={register} />);
   act(() => done({ topics: ['/old'], types: ['T'] }));
   const bridge = register.mock.lastCall?.[1] as PanelSettingsBridge;
