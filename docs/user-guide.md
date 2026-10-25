@@ -49,7 +49,13 @@ The 3D view can display:
 
 Use the visualization settings to select a fixed frame, choose topics, configure render options, and add or remove visualizations. The configuration is saved in browser storage.
 
-The fixed frame defaults to **Auto**: the view anchors to `world`, `map`, or `odom` when the robot publishes one of them, otherwise to the root of the TF tree. Picking a frame explicitly keeps it as long as it exists in the tree. The **Frames** list toggles individual TF frames, **Show all frames** follows the live tree (frames that appear later are added automatically), and the sliders button next to the list opens the frame display settings: axes, labels, parent links, axes size, and label size.
+The fixed frame defaults to **Auto**: the view anchors to `world`, `map`, or `odom` when the robot publishes one of them, otherwise to the root of the TF tree. Picking a frame explicitly keeps it as long as it exists in the tree. The **Frames** list toggles individual TF frames, **Show all frames** follows the live tree (frames that appear later are added automatically), and the sliders button next to the list opens the frame display settings: axes, labels, parent links, axes length and width, and label size. Axes width is the diameter in scene metres and is independent of length. New panels default to 0.08 m axes length, 0.004 m axes width, 70% axes opacity, and labels without a background, a label size of 0.35 m, and 80% label opacity. Saved custom label settings are preserved.
+
+PoseStamped and PointCloud2 layers use their message frame and acquisition timestamp. Dynamic TF is interpolated between recorded samples; a zero or omitted timestamp uses the latest TF. Missing frames, malformed data and timestamps outside the retained history hide the affected geometry. Open **Settings → Visualizations** to see the reason under that layer; incoming valid data or TF can resolve it automatically. Pose trails store positions in the selected fixed frame and reset when that frame or data source changes.
+
+For **URDF** and **Mesh markers** layers, open **Settings → Visualizations** and use the layer's **Mesh opacity** slider (0–100%, default 100%). Each layer is independent, updates immediately without reloading meshes or subscriptions, and saves its opacity with the panel. The slider multiplies the opacity already authored in model materials or ROS marker colors; 100% restores the original appearance. Newly loaded meshes use the current setting.
+
+Point clouds honor XYZ field types and offsets, byte order, and organized-cloud row padding. Invalid points are skipped, and decoding is limited by the layer's maximum point count. Color-axis shaders and point-size controls remain available.
 
 Navigation: drag to orbit, scroll to zoom, and pan with a middle- or right-button drag or by holding `Ctrl`, `Shift`, or `⌘` while dragging (the cursor turns into a hand). On touch screens, one finger orbits and two fingers pan and pinch-zoom.
 

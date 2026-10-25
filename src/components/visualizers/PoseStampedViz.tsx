@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import { Ros } from 'roslib';
 import * as ROS3D from '../../utils/ros3d';
 import { usePoseStampedClient, PoseStampedOptions } from '../../hooks/usePoseStampedClient';
@@ -12,6 +12,8 @@ interface PoseStampedVizProps {
   topic: string;
   fixedFrame: string;
   options?: PoseStampedOptions;
+  visualizationId?: string;
+  onStatus?: (id: string, status: string | null) => void;
 }
 
 const PoseStampedViz: React.FC<PoseStampedVizProps> = ({
@@ -22,7 +24,10 @@ const PoseStampedViz: React.FC<PoseStampedVizProps> = ({
   topic,
   fixedFrame,
   options,
+  visualizationId = '',
+  onStatus,
 }) => {
+  const report = useCallback((status: string | null) => onStatus?.(visualizationId, status), [onStatus, visualizationId]);
   // Use the PoseStamped client hook
   const { isSubscribed } = usePoseStampedClient({
     ros,
@@ -32,6 +37,7 @@ const PoseStampedViz: React.FC<PoseStampedVizProps> = ({
     topic,
     fixedFrame,
     options,
+    onStatus: report,
   });
 
   // This component doesn't render any direct DOM elements,
@@ -45,4 +51,4 @@ const PoseStampedViz: React.FC<PoseStampedVizProps> = ({
   return null;
 };
 
-export default PoseStampedViz;
+export default React.memo(PoseStampedViz);

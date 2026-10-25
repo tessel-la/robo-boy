@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import * as ROS3D from '../utils/ros3d';
 import * as THREE from 'three';
 import { Material } from 'three';
+import { DEFAULT_TF_DISPLAY_SETTINGS } from '../utils/visualizationState';
 import {
   CustomTFProvider,
   getSelectedTfFrameEdges,
@@ -20,7 +21,8 @@ interface UseTfVisualizerProps {
   showAxes?: boolean;
   showFrameLabels: boolean;
   showConnections?: boolean;
-  axesScale?: number; // Optional scale for the axes
+  axesScale?: number; // Axes length in metres
+  axesWidth?: number; // Axes diameter in metres
   labelScale?: number; // Label height in scene metres
   axesOpacity?: number;
   labelOpacity?: number;
@@ -50,8 +52,6 @@ type TfEdgeEntry = {
 };
 type TfEdgeMap = Map<string, TfEdgeEntry>;
 
-const DEFAULT_AXES_SCALE = 0.1;
-const DEFAULT_LABEL_SCALE = 0.05;
 const TF_EDGE_COLOR = 0x9aa7b3;
 
 function disposeMaterial(material: Material | Material[] | null | undefined) {
@@ -204,11 +204,12 @@ export function useTfVisualizer({
   showAxes = true,
   showFrameLabels,
   showConnections = true,
-  axesScale = DEFAULT_AXES_SCALE,
-  labelScale = DEFAULT_LABEL_SCALE,
-  axesOpacity = 1,
-  labelOpacity = 1,
-  showLabelBackground = true,
+  axesScale = DEFAULT_TF_DISPLAY_SETTINGS.tfAxesScale,
+  axesWidth = DEFAULT_TF_DISPLAY_SETTINGS.tfAxesWidth,
+  labelScale = DEFAULT_TF_DISPLAY_SETTINGS.tfLabelScale,
+  axesOpacity = DEFAULT_TF_DISPLAY_SETTINGS.tfAxesOpacity,
+  labelOpacity = DEFAULT_TF_DISPLAY_SETTINGS.tfLabelOpacity,
+  showLabelBackground = DEFAULT_TF_DISPLAY_SETTINGS.showTfLabelBackground,
 }: UseTfVisualizerProps) {
   const tfAxesContainerRef = useRef<THREE.Group | null>(null);
   const tfAxesMapRef = useRef<TfAxesMap>(new Map());
@@ -283,7 +284,7 @@ export function useTfVisualizer({
     framesToAdd.forEach((frameName: string) => {
       // console.log(`[useTfVisualizer] Adding Axes for ${frameName}`);
       const group = new THREE.Group();
-      const axes = showAxes ? new ROS3D.Axes({ lineSize: axesScale }) : null;
+      const axes = showAxes ? new ROS3D.Axes({ lineSize: axesScale, shaftRadius: axesWidth / 2 }) : null;
       if (axes) setAxesOpacity(axes, axesOpacity);
       const label = showFrameLabels
         ? createLabelSprite(frameName, axesScale, labelScale, labelOpacity, showLabelBackground)
@@ -327,6 +328,7 @@ export function useTfVisualizer({
     displayedTfFrames,
     showAxes,
     axesScale,
+    axesWidth,
     axesOpacity,
     showFrameLabels,
     labelScale,
@@ -468,6 +470,7 @@ export function useTfVisualizer({
     transforms,
     showAxes,
     axesScale,
+    axesWidth,
     axesOpacity,
     showFrameLabels,
     labelScale,

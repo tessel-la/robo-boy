@@ -26,6 +26,10 @@ services:
       ROBOBOY_SERVICE_BIND_ADDRESS: 127.0.0.1
       ROBOBOY_RECORDINGS_ADDRESS: 127.0.0.1
 
+  mesh-relay:
+    environment:
+      BACKEND_HOST: 127.0.0.1
+
   caddy:
     network_mode: host
     networks: !reset []

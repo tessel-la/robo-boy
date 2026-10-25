@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, memo } from 'react';
+import React, { useCallback, useEffect, useRef, useState, memo } from 'react';
 // Revert to using namespace for roslib types
 import { Ros } from 'roslib';
 import * as THREE from 'three'; // Keep THREE import for potential use, though ROS3D handles Points creation
@@ -41,6 +41,7 @@ import {
 } from '../utils/visualizationState';
 import { getTopicsForVisualizationType, isTopicVisualizationType, TOPIC_VISUALIZATION_TYPES } from '../utils/visualizationTopics';
 import { getPreferredUrdfTopic } from '../utils/urdfTopics';
+import type { MeshDisplayOptions } from '../utils/meshOpacity';
 import type { PanelSettingsBridge } from '../features/assistant/types';
 
 interface VisualizationPanelProps {
@@ -56,7 +57,7 @@ export interface VisualizationConfig {
   id: string;
   type: 'pointcloud' | 'camerainfo' | 'urdf' | 'laserscan' | 'tf' | 'posestamped' | 'markerarray'; // Added 'laserscan', 'tf', and 'posestamped'
   topic: string; // For pointcloud/camerainfo/laserscan/posestamped. For URDF, this might be robot_description topic
-  options?: PointCloudOptions | CameraInfoOptions | UrdfOptions | LaserScanOptions | LaserScanSettingsOptions | PoseStampedOptions | PoseStampedSettingsOptions; // Union of option types
+  options?: MeshDisplayOptions | PointCloudOptions | CameraInfoOptions | UrdfOptions | LaserScanOptions | LaserScanSettingsOptions | PoseStampedOptions | PoseStampedSettingsOptions; // Union of option types
 }
 
 // Define more specific option types
@@ -65,7 +66,7 @@ export interface CameraInfoOptions {
   lineColor?: THREE.Color | number | string;
   lineScale?: number;
 }
-export interface UrdfOptions {
+export interface UrdfOptions extends MeshDisplayOptions {
   robotDescriptionTopic?: string;
   urdfPath?: string;
   // Add other URDF specific options here, e.g., loaderType
@@ -92,12 +93,12 @@ const VALID_VISUALIZATION_TYPES: VisualizationConfig['type'][] = [
 const DEFAULT_STORAGE_KEY = 'roboboy_3d_visualization_state';
 
 const TF_DISPLAY_KEYS: ReadonlyArray<keyof TfDisplaySettings> = [
-  'showTfAxes', 'showTfFrameLabels', 'showTfConnections', 'tfAxesScale', 'tfLabelScale', 'tfAxesOpacity', 'tfLabelOpacity', 'showTfLabelBackground',
+  'showTfAxes', 'showTfFrameLabels', 'showTfConnections', 'tfAxesScale', 'tfAxesWidth', 'tfLabelScale', 'tfAxesOpacity', 'tfLabelOpacity', 'showTfLabelBackground',
 ];
 
 const ASSISTANT_SETTINGS_HELP =
   'Keys: "fixedFrame" (a frame name from availableFrames); "showAllTfFrames" (boolean); "showTfFrames" / "hideTfFrames" (arrays of frame names to add to or remove from the displayed list); ' +
-  '"tfDisplay" (object with any of showTfAxes, showTfFrameLabels, showTfConnections, showTfLabelBackground as booleans and tfAxesScale, tfLabelScale in metres, tfAxesOpacity, tfLabelOpacity from 0 to 1); ' +
+  '"tfDisplay" (object with any of showTfAxes, showTfFrameLabels, showTfConnections, showTfLabelBackground as booleans and tfAxesScale (length), tfAxesWidth (diameter), tfLabelScale in metres, tfAxesOpacity, tfLabelOpacity from 0 to 1); ' +
   '"addVisualizations" (array of {"type": one of pointcloud|camerainfo|urdf|laserscan|posestamped|markerarray, "topic": optional — the first compatible topic is used when omitted}); ' +
   '"removeVisualizations" (array of {"id"} or {"type"} or {"topic"} matching entries in visualizations).';
 
@@ -152,6 +153,10 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({
   // State for modular visualizations
   const [visualizations, setVisualizations] = useState<VisualizationConfig[]>(initialState.visualizations);
   const [allTopics, setAllTopics] = useState<TopicInfo[]>([]); // Store all topics
+  const [visualizationStatus, setVisualizationStatus] = useState<Record<string, string | null>>({});
+  const reportVisualizationStatus = useCallback((id: string, status: string | null) => {
+    setVisualizationStatus(previous => previous[id] === status ? previous : { ...previous, [id]: status });
+  }, []);
 
   // Save visualization state whenever visualizations, fixed frame, or displayed TF frames change
   useEffect(() => {
@@ -210,6 +215,7 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({
     showFrameLabels: tfDisplay.showTfFrameLabels,
     showConnections: tfDisplay.showTfConnections,
     axesScale: tfDisplay.tfAxesScale,
+    axesWidth: tfDisplay.tfAxesWidth,
     labelScale: tfDisplay.tfLabelScale,
     axesOpacity: tfDisplay.tfAxesOpacity,
     labelOpacity: tfDisplay.tfLabelOpacity,
@@ -229,6 +235,7 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({
   };
 
   const removeVisualization = (idToRemove: string) => {
+    setVisualizationStatus(previous => { const next = { ...previous }; delete next[idToRemove]; return next; });
     setVisualizations((prev: VisualizationConfig[]) => prev.filter((viz: VisualizationConfig) => viz.id !== idToRemove));
     console.log("Removed visualization with ID:", idToRemove);
   };
@@ -385,7 +392,8 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({
           Object.entries(settings.tfDisplay as Record<string, unknown>).forEach(([key, value]) => {
             if (!TF_DISPLAY_KEYS.includes(key as keyof TfDisplaySettings)) return rejected.push(key);
             const expectsBoolean = key.startsWith('show');
-            if (expectsBoolean ? typeof value === 'boolean' : typeof value === 'number' && Number.isFinite(value) && value > 0) {
+            if (expectsBoolean ? typeof value === 'boolean' : typeof value === 'number' && Number.isFinite(value) && value > 0
+              && (key !== 'tfAxesWidth' || (value >= 0.001 && value <= 0.1))) {
               (patch as Record<string, unknown>)[key] = value;
             } else {
               rejected.push(key);
@@ -540,6 +548,8 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({
             <React.Fragment key={viz.id}>
               <PointCloudViz
                 ros={ros}
+                visualizationId={viz.id}
+                onStatus={reportVisualizationStatus}
                 isRosConnected={isRosConnected}
                 ros3dViewer={ros3dViewer}
                 customTFProvider={customTFProvider}
@@ -563,7 +573,7 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({
           );
         } else if (viz.type === 'markerarray') {
           return <MarkerArrayViz key={viz.id} ros={ros} topic={viz.topic} viewer={ros3dViewer}
-            provider={customTFProvider} ready={isProviderReady} />;
+            provider={customTFProvider} ready={isProviderReady} opacity={(viz.options as MeshDisplayOptions)?.opacity} />;
         } else if (viz.type === 'urdf') { // Added URDF rendering
           return (
             <React.Fragment key={viz.id}>
@@ -575,6 +585,7 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({
                 dependenciesReady={isProviderReady}
                 robotDescriptionTopic={(viz.options as UrdfOptions)?.robotDescriptionTopic || viz.topic}
                 urdfPath={(viz.options as UrdfOptions)?.urdfPath}
+                opacity={(viz.options as UrdfOptions)?.opacity}
               // Pass other URDF options as needed
               />
             </React.Fragment>
@@ -597,6 +608,8 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({
           return (
             <React.Fragment key={viz.id}>
               <PoseStampedViz
+                visualizationId={viz.id}
+                onStatus={reportVisualizationStatus}
                 ros={ros}
                 isRosConnected={isRosConnected}
                 ros3dViewer={ros3dViewer}
@@ -633,6 +646,7 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({
         classNames={{ panel: 'visualization-menu-panel' }}
         menuContent={
           <SettingsPopup
+            visualizationStatus={visualizationStatus}
             onClose={closeSettingsPopup}
             fixedFrame={fixedFrame}
             availableFrames={availableFrames}
@@ -648,6 +662,7 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({
             onAddVisualizationClick={openAddVizModalFromSettings}
             onEditVisualization={openVisualizationSettings}
             onUpdateVisualizationTopic={updateVisualizationTopic}
+            onUpdateVisualizationOptions={updateVisualizationSettings}
             allTopics={allTopics}
           />
         }

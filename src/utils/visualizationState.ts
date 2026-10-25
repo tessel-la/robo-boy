@@ -14,6 +14,8 @@ export interface TfDisplaySettings {
   showTfFrameLabels: boolean;
   showTfConnections: boolean;
   tfAxesScale: number;
+  /** Diameter of the solid axes, in scene metres, independent of their length. */
+  tfAxesWidth: number;
   /** Label height in scene metres, independent of the axes so small axes can keep readable names. */
   tfLabelScale: number;
   tfAxesOpacity: number;
@@ -27,11 +29,12 @@ export const DEFAULT_TF_DISPLAY_SETTINGS: TfDisplaySettings = {
   showTfFrameLabels: true,
   showTfConnections: true,
   // Microduck is only ~0.25 m tall; 0.5 m axes overwhelm compact robots.
-  tfAxesScale: 0.1,
-  tfLabelScale: 0.05,
-  tfAxesOpacity: 1,
-  tfLabelOpacity: 1,
-  showTfLabelBackground: true,
+  tfAxesScale: 0.08,
+  tfAxesWidth: 0.004,
+  tfLabelScale: 0.35,
+  tfAxesOpacity: 0.7,
+  tfLabelOpacity: 0.8,
+  showTfLabelBackground: false,
 };
 
 // Complete state for the visualization panel
@@ -58,6 +61,7 @@ export const pickTfDisplaySettings = (state: TfDisplaySettings): TfDisplaySettin
   showTfFrameLabels: state.showTfFrameLabels,
   showTfConnections: state.showTfConnections,
   tfAxesScale: state.tfAxesScale,
+  tfAxesWidth: state.tfAxesWidth,
   tfLabelScale: state.tfLabelScale,
   tfAxesOpacity: state.tfAxesOpacity,
   tfLabelOpacity: state.tfLabelOpacity,
@@ -86,6 +90,7 @@ const normalizeVisualizationState = (
   tfAxesScale: migrateLegacyAxesScale && state?.tfAxesScale === 0.5
     ? DEFAULT_VISUALIZATION_STATE.tfAxesScale
     : finiteOr(state?.tfAxesScale, DEFAULT_VISUALIZATION_STATE.tfAxesScale),
+  tfAxesWidth: Math.min(0.1, Math.max(0.001, finiteOr(state?.tfAxesWidth, DEFAULT_VISUALIZATION_STATE.tfAxesWidth))),
   tfLabelScale: finiteOr(state?.tfLabelScale, DEFAULT_VISUALIZATION_STATE.tfLabelScale),
   tfAxesOpacity: finiteOr(state?.tfAxesOpacity, DEFAULT_VISUALIZATION_STATE.tfAxesOpacity),
   tfLabelOpacity: finiteOr(state?.tfLabelOpacity, DEFAULT_VISUALIZATION_STATE.tfLabelOpacity),

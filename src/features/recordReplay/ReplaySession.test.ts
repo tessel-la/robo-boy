@@ -1,5 +1,6 @@
 import ROSLIB, { type Ros } from 'roslib';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { getTfHistory, subscribeToTfStream } from '../../utils/tfStream';
 import { ReplaySession } from './ReplaySession';
 import { setEnterpriseSession } from '../enterprise/session';
 import type { BagInfo, ReaderRequest, ReaderResponse, ReplayMessage } from './types';
@@ -242,6 +243,38 @@ describe('ReplaySession', () => {
     const late = listen(ros, '/tf');
     await Promise.resolve();
     expect(late.received).toEqual([{ transforms: [{ child_frame_id: 'a', x: 3 }, { child_frame_id: 'b', x: 2 }] }]);
+  });
+
+  it('hydrates sensor-time TF on seek and isolates history after a backward seek', async () => {
+    const ros = open();
+    const stop = subscribeToTfStream(ros, vi.fn());
+    await vi.advanceTimersByTimeAsync(50);
+    const tf = (sec: number, x: number) => ({ header: { frame_id: 'map', stamp: { sec, nanosec: 0 } },
+      child_frame_id: 'camera', transform: { translation: { x, y: 0, z: 0 }, rotation: { x: 0, y: 0, z: 0, w: 1 } } });
+    const reply = { ...message('/tf', 0, { transforms: [tf(3, 30)] }), tfHistory: [tf(3, 30), tf(1, 10)] };
+    worker.reply({ id: worker.last('seek').id, op: 'messages', messages: [reply], done: true });
+    const history = getTfHistory(ros);
+    expect(history.lookup('map', 'camera', 2_000_000_000n).transform?.translation.x).toBe(20);
+    // A later panel shares existing history and causes no transport subscriptions.
+    const stopLate = subscribeToTfStream(ros, vi.fn());
+    expect(getTfHistory(ros)).toBe(history);
+    session.seek(10);
+    worker.reply({ id: worker.last('seek').id, op: 'messages', messages: [], done: true });
+    session.seek(1);
+    const replacement = session.getSource().ros!;
+    expect(replacement).not.toBe(ros);
+    expect(getTfHistory(replacement).lookup('map', 'camera', 2_000_000_000n).transform).toBeNull();
+    stopLate(); stop();
+  });
+
+  it('discovers recorded TF locally and prefers raw TF to the display relay', () => {
+    session.open(file());
+    worker.reply({ id: worker.last('open').id, op: 'opened', info: { ...INFO,
+      topics: [...INFO.topics, { name: '/roboboy/tf', type: 'tf2_msgs/TFMessage', count: 5 }] } });
+    const callback = vi.fn();
+    const ros = session.getSource().ros as Ros & { getTopicsForType(type: string, callback: (topics: string[]) => void): void };
+    ros.getTopicsForType('tf2_msgs/TFMessage', callback);
+    expect(callback).toHaveBeenCalledWith(['/tf']);
   });
 
   it('keeps panel state moving forward and rebuilds it moving backward', async () => {

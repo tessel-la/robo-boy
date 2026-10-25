@@ -3,6 +3,7 @@ import { FaCog } from 'react-icons/fa';
 import { FiArrowLeft, FiPlus, FiSettings, FiTrash2, FiX } from 'react-icons/fi';
 
 import { getTopicsForVisualizationType, isTopicVisualizationType } from '../utils/visualizationTopics';
+import { normalizeMeshOpacity, type MeshDisplayOptions } from '../utils/meshOpacity';
 import type { TfDisplaySettings } from '../utils/visualizationState';
 import type { VisualizationConfig } from './VisualizationPanel';
 import './VisualizationPanel.css';
@@ -29,8 +30,10 @@ interface SettingsPopupProps {
   onRemoveVisualization: (id: string) => void;
   onAddVisualizationClick: () => void;
   onEditVisualization?: (id: string) => void;
+  onUpdateVisualizationOptions?: (id: string, options: MeshDisplayOptions) => void;
   onUpdateVisualizationTopic?: (id: string, newTopic: string) => void;
   allTopics: TopicInfo[];
+  visualizationStatus?: Record<string, string | null>;
 }
 
 /** Each section collapses on its own; the open ones share the remaining height so the frame
@@ -50,8 +53,9 @@ const ScaleField: React.FC<{
   min: number;
   max: number;
   disabled?: boolean;
+  precision?: number;
   onChange: (value: number) => void;
-}> = ({ id, label, value, min, max, disabled, onChange }) => {
+}> = ({ id, label, value, min, max, disabled, precision = 2, onChange }) => {
   const SLIDER_STEPS = 1000;
   const toSlider = (metres: number) => Math.round((Math.log(Math.min(Math.max(metres, min), max) / min) / Math.log(max / min)) * SLIDER_STEPS);
   const fromSlider = (position: number) => min * Math.pow(max / min, position / SLIDER_STEPS);
@@ -74,9 +78,9 @@ const ScaleField: React.FC<{
             aria-label={`${label} in metres`}
             min={min}
             max={max}
-            step="0.01"
+            step={10 ** -precision}
             disabled={disabled}
-            value={draft ?? value.toFixed(2)}
+            value={draft ?? value.toFixed(precision)}
             onChange={event => setDraft(event.target.value)}
             onBlur={commitDraft}
             onKeyDown={event => {
@@ -126,10 +130,12 @@ const SettingsPopup: React.FC<SettingsPopupProps> = ({
   tfDisplay,
   onTfDisplayChange,
   activeVisualizations,
+  visualizationStatus,
   onRemoveVisualization,
   onAddVisualizationClick,
   onEditVisualization,
   onUpdateVisualizationTopic,
+  onUpdateVisualizationOptions,
   allTopics = [],
 }) => {
   const [tab, setTab] = useState<SettingsTab>('frames');
@@ -194,12 +200,22 @@ const SettingsPopup: React.FC<SettingsPopupProps> = ({
           <div className="tf-scale-control">
             <ScaleField
               id="tf-axes-scale"
-              label="Axes size"
+              label="Axes length"
               value={tfDisplay.tfAxesScale}
               min={0.01}
               max={5}
               disabled={!tfDisplay.showTfAxes}
               onChange={tfAxesScale => onTfDisplayChange({ tfAxesScale })}
+            />
+            <ScaleField
+              id="tf-axes-width"
+              label="Axes width"
+              value={tfDisplay.tfAxesWidth}
+              min={0.001}
+              max={0.1}
+              precision={3}
+              disabled={!tfDisplay.showTfAxes}
+              onChange={tfAxesWidth => onTfDisplayChange({ tfAxesWidth })}
             />
             <div className="control-heading-row">
               <label htmlFor="tf-axes-opacity">Axes opacity</label>
@@ -430,6 +446,7 @@ const SettingsPopup: React.FC<SettingsPopupProps> = ({
 
                 return (
                   <li key={viz.id} className="visualization-item">
+                    {visualizationStatus?.[viz.id] && <p role="status" className="visualization-status">{visualizationStatus[viz.id]}</p>}
                     <div className="visualization-item-heading">
                       <span className="viz-type">{TYPE_LABELS[viz.type]}</span>
                       <div className="visualization-item-actions">
@@ -481,6 +498,21 @@ const SettingsPopup: React.FC<SettingsPopupProps> = ({
                         )}
                       </select>
                     </div>
+                    {(viz.type === 'urdf' || viz.type === 'markerarray') && onUpdateVisualizationOptions && (
+                      <div className="tf-scale-control">
+                        <div className="control-heading-row">
+                          <label htmlFor={`mesh-opacity-${viz.id}`}>Mesh opacity</label>
+                          <output htmlFor={`mesh-opacity-${viz.id}`} className="range-value">
+                            {Math.round(normalizeMeshOpacity((viz.options as MeshDisplayOptions)?.opacity) * 100)}%
+                          </output>
+                        </div>
+                        <input type="range" id={`mesh-opacity-${viz.id}`} min="0" max="1" step="0.05"
+                          aria-label={`Mesh opacity for ${TYPE_LABELS[viz.type]} on ${viz.topic}`}
+                          value={normalizeMeshOpacity((viz.options as MeshDisplayOptions)?.opacity)}
+                          onChange={event => onUpdateVisualizationOptions(viz.id, { opacity: Number(event.target.value) })}
+                          className="range-input" />
+                      </div>
+                    )}
                   </li>
                 );
               })}

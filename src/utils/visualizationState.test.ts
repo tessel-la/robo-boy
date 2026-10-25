@@ -27,6 +27,7 @@ describe('visualizationState', () => {
     showTfFrameLabels: false,
     showTfConnections: false,
     tfAxesScale: 1.2,
+    tfAxesWidth: 0.006,
     tfLabelScale: 0.3,
     tfAxesOpacity: 0.5,
     tfLabelOpacity: 0.8,
@@ -56,11 +57,12 @@ describe('visualizationState', () => {
       showTfAxes: true,
       showTfFrameLabels: true,
       showTfConnections: true,
-      tfAxesScale: 0.1,
-      tfLabelScale: 0.05,
-      tfAxesOpacity: 1,
-      tfLabelOpacity: 1,
-      showTfLabelBackground: true,
+      tfAxesScale: 0.08,
+      tfAxesWidth: 0.004,
+      tfLabelScale: 0.35,
+      tfAxesOpacity: 0.7,
+      tfLabelOpacity: 0.8,
+      showTfLabelBackground: false,
     });
   });
 
@@ -79,11 +81,22 @@ describe('visualizationState', () => {
       showTfFrameLabels: false,
       showTfConnections: true,
       tfAxesScale: 0.2,
-      tfLabelScale: 0.05,
-      tfAxesOpacity: 1,
-      tfLabelOpacity: 1,
-      showTfLabelBackground: true,
+      tfAxesWidth: 0.004,
+      tfLabelScale: 0.35,
+      tfAxesOpacity: 0.7,
+      tfLabelOpacity: 0.8,
+      showTfLabelBackground: false,
     });
+  });
+
+  it('fills missing width in saved layouts and bounds invalid width without changing labels', () => {
+    const { tfAxesWidth: _width, ...legacy } = mockState;
+    localStorage.setItem('roboboy_3d_visualization_state', JSON.stringify(legacy));
+    expect(getVisualizationState()).toEqual({ ...legacy, tfAxesWidth: 0.004 });
+    saveVisualizationState({ ...mockState, tfAxesWidth: -1 });
+    expect(getVisualizationState().tfAxesWidth).toBe(0.001);
+    saveVisualizationState({ ...mockState, tfAxesWidth: 100 });
+    expect(getVisualizationState().tfAxesWidth).toBe(0.1);
   });
 
   it('should load from localStorage if memory is empty', () => {
@@ -103,7 +116,7 @@ describe('visualizationState', () => {
       JSON.stringify({ ...mockState, tfAxesScale: 0.5 })
     );
 
-    expect(getVisualizationState().tfAxesScale).toBe(0.1);
+    expect(getVisualizationState().tfAxesScale).toBe(0.08);
   });
 
   it('should prioritize memory overly localStorage', () => {

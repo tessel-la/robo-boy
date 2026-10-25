@@ -95,6 +95,9 @@ describe('BagReader', () => {
     expect(byTopic['/tf'].message.transforms).toEqual(
       expect.arrayContaining([{ child_frame_id: 'a', x: 50 }, { child_frame_id: 'b', x: 49 }])
     );
+    expect(byTopic['/tf'].tfHistory).toHaveLength(51);
+    expect(byTopic['/tf'].tfHistory).toContainEqual({ child_frame_id: 'a', x: 0 });
+    expect(await reader.seek(at(5.05), ['/tf'], () => true)).toEqual([]);
     expect(await reader.seek(at(0.2), ['/sparse'], () => false)).toEqual([]);
   });
 });

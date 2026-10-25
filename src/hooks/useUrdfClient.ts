@@ -12,6 +12,7 @@ interface UseUrdfClientProps {
   tfClient: React.RefObject<CustomTFProvider | null>; // Changed to CustomTFProvider
   dependenciesReady: boolean;
   robotDescriptionTopic?: string; // Topic for URDF string
+  opacity?: number;
   urdfPath?: string; // Base path for mesh resources
   // Consider adding loader options if your UrdfClient supports them
   // loader?: any;
@@ -24,8 +25,11 @@ export function useUrdfClient({
   tfClient,
   dependenciesReady,
   robotDescriptionTopic = '/robot_description',
+  opacity = 1,
 }: UseUrdfClientProps) {
   const { meshResourcesBaseUrl } = useRuntimeConfig();
+  const opacityRef = useRef(opacity);
+  opacityRef.current = opacity;
   const urdfClientRef = useRef<ROS3D.UrdfClient | null>(null);
   const [isUrdfLoaded, setIsUrdfLoaded] = useState(false);
 
@@ -42,6 +46,7 @@ export function useUrdfClient({
       tfClient: provider,
       rootObject: viewer.scene,
       robotDescriptionTopic,
+      opacity: opacityRef.current,
       path: meshResourcesBaseUrl,
       requestRender: viewer.requestRender,
       onComplete: (model: Object3D) => {
@@ -60,6 +65,8 @@ export function useUrdfClient({
       if (urdfClientRef.current === urdfClient) urdfClientRef.current = null;
     };
   }, [dependenciesReady, isRosConnected, ros, ros3dViewer, tfClient, robotDescriptionTopic, meshResourcesBaseUrl]);
+
+  useEffect(() => { urdfClientRef.current?.setOpacity(opacity); }, [opacity]);
 
   return { urdfClient: urdfClientRef.current, isUrdfLoaded };
 }

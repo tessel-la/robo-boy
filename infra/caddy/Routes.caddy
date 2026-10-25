@@ -47,11 +47,12 @@
 
 	# Proxy mesh resources to the configured backend. The backend owns the
 	# active robot assets; Robo Boy remains independent of robot and simulator.
+	# A host-network relay also reaches mesh servers bound only to loopback.
 	# Browsers may cache a mesh but must ask the backend before reusing it: an unchanged mesh
 	# costs a 304, and one replaced by a new simulation or cell is fetched again at once. Without
 	# this, a backend sending only Last-Modified lets the browser reuse old meshes for days.
 	handle_path /mesh_resources/* {
-		reverse_proxy {$BACKEND_HOST:host.docker.internal}:{$MESH_RESOURCES_PORT:8000} {
+		reverse_proxy {$MESH_RESOURCES_UPSTREAM:unix//run/mesh-relay/mesh.sock} {
 			header_down Cache-Control "no-cache"
 		}
 	}

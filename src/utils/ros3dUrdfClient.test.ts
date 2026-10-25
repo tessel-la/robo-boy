@@ -83,6 +83,23 @@ describe('UrdfClient cache', () => {
     roslibMock.topicInstances = [];
   });
 
+  it('changes robot opacity without compounding authored alpha or reloading the model', () => {
+    const root = new THREE.Scene();
+    const client = new UrdfClient({ ros: {} as any, tfClient: { subscribe: vi.fn(), unsubscribe: vi.fn() } as any,
+      rootObject: root, opacity: 0.5 });
+    const description = urdf.replace('</geometry>', '</geometry><material><color rgba="1 0 0 0.6" /></material>');
+    roslibMock.topicInstances[0].callback?.({ data: description });
+    let mesh!: THREE.Mesh<THREE.BufferGeometry, THREE.Material>;
+    root.traverse(object => { if (object instanceof THREE.Mesh) mesh = object; });
+    expect(mesh.material.opacity).toBeCloseTo(0.3);
+    client.setOpacity(0.2);
+    expect(mesh.material.opacity).toBeCloseTo(0.12);
+    client.setOpacity(1);
+    expect(mesh.material.opacity).toBeCloseTo(0.6);
+    expect(roslibMock.topicInstances).toHaveLength(1);
+    client.dispose();
+  });
+
   it('loads companion OBJ materials for name-only URDF materials', async () => {
     const rootObject = new THREE.Scene();
     const tfClient = {

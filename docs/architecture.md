@@ -120,11 +120,15 @@ The 3D stack has three layers:
 - `src/hooks/` and `src/utils/ros3d/` own ROS subscriptions, TF coordination, Three.js objects, shaders, primitives, and disposal.
 
 The application-facing `../utils/ros3d` import currently resolves to `src/utils/ros3d.ts`; that
-entry point owns the live viewer, point-cloud, orbit-control, and URDF implementations and
-re-exports the modular LaserScan implementation. The viewer is invalidation-driven: scene/data,
+entry point owns the live viewer, orbit-control, and URDF implementations and
+re-exports the modular PointCloud2 and LaserScan implementations. The viewer is invalidation-driven: scene/data,
 resize, settings, and camera changes coalesce into one requested frame, while an unchanged scene
 does not retain a render loop. Keep new visualizers on that boundary so idle panels do no WebGL
 work. See [Performance evaluation](performance.md) for measurements and the profiling suite.
+
+`tfStream` owns one timestamped `TfHistory` per ROS connection alongside its latest-transform snapshot. History is bounded to 30 seconds and 256 samples per child frame, with at most 1024 child frames. Static TF is timeless. `CustomTFProvider.watchTransform` resolves stamped observations and retries on incoming TF or fixed-frame changes; its existing latest API remains available for robot models and frame axes. PoseStamped composes the local pose with this transform, and PointCloud2 applies it to the cloud wrapper. Other spatial layer types retain their existing TF behavior.
+
+The live stream retains the existing preference for `/roboboy/tf` when available. That relay preserves the latest state of each child but samples intermediate motion; interpolation cannot recover discarded motion. Replay prefers recorded raw `/tf` when available, restores bounded TF samples on seeks (up to 8192 samples per topic), and isolates backward seeks with a replacement replay ROS identity. Sensor-time history uses ROS stamps, independently of the wall clock; seek scanning uses the bag's log-time window. Messages whose acquisition time falls outside that window can remain unavailable. Invalid/missing transforms never silently fall back to latest for a nonzero sensor timestamp. History and pending bindings are released with their owning stream/provider/layer.
 
 New visualization types should follow the same split: serializable configuration in the panel, a thin React adapter, and lifecycle-heavy ROS/Three.js code in a hook or `ros3d` class. Dispose subscriptions, geometries, materials, animation callbacks, and viewer objects when dependencies change or components unmount.
 

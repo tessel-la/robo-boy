@@ -43,6 +43,7 @@ services:
       - ROSBRIDGE_PORT=${ROSBRIDGE_PORT:-9090}
       - VIDEO_STREAM_PORT=${VIDEO_STREAM_PORT:-8080}
       - MESH_RESOURCES_PORT=${MESH_RESOURCES_PORT:-8000}
+      - MESH_RESOURCES_UPSTREAM=${MESH_RESOURCES_UPSTREAM:-unix//run/mesh-relay/mesh.sock}
       - RECORDINGS_UPSTREAM=${RECORDINGS_UPSTREAM:-unix//run/roboboy-recordings/recordings.sock}
     volumes:
       - ./infra/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
@@ -50,12 +51,14 @@ services:
       - ./infra/caddy/certs:/etc/caddy/certs:ro # Mount the certs directory (read-only)
       - ollama-relay-socket:/run/ollama-relay
       - webrtc-relay-socket:/run/webrtc-relay
+      - mesh-relay-socket:/run/mesh-relay
       - recordings-socket:/run/roboboy-recordings
       - caddy-data:/data
       - caddy-config:/config
     depends_on:
       - app
       - ollama-relay
+      - mesh-relay
       - ros-stack
     networks:
       - app-net
@@ -74,6 +77,22 @@ services:
     volumes:
       - ./infra/caddy/OllamaRelay.Caddyfile:/etc/caddy/Caddyfile:ro
       - ollama-relay-socket:/run/ollama-relay
+
+  # Reach external robot meshes even when their server binds only to host loopback.
+  # The relay opens no TCP listener; Caddy reads through the shared Unix socket.
+  mesh-relay:
+    image: caddy:latest
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      - BACKEND_HOST=${BACKEND_HOST:-127.0.0.1}
+      - MESH_RESOURCES_PORT=${MESH_RESOURCES_PORT:-8000}
+    extra_hosts:
+      # Preserve the existing BACKEND_HOST alias: on the host network it means loopback.
+      - 'host.docker.internal:127.0.0.1'
+    volumes:
+      - ./infra/caddy/MeshRelay.Caddyfile:/etc/caddy/Caddyfile:ro
+      - mesh-relay-socket:/run/mesh-relay
 
   # Part of the web deployment, beside Caddy, for a media gateway Robo-Boy does not run. Only a
   # browser needs it, and only because two things are true at once: an HTTPS page cannot fetch the
@@ -154,6 +173,7 @@ volumes:
   caddy-config:
   ollama-relay-socket:
   webrtc-relay-socket:
+  mesh-relay-socket:
   recordings-socket:
   control-journal:
 

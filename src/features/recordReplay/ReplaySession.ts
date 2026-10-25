@@ -1,4 +1,5 @@
 import ROSLIB, { type Ros } from 'roslib';
+import { getTfHistory } from '../../utils/tfStream';
 import { enterpriseMediaUrl } from '../enterprise/session';
 import { isRemoteBag, type BagInfo, type BagSource, type ReaderRequest, type ReaderResponse, type ReplayMessage } from './types';
 
@@ -20,7 +21,7 @@ export interface ReplaySnapshot {
   buffering: boolean;
   error?: string;
 }
-const isTf = (topic: string) => topic === '/tf' || topic === '/tf_static';
+const isTf = (topic: string) => topic === '/tf' || topic === '/tf_static' || topic === '/roboboy/tf';
 type Transform = { child_frame_id: string };
 
 /** A ROSLIB-compatible read adapter with no socket and no publishing path. */
@@ -37,7 +38,10 @@ class ReplayRos extends ROSLIB.Ros {
   emitEvent(name: string, value: unknown) { (this as unknown as Emitter).emit(name, value); }
   callOnConnection = (message: WireMessage) => {
     if (message.op === 'subscribe' && message.topic && message.id) {
+      const alreadySubscribed = [...this.subscriptions.values()].includes(message.topic);
       this.subscriptions.set(message.id, message.topic);
+      // A new shared TF subscription needs the recorded history, not just one latched sample.
+      if (isTf(message.topic) && !alreadySubscribed) { this.latest.delete(message.topic); this.frames.delete(message.topic); }
       const last = this.last(message.topic);
       if (last) queueMicrotask(() => { if (this.subscriptions.has(message.id!)) this.deliver(last); });
       else this.session.refreshTopics();
@@ -60,6 +64,14 @@ class ReplayRos extends ROSLIB.Ros {
   getTopicType(topic: string, callback: (type: string) => void) {
     callback(this.session.snapshot.info?.topics.find(t => t.name === topic)?.type ?? '');
   }
+  getTopicsForType(type: string, callback: (topics: string[]) => void) {
+    const normalize = (name: string) => name.replace('/msg/', '/');
+    let topics = this.session.snapshot.info?.topics
+      .filter(t => !t.error && normalize(t.type) === normalize(type)).map(t => t.name) ?? [];
+    // Recorded raw TF is more complete than the display relay; never prefer the relay over it.
+    if (normalize(type) === 'tf2_msgs/TFMessage' && topics.includes('/tf')) topics = topics.filter(t => t !== '/roboboy/tf');
+    callback(topics);
+  }
   get topics() { return [...new Set(this.subscriptions.values())]; }
   get unseenTopics() { return this.topics.filter(topic => !this.latest.has(topic)); }
   private last(topic: string): ReplayMessage | undefined {
@@ -75,6 +87,7 @@ class ReplayRos extends ROSLIB.Ros {
     for (const transform of (item.message.transforms ?? []) as Transform[]) frames.set(transform.child_frame_id, transform);
   }
   deliver(item: ReplayMessage) {
+    if (item.tfHistory) getTfHistory(this).ingest({ transforms: item.tfHistory }, item.topic === '/tf_static');
     this.remember(item);
     this.session.messageTime = Number(item.time / 1000n) / 1000;
     this.emitEvent(item.topic, item.message);
