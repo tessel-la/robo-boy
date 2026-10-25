@@ -23,6 +23,7 @@
   display: flex;
   align-items: center;
   gap: 7px;
+  flex-wrap: wrap;
   pointer-events: none;
 }
 .camera-toolbar > * {
@@ -152,6 +153,7 @@
   align-items: center;
   flex: 1 1 0;
 }
+.camera-stream-container video,
 .camera-stream-container img,
 .camera-stream-container .shared-camera-frame {
   display: block;
@@ -221,4 +223,44 @@
 
 .camera-stream-container .shared-camera-frame[hidden] {
   display: none;
+}
+
+.camera-source-field {
+  flex: 0 1 150px;
+}
+.camera-webrtc-settings {
+  position: absolute;
+  z-index: 6;
+  top: 60px;
+  left: 12px;
+  right: 12px;
+  max-height: calc(100% - 75px);
+  overflow: auto;
+  background: var(--card-bg, #fff);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 8px;
+}
+.webrtc-source-settings {
+  display: grid;
+  gap: 8px;
+}
+.webrtc-source-settings label {
+  display: grid;
+  gap: 4px;
+}
+.webrtc-source-settings input,
+.webrtc-source-settings select {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+@container (max-width: 480px) {
+  .camera-source-field {
+    flex-basis: 100%;
+  }
+  .camera-webrtc-settings {
+    top: 104px;
+    max-height: calc(100% - 119px);
+  }
 }

@@ -163,6 +163,7 @@ test('shares full-rate Camera frames with calibrated 3D, independently of TF and
     await panel.getByRole('tab', { name: /^Visualizations/ }).click();
     await panel.locator('[id^="visualization-topic-"]').selectOption(topic);
     await expect(panel.getByLabel(`Image source for Camera image on ${topic}`)).toHaveValue('stream');
+    await panel.getByLabel(`TF timing for Camera image on ${topic}`).selectOption('capture');
     await expect.poll(() => getActiveRosSubscriptionCount(page, topic)).toBe(0);
     await expect.poll(() => getActiveRosSubscriptionCount(page, `${topic}/compressed`)).toBe(0);
     await expect.poll(() => streams.size).toBe(1);

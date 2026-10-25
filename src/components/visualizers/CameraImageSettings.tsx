@@ -1,3 +1,4 @@
+import WebRtcSourceSettings from '../WebRtcSourceSettings';
 import ScaleField from '../ScaleField';
 import { CAMERA_STREAM_PRESETS } from '../../utils/cameraStreamQuality';
 import { CAMERA_INFO_TYPES } from '../../utils/images/cameraCalibration';
@@ -45,10 +46,16 @@ export default function CameraImageSettings({
         className="topic-dropdown"
         aria-label={`Image source for ${label}`}
         value={values.imageSource}
-        onChange={e => onChange(id, { imageSource: e.target.value as 'ros' | 'stream' })}
+        onChange={e =>
+          onChange(id, {
+            imageSource: e.target.value as CameraImageOptions['imageSource'],
+            ...(e.target.value === 'webrtc' ? { videoTiming: 'latest' as const } : {}),
+          })
+        }
       >
         <option value="stream">Camera streamer</option>
         <option value="ros">ROS image messages</option>
+        <option value="webrtc">WebRTC</option>
       </select>
       {values.imageSource === 'stream' && (
         <>
@@ -69,6 +76,53 @@ export default function CameraImageSettings({
             ))}
           </select>
         </>
+      )}
+      {values.imageSource !== 'ros' && (
+        <>
+          {values.imageSource === 'stream' && (
+            <label>
+              TF timing
+              <select
+                aria-label={`TF timing for ${label}`}
+                value={values.videoTiming}
+                onChange={event => onChange(id, { videoTiming: event.target.value as 'capture' | 'latest' })}
+              >
+                <option value="capture">Capture time (requires frame timestamps)</option>
+                <option value="latest">Latest TF (not time-synchronized)</option>
+              </select>
+            </label>
+          )}
+          {(values.videoTiming === 'latest' || values.imageSource === 'webrtc') && (
+            <label>
+              Optical frame override
+              <input
+                aria-label={`Optical frame for ${label}`}
+                defaultValue={values.opticalFrame}
+                placeholder="Use selected CameraInfo frame"
+                onBlur={event => onChange(id, { opticalFrame: event.target.value.trim() })}
+              />
+            </label>
+          )}
+        </>
+      )}
+      {values.imageSource !== 'ros' && (
+        <label>
+          Projection update rate
+          <select
+            aria-label={`Projection update rate for ${label}`}
+            value={values.projectionFps}
+            onChange={event => onChange(id, { projectionFps: Number(event.target.value) })}
+          >
+            {[0, 5, 10, 15, 30, 60].map(fps => (
+              <option key={fps} value={fps}>
+                {fps ? `${fps} fps` : 'Source frame rate'}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+      {values.imageSource === 'webrtc' && (
+        <WebRtcSourceSettings value={values} onChange={patch => onChange(id, patch)} />
       )}
       <label className="viz-topic-label" htmlFor={`camera-info-${id}`}>
         CameraInfo topic
@@ -141,36 +195,40 @@ export default function CameraImageSettings({
         />{' '}
         Show frustum
       </label>
-      <label className="viz-topic-label" htmlFor={`camera-sync-${id}`}>
-        Calibration timing
-      </label>
-      <select
-        id={`camera-sync-${id}`}
-        className="topic-dropdown"
-        value={values.calibrationSync}
-        aria-label={`Calibration timing for ${label}`}
-        onChange={e => onChange(id, { calibrationSync: e.target.value as 'exact' | 'latest' })}
-      >
-        <option value="exact">Match image timestamp</option>
-        <option value="latest">Latest (static calibration)</option>
-      </select>
-      {values.calibrationSync === 'exact' && (
-        <div className="control-heading-row">
-          <label htmlFor={`camera-tolerance-${id}`}>Tolerance (ms)</label>
-          <input
-            id={`camera-tolerance-${id}`}
-            className="scale-field-number"
-            type="number"
-            min="0"
-            max="1000"
-            step="1"
-            value={values.toleranceMs}
-            aria-label={`Calibration tolerance in milliseconds for ${label}`}
-            onChange={e => {
-              if (Number.isFinite(e.target.valueAsNumber)) onChange(id, { toleranceMs: e.target.valueAsNumber });
-            }}
-          />
-        </div>
+      {(values.imageSource === 'ros' || (values.imageSource === 'stream' && values.videoTiming !== 'latest')) && (
+        <>
+          <label className="viz-topic-label" htmlFor={`camera-sync-${id}`}>
+            Calibration timing
+          </label>
+          <select
+            id={`camera-sync-${id}`}
+            className="topic-dropdown"
+            value={values.calibrationSync}
+            aria-label={`Calibration timing for ${label}`}
+            onChange={e => onChange(id, { calibrationSync: e.target.value as 'exact' | 'latest' })}
+          >
+            <option value="exact">Match image timestamp</option>
+            <option value="latest">Latest (static calibration)</option>
+          </select>
+          {values.calibrationSync === 'exact' && (
+            <div className="control-heading-row">
+              <label htmlFor={`camera-tolerance-${id}`}>Tolerance (ms)</label>
+              <input
+                id={`camera-tolerance-${id}`}
+                className="scale-field-number"
+                type="number"
+                min="0"
+                max="1000"
+                step="1"
+                value={values.toleranceMs}
+                aria-label={`Calibration tolerance in milliseconds for ${label}`}
+                onChange={e => {
+                  if (Number.isFinite(e.target.valueAsNumber)) onChange(id, { toleranceMs: e.target.valueAsNumber });
+                }}
+              />
+            </div>
+          )}
+        </>
       )}
     </div>
   );

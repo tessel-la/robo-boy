@@ -4,6 +4,13 @@ import React from 'react';
 import CameraView from './CameraView';
 import { clearCameraSourceSizes } from '../utils/cameraStreamQuality';
 
+vi.mock('./WebRtcCameraVideo', () => ({
+  default: ({ url }: { url: string }) => <div data-testid="native-webrtc">{url}</div>,
+}));
+vi.mock('./RosCameraImage', () => ({
+  default: ({ topic }: { topic: string }) => <div data-testid="ros-image">{topic}</div>,
+}));
+vi.mock('./WebRtcSourceSettings', () => ({ default: () => <div>WebRTC settings</div> }));
 // Mock ROSLIB.Ros
 const createMockRos = (isConnected: boolean = true) => ({
   isConnected,
@@ -324,4 +331,48 @@ describe('CameraView', () => {
       expect(onStreamQualityChange).toHaveBeenCalledWith('original');
     });
   });
+});
+
+it('allows ordinary WebRTC playback with no ROS image topic or metadata', () => {
+  render(
+    <CameraView
+      ros={createMockRos(false) as any}
+      cameraTopic=""
+      availableTopics={[]}
+      onTopicChange={vi.fn()}
+      sourceOptions={{ imageSource: 'webrtc', whepUrl: 'https://camera.example/whep' }}
+      onSourceOptionsChange={vi.fn()}
+    />
+  );
+  expect(screen.getByTestId('native-webrtc')).toHaveTextContent('https://camera.example/whep');
+  expect(screen.queryByLabelText('Camera topic')).not.toBeInTheDocument();
+  expect(screen.queryByRole('img')).not.toBeInTheDocument();
+});
+it('makes ROS an explicit source choice and reports serializable source settings to the owner', () => {
+  const changed = vi.fn();
+  const { rerender } = render(
+    <CameraView
+      ros={createMockRos() as any}
+      cameraTopic="/camera/image_raw"
+      availableTopics={['/camera/image_raw']}
+      onTopicChange={vi.fn()}
+      streamQuality="original"
+      sourceOptions={{}}
+      onSourceOptionsChange={changed}
+    />
+  );
+  fireEvent.change(screen.getByLabelText('Camera image source'), { target: { value: 'ros' } });
+  expect(changed).toHaveBeenCalledWith({ imageSource: 'ros' });
+  rerender(
+    <CameraView
+      ros={createMockRos() as any}
+      cameraTopic="/camera/image_raw"
+      availableTopics={['/camera/image_raw']}
+      onTopicChange={vi.fn()}
+      sourceOptions={{ imageSource: 'ros' }}
+      onSourceOptionsChange={changed}
+    />
+  );
+  expect(screen.getByTestId('ros-image')).toHaveTextContent('/camera/image_raw');
+  expect(screen.queryByRole('img')).not.toBeInTheDocument();
 });

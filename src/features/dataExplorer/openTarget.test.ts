@@ -69,3 +69,12 @@ describe('opening a topic in another panel', () => {
     expect(visualizationStateFor(added, request({ panel: '3d', topic: '/x' }), createId)).toBe(added);
   });
 });
+
+it('starts explorer-created camera layers with explicit metadata-free timing', () => {
+  const state = visualizationStateFor(
+    DEFAULT_VISUALIZATION_STATE,
+    request({ panel: '3d', topic: '/image', visualizationType: 'cameraimage' }),
+    () => 'camera'
+  );
+  expect(state.visualizations[0].options).toEqual({ videoTiming: 'latest' });
+});

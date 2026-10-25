@@ -71,7 +71,7 @@ import {
 } from '../panels/types';
 import { validatePanelState } from '../panels/storage';
 import { APP_VERSION } from '../features/appUpdate/releases';
-import { CAMERA_STREAM_PRESETS, CAMERA_STREAM_QUALITIES, isCameraStreamQuality, type CameraStreamQuality } from '../utils/cameraStreamQuality';
+import { CAMERA_STREAM_PRESETS, CAMERA_STREAM_QUALITIES, isCameraStreamQuality } from '../utils/cameraStreamQuality';
 import { isValidPanelId } from '../panels/registry';
 import { useInstalledPanels } from '../panels/useInstalledPanels';
 import TreePanelMenu from '../features/treePanel/components/TreePanelMenu';
@@ -2354,11 +2354,11 @@ const MainControlView: React.FC<MainControlViewProps> = ({
     setMobileWorkspacePanels(prev => prev.map(panel => (panel.id === panelId ? { ...panel, cameraTopic } : panel)));
   };
 
-  const handleWorkspaceCameraQualityChange = (panelId: string, streamQuality: CameraStreamQuality) => {
+  const handleWorkspaceCameraSettingsChange = (panelId: string, patch: NonNullable<WorkspacePanel['panelState']>['values']) => {
     const update = (previous: WorkspacePanel[]) =>
       previous.map(candidate =>
         candidate.id === panelId
-          ? { ...candidate, panelState: { schemaVersion: 1 as const, panelId: candidate.type, values: { ...(candidate.panelState?.values ?? {}), streamQuality } } }
+          ? { ...candidate, panelState: { schemaVersion: 1 as const, panelId: candidate.type, values: { ...(candidate.panelState?.values ?? {}), ...patch } } }
           : candidate
       );
     setWorkspacePanels(update);
@@ -2692,7 +2692,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({
             results.push({ operation, ok: false, message: `"${operation.quality}" is not a stream quality; use ${CAMERA_STREAM_QUALITIES.join(', ')}.` });
             break;
           }
-          handleWorkspaceCameraQualityChange(panel.id, operation.quality);
+          handleWorkspaceCameraSettingsChange(panel.id, { streamQuality: operation.quality });
           results.push({ operation, ok: true, message: `${panel.title} now streams at ${CAMERA_STREAM_PRESETS[operation.quality].label} quality.` });
           break;
         }
@@ -3577,7 +3577,9 @@ const MainControlView: React.FC<MainControlViewProps> = ({
           streamQuality={
             isCameraStreamQuality(panel.panelState?.values.streamQuality) ? panel.panelState.values.streamQuality : undefined
           }
-          onStreamQualityChange={streamQuality => handleWorkspaceCameraQualityChange(panel.id, streamQuality)}
+          onStreamQualityChange={streamQuality => handleWorkspaceCameraSettingsChange(panel.id, { streamQuality })}
+          sourceOptions={panel.panelState?.values}
+          onSourceOptionsChange={patch => handleWorkspaceCameraSettingsChange(panel.id, { ...patch })}
         />
       );
     }
