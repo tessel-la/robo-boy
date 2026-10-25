@@ -81,3 +81,9 @@ it('supports ROS 1 matrix names and selects calibration only in the image namesp
     visible: false,
   });
 });
+
+it('defaults to the camera streamer and preserves an explicit ROS source choice', () => {
+  expect(normalizeCameraImageOptions().imageSource).toBe('stream');
+  expect(normalizeCameraImageOptions({ imageSource: 'stream' }).imageSource).toBe('stream');
+  expect(normalizeCameraImageOptions({ imageSource: 'ros' }).imageSource).toBe('ros');
+});

@@ -3,28 +3,9 @@ import type { Ros, Topic } from 'roslib';
 import { decodeImageFrame, type DecodedImageFrame } from './decodeImage';
 import { parseCameraInfo, type CameraCalibration } from './cameraCalibration';
 
-/** Stream and consumers share bitmap ownership; each retained frame must be released. */
-export type SharedImageFrame = DecodedImageFrame & { retain: () => () => void };
-type ImageEvent = { frame: SharedImageFrame | null; error: string | null };
-function shareFrame(frame: DecodedImageFrame) {
-  let references = 1;
-  const release = () => {
-    if (--references === 0) closeFrame(frame);
-  };
-  const shared: SharedImageFrame = {
-    ...frame,
-    retain: () => {
-      references++;
-      let active = true;
-      return () => {
-        if (!active) return;
-        active = false;
-        release();
-      };
-    },
-  };
-  return { frame: shared, release };
-}
+import { shareImageFrame, type ImageEvent } from './sharedImageFrame';
+export type { ImageEvent, SharedImageFrame } from './sharedImageFrame';
+
 type InfoEvent = { samples: readonly CameraCalibration[]; error: string | null };
 const imageStreams = new WeakMap<Ros, Map<string, ImageStream>>();
 const infoStreams = new WeakMap<Ros, Map<string, InfoStream>>();
@@ -85,7 +66,7 @@ class ImageStream {
         return;
       }
       const previous = this.releaseFrame;
-      const shared = shareFrame(frame);
+      const shared = shareImageFrame(frame);
       this.releaseFrame = shared.release;
       this.event = { frame: shared.frame, error: null };
       notify(this.listeners, this.event);

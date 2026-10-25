@@ -15,6 +15,7 @@ import {
   type FrameSize,
 } from '../utils/cameraStreamQuality';
 import SafeCameraImage from './SafeCameraImage';
+import SharedCameraImage from './SharedCameraImage';
 
 const PANEL_RESIZE_SETTLE_MS = 300;
 
@@ -117,12 +118,6 @@ const CameraView: React.FC<CameraViewProps> = ({
   };
 
   useEffect(() => {
-    console.log('[CameraView useEffect] Checking dependencies:', {
-      rosExists: !!ros,
-      isConnected: ros?.isConnected,
-      cameraTopic: cameraTopic,
-    });
-
     // Pointing an <img> at a topic web_video_server is not publishing returns an empty
     // multipart response, which WebKitGTK 2.52.6 dereferences null on: it takes the whole
     // renderer down, so the window freezes on its last frame. A saved layout outlives the
@@ -154,7 +149,6 @@ const CameraView: React.FC<CameraViewProps> = ({
         });
         setStreamUrl(url);
         setError(null);
-        console.log(`[CameraView] Relative stream URL set to: ${url}`);
       } catch (e) {
         console.error('[CameraView] Error constructing stream URL:', e);
         setError('Failed to construct stream URL.');
@@ -252,18 +246,22 @@ const CameraView: React.FC<CameraViewProps> = ({
         {error ? (
           <div className="error-message">{error}</div>
         ) : streamUrl && isTopicLive ? (
-          <SafeCameraImage
-            src={streamUrl}
-            allowedStreamBaseUrl={videoStreamBaseUrl}
-            alt={`Stream for ${cameraTopic}`}
-            onError={e => {
-              console.error('Error loading video stream:', e);
-              setError(
-                // Update error message to reflect proxy
-                'Could not load this camera stream. Refresh to retry.'
-              );
-            }}
-          />
+          streamType === 'mjpeg' ? (
+            <SharedCameraImage
+              ros={ros}
+              src={streamUrl}
+              baseUrl={videoStreamBaseUrl}
+              alt={`Stream for ${cameraTopic}`}
+              onError={() => setError('Could not load this camera stream. Refresh to retry.')}
+            />
+          ) : (
+            <SafeCameraImage
+              src={streamUrl}
+              allowedStreamBaseUrl={videoStreamBaseUrl}
+              alt={`Stream for ${cameraTopic}`}
+              onError={() => setError('Could not load this camera stream. Refresh to retry.')}
+            />
+          )
         ) : (
           <div className="placeholder">
             {needsSourceSize && isTopicLive ? 'Sizing stream...' : 'Waiting for stream URL...'}

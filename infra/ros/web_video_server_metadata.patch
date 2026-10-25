@@ -1,0 +1,21 @@
+--- a/include/web_video_server/streamers/image_transport_streamer.hpp
++++ b/include/web_video_server/streamers/image_transport_streamer.hpp
+@@ -86,0 +87,3 @@
++  std_msgs::msg::Header acquisition_header_;
++  uint32_t source_width_ = 0;
++  uint32_t source_height_ = 0;
+--- a/src/streamers/image_transport_streamer.cpp
++++ b/src/streamers/image_transport_streamer.cpp
+@@ -223,0 +224,3 @@
++    acquisition_header_ = msg->header;
++    source_width_ = msg->width;
++    source_height_ = msg->height;
+--- a/src/streamers/jpeg_streamers.cpp
++++ b/src/streamers/jpeg_streamers.cpp
+@@ -31,0 +32,1 @@
++#include "web_video_server/jpeg_ros_metadata.hpp"
+@@ -85,0 +87,4 @@
++  if (!invert_) {
++    roboboy::add_ros_metadata(encoded_buffer, acquisition_header_.stamp.sec,
++      acquisition_header_.stamp.nanosec, acquisition_header_.frame_id, source_width_, source_height_);
++  }

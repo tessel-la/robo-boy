@@ -1,5 +1,32 @@
 # Performance Evaluation
 
+## Shared MJPEG camera check (2026-10-25)
+
+`e2e/shared-camera-stream.spec.ts` uses an ongoing local HTTP MJPEG fixture with exact ROS
+metadata, 640×480 solid-color JPEGs at 30 fps, and the real Camera/3D renderers. A Chromium
+run against the development frontend, with three-second samples, measured:
+
+| View | Active streams | Encoded bytes/s | Shared decodes/s | Camera draws/s | Main-thread task ms/s |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Native MJPEG Camera baseline | 1 | 65,650 | Not instrumented | Not instrumented | 16.6 |
+| Shared Camera | 1 | 64,950 | 30.3 | 30.3 | 74.2 |
+| Camera + 3D waiting for calibration/TF | 1 | 65,650 | 30.0 | 30.3 | 80.3 |
+| Camera + 3D rendering | 1 | 65,650 | 30.3 | 30.3 | 135.4 |
+
+Adding compatible 3D did not add a stream/decoder or cap Camera to 3D's 10 fps sample rate.
+Late calibration/TF, shared refresh, distinct quality profiles, removing either consumer and
+final stream closure are asserted. Native playback takes less main-thread time for one view;
+the shared path adds multipart parsing, bitmap creation and canvas drawing. The 3D view also
+pays its own texture upload/render cost.
+
+These are short synthetic samples, not a device CPU/GPU benchmark or a latency guarantee.
+`Performance.getMetrics().TaskDuration` measures main-thread tasks only; native decoder frame
+presentation and worker/GPU time are not instrumented. Solid-color VGA JPEGs are much smaller
+and cheaper than detailed HD camera frames. Measure real cameras and target hardware before
+setting a supported camera-count/resolution budget. The browser test prints its measurements
+on each run; a 3D-only MJPEG source still receives full source-rate traffic. See
+[camera stream architecture](camera-streams.md) for ownership and explicit source-selection behavior.
+
 Use this guide to reproduce frontend performance checks and review changes that affect panel,
 rendering, or ROS-resource lifecycles. The automated profile lives in
 `e2e/performance-profile.spec.ts` and is skipped during ordinary end-to-end runs.

@@ -11,12 +11,14 @@ test('refreshes late camera topics and releases MJPEG streams on refresh and rem
     .toBuffer();
   const streams = new Set<ServerResponse>();
   let requests = 0;
+  const requestedUrls: string[] = [];
   const server = createServer((_request, response) => {
     ++requests;
     streams.add(response);
     response.writeHead(200, {
       'Content-Type': 'multipart/x-mixed-replace; boundary=frame',
       'Cache-Control': 'no-store',
+      'Access-Control-Allow-Origin': '*',
     });
     const writeFrame = () =>
       response.write(
@@ -36,11 +38,10 @@ test('refreshes late camera topics and releases MJPEG streams on refresh and rem
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
   const address = server.address() as { port: number };
   try {
-    await page.route('**/video_stream/**', route =>
-      route.continue({
-        url: `http://127.0.0.1:${address.port}/stream`,
-      })
-    );
+    await page.route('**/video_stream/**', route => {
+      requestedUrls.push(route.request().url());
+      return route.continue({ url: `http://127.0.0.1:${address.port}/stream` });
+    });
     await installRosMock(page, {
       topics: [],
       serviceCalls: {
@@ -64,17 +65,23 @@ test('refreshes late camera topics and releases MJPEG streams on refresh and rem
     for (let cycle = 0; cycle < 8; cycle += 1) {
       await page.getByLabel('Add workspace panel').first().click();
       await page.getByRole('button', { name: 'Camera', exact: true }).click();
-      const image = page.locator('.camera-view img');
+      const image = page.locator('.camera-view .shared-camera-frame, .camera-view img');
       if (cycle === 0) {
         await expect(image).toHaveCount(0);
         await page.getByRole('button', { name: 'Refresh camera topics and stream' }).click();
       }
-      await expect.poll(() => image.evaluate((img: HTMLImageElement) => img.naturalWidth)).toBe(64);
+      await expect
+        .poll(() =>
+          image.evaluate((img: HTMLImageElement | HTMLCanvasElement) =>
+            img instanceof HTMLCanvasElement ? img.width : img.naturalWidth
+          )
+        )
+        .toBe(64);
       await expect.poll(() => streams.size).toBe(1);
       if (cycle === 0) {
         await page.getByLabel('Camera topic', { exact: true }).selectOption('/camera/late');
         await page.getByLabel('Stream quality', { exact: true }).selectOption('low');
-        await expect(image).toHaveAttribute('src', /topic=\/camera\/late.*quality=40/);
+        await expect.poll(() => requestedUrls.some(url => /topic=\/camera\/late.*quality=40/.test(url))).toBe(true);
         await expect.poll(() => streams.size).toBe(1);
         const before = requests;
         await page.getByRole('button', { name: 'Refresh camera topics and stream' }).click();

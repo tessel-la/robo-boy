@@ -36,6 +36,8 @@ jobs:
         base: ${{ github.ref_name }}
         filters: |
           frontend:
+            - 'infra/ros/jpeg_ros_metadata.hpp'
+            - 'infra/ros/web_video_server_metadata.patch'
             - 'infra/enterprise/**'
             - 'infra/caddy/**'
             - 'infra/compose/enterprise.yml'
@@ -156,6 +158,10 @@ jobs:
     - name: Test loopback mesh proxy transport
       if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.frontend == 'true' || needs.changes.outputs.e2e == 'true'
       run: npm run test:mesh-proxy
+
+    - name: Test camera acquisition metadata producer
+      if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.frontend == 'true' || needs.changes.outputs.e2e == 'true'
+      run: npm run test:camera-metadata
 
     - name: Run tests with coverage
       if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.frontend == 'true' || needs.changes.outputs.e2e == 'true'

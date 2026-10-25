@@ -5,6 +5,7 @@ import { CameraImageClient } from '../ros3d/visualizers/CameraImage';
 import { CustomTFProvider } from '../tfUtils';
 import { TfHistory } from '../tfHistory';
 import { subscribeToImages } from './cameraStreams';
+import { shareImageFrame } from './sharedImageFrame';
 import { decodeImageFrame } from './decodeImage';
 import { messageBytes, rawImageToRgba } from './imageFrames';
 
@@ -406,6 +407,32 @@ it('keeps a wrist-camera snapshot coherent through rotated multi-link motion and
   expect(
     c.object.quaternion.angleTo(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), Math.PI))
   ).toBeCloseTo(0);
+});
+
+it('projects resized streamer pixels using the original source geometry and fails closed on mismatches', () => {
+  const message = image();
+  const raw = rawImageToRgba({ ...message, data: messageBytes(message.data) });
+  const shared = shareImageFrame({
+    image: raw,
+    header: header(),
+    encoding: 'jpeg',
+    sourceSize: { width: 4, height: 4 },
+  });
+  const c = make({
+    subscribeImages: (listener: any) => {
+      listener({ frame: shared.frame, error: null });
+      return shared.release;
+    },
+  });
+  history.ingest(tf(), true);
+  const calibration = { ...info(), width: 4, height: 4, k: [4, 0, 2, 0, 4, 2, 0, 0, 1] };
+  receive('/cam/camera_info', calibration);
+  expect(c.object.visible).toBe(true);
+  expect(c.plane.material.map!.image.width).toBe(2);
+  expect(c.plane.geometry.getAttribute('position').getX(0)).toBe(-0.5);
+  receive('/cam/camera_info', { ...calibration, width: 6 });
+  expect(c.object.visible).toBe(false);
+  expect(status).toHaveBeenLastCalledWith(expect.stringContaining('dimensions'));
 });
 
 it('bounds async decoding to one in-flight and one latest pending image, and closes late completions', async () => {

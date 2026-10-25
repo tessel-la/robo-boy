@@ -3,6 +3,28 @@
 # Humble/Jammy) when overriding these build arguments.
 ARG ROS_DISTRO=jazzy
 ARG ROS_UBUNTU_CODENAME=noble
+
+# Keep upstream encoding/backpressure, adding acquisition metadata to each JPEG.
+# Build separately so compilers and codec headers do not enlarge the runtime image.
+FROM ros:${ROS_DISTRO}-ros-core-${ROS_UBUNTU_CODENAME} AS video-build
+ARG ROS_DISTRO
+SHELL ["/bin/bash", "-c"]
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      build-essential cmake pkg-config curl ca-certificates patch \
+      ros-${ROS_DISTRO}-web-video-server libboost-system-dev \
+      libavcodec-dev libavformat-dev libavutil-dev libswscale-dev \
+    && rm -rf /var/lib/apt/lists/*
+RUN curl -fLsS https://codeload.github.com/RobotWebTools/web_video_server/tar.gz/0b6944deef80db148b3e09d2901fbbf85b199c67 -o /tmp/video.tar.gz \
+    && echo 'fb679f78d4dc0edee5f31de5dd1c07bec1bc3f9a480630e5349d9d911bfb11f1  /tmp/video.tar.gz' | sha256sum -c - \
+    && mkdir /tmp/video && tar -xzf /tmp/video.tar.gz -C /tmp/video --strip-components=1
+COPY infra/ros/web_video_server_metadata.patch /tmp/video.patch
+COPY infra/ros/jpeg_ros_metadata.hpp /tmp/video/include/web_video_server/jpeg_ros_metadata.hpp
+RUN cd /tmp/video && patch -p1 < /tmp/video.patch \
+    && source /opt/ros/${ROS_DISTRO}/setup.bash \
+    && cmake -S . -B /tmp/video-build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF -DCMAKE_INSTALL_PREFIX=/opt/roboboy-video \
+    && cmake --build /tmp/video-build -j2 && cmake --install /tmp/video-build \
+    && install -Dm644 LICENSE /opt/roboboy-video/share/licenses/web_video_server/LICENSE
+
 FROM ros:${ROS_DISTRO}-ros-core-${ROS_UBUNTU_CODENAME}
 
 ARG ROS_DISTRO
@@ -43,6 +65,8 @@ RUN source /opt/ros/${ROS_DISTRO}/setup.bash && \
 
 # Pre-create the conventional mount point for robot interface overlays.
 RUN mkdir -p /overlay_ws
+
+COPY --from=video-build /opt/roboboy-video /opt/roboboy-video
 
 WORKDIR /ros_ws
 
