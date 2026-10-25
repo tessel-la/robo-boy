@@ -27,6 +27,7 @@ describe('SettingsPopup', () => {
       showTfFrameLabels: true,
       showTfConnections: true,
       tfAxesScale: 0.5,
+      tfAxesWidth: 0.003,
       tfLabelScale: 0.12,
       tfAxesOpacity: 1,
       tfLabelOpacity: 0.8,
@@ -113,19 +114,22 @@ describe('SettingsPopup', () => {
     it('moves axes, label, link toggles and the size/opacity sliders to their own view', () => {
       render(<SettingsPopup {...defaultProps} />);
 
-      expect(screen.queryByLabelText('Axes size')).not.toBeInTheDocument();
+      expect(screen.queryByLabelText('Axes length')).not.toBeInTheDocument();
       fireEvent.click(screen.getByRole('button', { name: 'Frame display settings' }));
 
       expect(screen.getByRole('heading', { name: 'Frame display' })).toBeInTheDocument();
       expect(screen.queryByLabelText('Fixed Frame:')).not.toBeInTheDocument();
-      expect(screen.getByLabelText('Axes size in metres')).toHaveValue(0.5);
+      expect(screen.getByLabelText('Axes length in metres')).toHaveValue(0.5);
+      expect(screen.getByLabelText('Axes width in metres')).toHaveValue(0.003);
       expect(screen.getByLabelText('Label size in metres')).toHaveValue(0.12);
       expect(screen.getByLabelText('Label opacity')).toHaveValue('0.8');
       expect(screen.getByText('80%')).toBeInTheDocument();
 
       // Typed values commit on blur/Enter, clamped to the field's range.
-      fireEvent.change(screen.getByLabelText('Axes size in metres'), { target: { value: '0.25' } });
-      fireEvent.blur(screen.getByLabelText('Axes size in metres'));
+      fireEvent.change(screen.getByLabelText('Axes length in metres'), { target: { value: '0.25' } });
+      fireEvent.blur(screen.getByLabelText('Axes length in metres'));
+      fireEvent.change(screen.getByLabelText('Axes width in metres'), { target: { value: '0.006' } });
+      fireEvent.blur(screen.getByLabelText('Axes width in metres'));
       fireEvent.change(screen.getByLabelText('Label size in metres'), { target: { value: '0.3' } });
       fireEvent.keyDown(screen.getByLabelText('Label size in metres'), { key: 'Enter' });
       fireEvent.change(screen.getByLabelText('Axes opacity'), { target: { value: '0.5' } });
@@ -137,6 +141,7 @@ describe('SettingsPopup', () => {
 
       expect(mockOnTfDisplayChange.mock.calls.map(call => call[0])).toEqual([
         { tfAxesScale: 0.25 },
+        { tfAxesWidth: 0.006 },
         { tfLabelScale: 0.3 },
         { tfAxesOpacity: 0.5 },
         { tfLabelOpacity: 0.35 },
@@ -154,14 +159,14 @@ describe('SettingsPopup', () => {
       render(<SettingsPopup {...defaultProps} tfDisplay={{ ...defaultProps.tfDisplay, tfAxesScale: 0.01 }} />);
       fireEvent.click(screen.getByRole('button', { name: 'Frame display settings' }));
 
-      const slider = screen.getByLabelText('Axes size');
+      const slider = screen.getByLabelText('Axes length');
       expect(slider).toHaveValue('0');
       fireEvent.change(slider, { target: { value: '500' } });
       // Halfway along a 0.01–5 m log scale is sqrt(0.05) ≈ 0.224 m, not 2.5 m.
       expect(mockOnTfDisplayChange).toHaveBeenLastCalledWith({ tfAxesScale: 0.224 });
 
-      fireEvent.change(screen.getByLabelText('Axes size in metres'), { target: { value: '9' } });
-      fireEvent.blur(screen.getByLabelText('Axes size in metres'));
+      fireEvent.change(screen.getByLabelText('Axes length in metres'), { target: { value: '9' } });
+      fireEvent.blur(screen.getByLabelText('Axes length in metres'));
       expect(mockOnTfDisplayChange).toHaveBeenLastCalledWith({ tfAxesScale: 5 });
     });
 
@@ -174,9 +179,10 @@ describe('SettingsPopup', () => {
       );
       fireEvent.click(screen.getByRole('button', { name: 'Frame display settings' }));
 
-      expect(screen.getByLabelText('Axes size')).toBeDisabled();
-      expect(screen.getByLabelText('Axes size in metres')).toBeDisabled();
+      expect(screen.getByLabelText('Axes length')).toBeDisabled();
+      expect(screen.getByLabelText('Axes length in metres')).toBeDisabled();
       expect(screen.getByLabelText('Axes opacity')).toBeDisabled();
+      expect(screen.getByLabelText('Axes width in metres')).toBeDisabled();
       expect(screen.getByLabelText('Label size')).toBeDisabled();
       expect(screen.getByLabelText('Label opacity')).toBeDisabled();
       expect(screen.getByLabelText('Label background')).toBeDisabled();

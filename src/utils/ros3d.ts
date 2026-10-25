@@ -7,6 +7,7 @@ import { ColladaLoader } from 'three/examples/jsm/loaders/ColladaLoader.js';
 import { MTLLoader } from 'three/examples/jsm/loaders/MTLLoader.js';
 import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { LaserScan } from './ros3d/visualizers/LaserScan';
 import { PointCloud2 } from './ros3d/visualizers/PointCloud2';
 import { createRobotResourceManager } from '../runtime/robotResources';
@@ -226,6 +227,27 @@ class Axes extends THREE.Object3D {
     super();
     
     const size = options.lineSize || 1;
+    // World-space thickness works even when WebGL clamps line widths to one pixel.
+    // Merge the three colored cylinders so each frame still needs only one draw call.
+    if (options.shaftRadius !== undefined) {
+      const up = new THREE.Vector3(0, 1, 0);
+      const colors = [new THREE.Color(0xff0000), new THREE.Color(0x00ff00), new THREE.Color(0x0000ff)];
+      const parts = [new THREE.Vector3(1, 0, 0), up, new THREE.Vector3(0, 0, 1)].map((direction, index) => {
+        const geometry = new THREE.CylinderGeometry(options.shaftRadius, options.shaftRadius, size, 8);
+        geometry.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(up, direction));
+        geometry.translate(direction.x * size / 2, direction.y * size / 2, direction.z * size / 2);
+        const vertexColors = new Float32Array(geometry.getAttribute('position').count * 3);
+        for (let i = 0; i < vertexColors.length; i += 3) colors[index].toArray(vertexColors, i);
+        geometry.setAttribute('color', new THREE.BufferAttribute(vertexColors, 3));
+        return geometry;
+      });
+      const geometry = mergeGeometries(parts)!; // Identical cylinder layouts and attributes.
+      parts.forEach(part => part.dispose());
+      const material = new THREE.MeshBasicMaterial({ vertexColors: true });
+      this.add(new THREE.Mesh(geometry, material));
+      this.lineSegments = { geometry, material };
+      return;
+    }
     const axesHelper = new THREE.AxesHelper(size);
     this.add(axesHelper);
     

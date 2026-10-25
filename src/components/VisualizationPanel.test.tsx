@@ -62,6 +62,7 @@ describe('VisualizationPanel state restoration', () => {
       showTfFrameLabels: false,
       showTfConnections: false,
       tfAxesScale: 1.2,
+      tfAxesWidth: 0.003,
       tfLabelScale: 0.3,
       tfAxesOpacity: 0.6,
       tfLabelOpacity: 0.7,
@@ -82,7 +83,7 @@ describe('VisualizationPanel state restoration', () => {
     expect(screen.getByLabelText('Fixed Frame:')).toHaveValue('map');
     expect(screen.getByLabelText('odom')).toBeChecked();
     fireEvent.click(screen.getByRole('button', { name: 'Frame display settings' }));
-    expect(screen.getByLabelText('Axes size in metres')).toHaveValue(1.2);
+    expect(screen.getByLabelText('Axes length in metres')).toHaveValue(1.2);
     expect(screen.getByLabelText('Label size in metres')).toHaveValue(0.3);
     expect(screen.getByLabelText('Axes opacity')).toHaveValue('0.6');
     expect(screen.getByLabelText('Label opacity')).toHaveValue('0.7');
@@ -157,6 +158,7 @@ describe('VisualizationPanel state restoration', () => {
       displayedTfFrames: [],
       showFrameLabels: true,
       tfAxesScale: 0.1,
+      tfAxesWidth: 0.003,
     };
     localStorage.setItem('delayed-viewer', JSON.stringify(savedState));
     const createRos = () => ({

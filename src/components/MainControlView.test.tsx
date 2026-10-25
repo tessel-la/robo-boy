@@ -1468,6 +1468,7 @@ describe('MainControlView desktop workspace', () => {
       showTfFrameLabels: true,
       showTfConnections: false,
       tfAxesScale: 0.3,
+      tfAxesWidth: 0.003,
       tfLabelScale: 0.2,
       tfAxesOpacity: 0.5,
       tfLabelOpacity: 0.9,
