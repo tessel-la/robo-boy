@@ -494,13 +494,21 @@ export class CustomTFProvider {
 
   /** Sensor geometry is fixed at acquisition time; URDF/axes retain the existing latest API. */
   watchTransform(frameId: string, stamp: bigint, callback: (result: TransformResult) => void): () => void {
+    return this.watchTransforms([{ frameId, stamp }], results => callback(results[0]));
+  }
+
+  /** One listener per path, rather than one listener per pose. Requests may share frame/time. */
+  watchTransforms(requests: readonly { frameId: string; stamp: bigint }[], callback: (results: TransformResult[]) => void): () => void {
     if (this.disposed) return () => {};
     const resolve = () => {
-      if (stamp === 0n) {
-        const transform = this.lookupTransform(this.fixedFrame, frameId);
-        callback(transform ? { transform, error: null } : { transform: null, error: `No TF path from ${frameId} to ${this.fixedFrame}.` });
-      } else callback(this.history?.lookup(this.fixedFrame, frameId, stamp)
-        ?? { transform: null, error: 'Timestamped TF history is unavailable.' });
+      callback(requests.map(({ frameId, stamp }): TransformResult => {
+        if (stamp === 0n) {
+          const transform = this.lookupTransform(this.fixedFrame, frameId);
+          return transform ? { transform, error: null } : { transform: null, error: `No TF path from ${frameId} to ${this.fixedFrame}.` };
+        }
+        return this.history?.lookup(this.fixedFrame, frameId, stamp)
+          ?? { transform: null, error: 'Timestamped TF history is unavailable.' };
+      }));
     };
     this.timedCallbacks.add(resolve);
     try { resolve(); }

@@ -46,6 +46,8 @@ The 3D view can display:
 - Pose stamped or odometry data
 - Camera information
 - URDF robot models
+- Planned paths (`nav_msgs/Path`)
+- Occupancy maps (`nav_msgs/OccupancyGrid`)
 
 Use the visualization settings to select a fixed frame, choose topics, configure render options, and add or remove visualizations. The configuration is saved in browser storage.
 
@@ -54,6 +56,14 @@ The fixed frame defaults to **Auto**: the view anchors to `world`, `map`, or `od
 PoseStamped and PointCloud2 layers use their message frame and acquisition timestamp. Dynamic TF is interpolated between recorded samples; a zero or omitted timestamp uses the latest TF. Missing frames, malformed data and timestamps outside the retained history hide the affected geometry. Open **Settings → Visualizations** to see the reason under that layer; incoming valid data or TF can resolve it automatically. Pose trails store positions in the selected fixed frame and reset when that frame or data source changes.
 
 For **URDF** and **Mesh markers** layers, open **Settings → Visualizations** and use the layer's **Mesh opacity** slider (0–100%, default 100%). Each layer is independent, updates immediately without reloading meshes or subscriptions, and saves its opacity with the panel. The slider multiplies the opacity already authored in model materials or ROS marker colors; 100% restores the original appearance. Newly loaded meshes use the current setting.
+
+To show a route and its environment, open **Settings → Visualizations → Add visualization** and choose **Path** or **Occupancy grid**. Add multiple layers for different robots or global/local plans, then select each layer's topic. ROS 1 and ROS 2 message-type spellings and namespaced topics are supported. The Data Explorer's **Open in 3D** action also opens these types.
+
+Each path/map has a **Show layer** toggle and **Opacity** slider. Paths also have **Color** and **Line width (m)** controls; defaults are green, 0.03 m width and 100% opacity. Maps default to 70% opacity: white is free (0), black is occupied (100), intermediate probabilities are gray, and unknown cells (-1) are blue-gray. Resolution, origin translation and rotation determine the cell placement; row zero starts at the map origin. Appearance and visibility are saved with the panel and update without resubscribing.
+
+Paths respect each pose's frame and timestamp, falling back to the path header when its pose frame is empty or its timestamp is omitted. Explicit zero timestamps use latest TF. Maps use their header's frame/timestamp. Missing transforms hide the affected layer and show its reason in the menu. Empty messages clear the previous route/map; an isolated path pose has no line to draw. Both layers follow recorded messages and playback seeks. Rendering is bounded to 10,000 poses per path, 4,194,304 cells per map, and 4,096 cells per map side (or the GPU's smaller texture limit); invalid/oversized messages show an error instead of retaining obsolete geometry.
+
+Maps currently consume complete OccupancyGrid messages. Incremental map/costmap updates are a later feature. A latched ROS 2 map may require compatible transient-local durability in the publisher/rosbridge setup; the browser layer cannot set ROS 2 QoS through this transport. If the layer stays on “Waiting for map messages”, check those settings. These layers only subscribe and render; they do not send navigation goals or robot commands.
 
 Point clouds honor XYZ field types and offsets, byte order, and organized-cloud row padding. Invalid points are skipped, and decoding is limited by the layer's maximum point count. Color-axis shaders and point-size controls remain available.
 

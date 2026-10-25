@@ -1,9 +1,9 @@
 import { getUrdfTopics, type RosTopicInfo } from './urdfTopics';
 
 /** Visualization types that bind to a topic; TF is driven by the frame list instead. */
-export type TopicVisualizationType = 'pointcloud' | 'camerainfo' | 'urdf' | 'laserscan' | 'posestamped' | 'markerarray';
+export type TopicVisualizationType = 'pointcloud' | 'camerainfo' | 'urdf' | 'laserscan' | 'posestamped' | 'markerarray' | 'path' | 'occupancygrid';
 
-export const TOPIC_VISUALIZATION_TYPES: readonly TopicVisualizationType[] = ['pointcloud', 'camerainfo', 'urdf', 'laserscan', 'posestamped', 'markerarray'];
+export const TOPIC_VISUALIZATION_TYPES: readonly TopicVisualizationType[] = ['pointcloud', 'camerainfo', 'urdf', 'laserscan', 'posestamped', 'markerarray', 'path', 'occupancygrid'];
 
 /** ROS 1 and ROS 2 spellings of the message types each visualization can render. */
 const MESSAGE_TYPES_BY_VISUALIZATION: Record<Exclude<TopicVisualizationType, 'urdf'>, readonly string[]> = {
@@ -12,6 +12,8 @@ const MESSAGE_TYPES_BY_VISUALIZATION: Record<Exclude<TopicVisualizationType, 'ur
   camerainfo: ['sensor_msgs/CameraInfo', 'sensor_msgs/msg/CameraInfo'],
   laserscan: ['sensor_msgs/LaserScan', 'sensor_msgs/msg/LaserScan'],
   posestamped: ['geometry_msgs/PoseStamped', 'geometry_msgs/msg/PoseStamped'],
+  path: ['nav_msgs/Path', 'nav_msgs/msg/Path'],
+  occupancygrid: ['nav_msgs/OccupancyGrid', 'nav_msgs/msg/OccupancyGrid'],
 };
 
 export const isTopicVisualizationType = (value: unknown): value is TopicVisualizationType =>
