@@ -26,6 +26,10 @@ fi
 
 echo "--- Sourcing ROS ${ROS_DISTRO} ---"
 source "/opt/ros/${ROS_DISTRO}/setup.bash"
+# Local source installs without this overlay retain ordinary video playback.
+if [ -f /opt/roboboy-video/share/web_video_server/local_setup.bash ]; then
+    source /opt/roboboy-video/share/web_video_server/local_setup.bash
+fi
 
 echo "--- DDS middleware: ${RMW_IMPLEMENTATION} ---"
 echo "--- ROS service ports: rosbridge=${ROSBRIDGE_PORT}; web_video_server=${VIDEO_STREAM_PORT} ---"

@@ -1,4 +1,5 @@
 import ScaleField from '../ScaleField';
+import { CAMERA_STREAM_PRESETS } from '../../utils/cameraStreamQuality';
 import { CAMERA_INFO_TYPES } from '../../utils/images/cameraCalibration';
 import {
   cameraInfoTopicFor,
@@ -36,6 +37,39 @@ export default function CameraImageSettings({
         />{' '}
         Show layer
       </label>
+      <label className="viz-topic-label" htmlFor={`camera-source-${id}`}>
+        Image source
+      </label>
+      <select
+        id={`camera-source-${id}`}
+        className="topic-dropdown"
+        aria-label={`Image source for ${label}`}
+        value={values.imageSource}
+        onChange={e => onChange(id, { imageSource: e.target.value as 'ros' | 'stream' })}
+      >
+        <option value="ros">ROS image messages</option>
+        <option value="stream">Camera streamer (ROS fallback)</option>
+      </select>
+      {values.imageSource === 'stream' && (
+        <>
+          <label className="viz-topic-label" htmlFor={`camera-quality-${id}`}>
+            Stream quality
+          </label>
+          <select
+            id={`camera-quality-${id}`}
+            className="topic-dropdown"
+            aria-label={`Stream quality for ${label}`}
+            value={values.streamQuality}
+            onChange={e => onChange(id, { streamQuality: e.target.value as CameraImageOptions['streamQuality'] })}
+          >
+            {(['low', 'medium', 'high', 'original'] as const).map(quality => (
+              <option key={quality} value={quality}>
+                {CAMERA_STREAM_PRESETS[quality].label}
+              </option>
+            ))}
+          </select>
+        </>
+      )}
       <label className="viz-topic-label" htmlFor={`camera-info-${id}`}>
         CameraInfo topic
       </label>

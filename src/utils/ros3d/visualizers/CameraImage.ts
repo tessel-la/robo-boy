@@ -10,7 +10,12 @@ import {
   type CameraCalibration,
 } from '../../images/cameraCalibration';
 import { normalizeCameraImageOptions, type CameraImageOptions } from '../../images/cameraImageOptions';
-import { subscribeToCameraInfo, subscribeToImages, type SharedImageFrame } from '../../images/cameraStreams';
+import {
+  subscribeToCameraInfo,
+  subscribeToImages,
+  type SharedImageFrame,
+  type ImageEvent,
+} from '../../images/cameraStreams';
 
 type Candidate = {
   frame: SharedImageFrame;
@@ -73,6 +78,7 @@ export class CameraImageClient {
       onStatus?: (status: string | null) => void;
       options?: CameraImageOptions;
       maxTextureSize?: number;
+      subscribeImages?: (listener: (event: ImageEvent) => void) => () => void;
     }
   ) {
     this.object.name = `Camera image: ${config.topic}`;
@@ -80,7 +86,11 @@ export class CameraImageClient {
     this.object.add(this.plane, this.frustum);
     config.rootObject.add(this.object);
     this.updateOptions(config.options);
-    this.stopImages = subscribeToImages(config.ros, config.topic, config.messageType, event => {
+    const subscribe =
+      config.subscribeImages ??
+      ((listener: (event: ImageEvent) => void) =>
+        subscribeToImages(config.ros, config.topic, config.messageType, listener));
+    this.stopImages = subscribe(event => {
       if (this.disposed) return;
       this.frame = event.frame;
       this.imageError = event.error;
@@ -215,6 +225,7 @@ export class CameraImageClient {
     this.preparing = true;
     for (const candidate of this.candidates) {
       try {
+        if (candidate.frame.projectionError) throw new Error(candidate.frame.projectionError);
         if (/compresseddepth/i.test(candidate.frame.encoding))
           throw new Error('Compressed depth is unsupported in this layer. Select a color or mono image topic.');
         const calibration = matchCameraInfo(
@@ -239,14 +250,15 @@ export class CameraImageClient {
           calibration.binningY,
           width,
           height,
+          candidate.frame.sourceSize,
           this.options.imageGeometry,
           this.options.distance,
         ]);
         if (candidate.projection?.key !== key) {
           const corners = cameraPlaneCorners(
             calibration,
-            width,
-            height,
+            candidate.frame.sourceSize?.width ?? width,
+            candidate.frame.sourceSize?.height ?? height,
             this.options.imageGeometry,
             this.options.distance
           );

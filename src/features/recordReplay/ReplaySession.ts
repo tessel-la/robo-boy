@@ -100,6 +100,9 @@ class ReplayRos extends ROSLIB.Ros {
   dispose() { this.latest.clear(); this.frames.clear(); this.subscriptions.clear(); (this as unknown as Emitter).removeAllListeners(); }
 }
 
+/** Explicit source identity: recorded views must never open a live camera transport. */
+export const isReplayRos = (ros: Ros): boolean => ros instanceof ReplayRos;
+
 export class ReplaySession {
   snapshot: ReplaySnapshot = { phase: 'empty', position: 0, playing: false, speed: 1, loop: false, remote: false, buffering: false };
   messageTime = 0;

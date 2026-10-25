@@ -12,10 +12,13 @@ export interface DecodedImageFrame {
   image: ImageBitmap | RgbaFrame;
   header?: { frame_id?: string; stamp?: unknown };
   encoding: string;
+  /** Full-frame source size before streamer resizing; cropping/rotation is unsupported. */
+  sourceSize?: { width: number; height: number };
+  projectionError?: string;
 }
 
 /** Validate encoded dimensions before handing allocation to the browser's image decoder. */
-function encodedDimensions(bytes: Uint8Array): [number, number] {
+export function encodedDimensions(bytes: Uint8Array): [number, number] {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   if (
     bytes.length >= 24 &&

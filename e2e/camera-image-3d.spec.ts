@@ -191,6 +191,11 @@ async function recording() {
 test('replays camera textures through the real MCAP worker and restores frames after backward seek', async ({
   page,
 }) => {
+  let liveRequests = 0;
+  await page.route('**/video_stream/**', route => {
+    liveRequests++;
+    return route.abort();
+  });
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
   await page.goto('/');
@@ -203,6 +208,7 @@ test('replays camera textures through the real MCAP worker and restores frames a
   });
   await expect(replay.getByRole('button', { name: 'Play recording', exact: true })).toBeEnabled();
   const panel = await addLayer(page);
+  await panel.getByLabel(`Image source for Camera image on ${imageTopic}`).selectOption('stream');
   await panel.getByRole('button', { name: 'Close settings', exact: true }).click();
   await expect.poll(() => pixels(panel.locator('canvas'), 'green')).toBeGreaterThan(20);
   await page.getByLabel('Add workspace panel').first().click();
@@ -220,5 +226,6 @@ test('replays camera textures through the real MCAP worker and restores frames a
   await expect(panel.locator('canvas')).toBeVisible();
   await expect.poll(() => pixels(panel.locator('canvas'), 'green')).toBeGreaterThan(20);
   await expect.poll(() => pixels(recorded, 'green')).toBeGreaterThan(20);
+  expect(liveRequests).toBe(0);
   expect(errors).toEqual([]);
 });

@@ -1,5 +1,8 @@
 import type { ImageGeometry } from './cameraCalibration';
+import { isCameraStreamQuality, type CameraStreamQuality } from '../cameraStreamQuality';
 export interface CameraImageOptions {
+  imageSource?: 'ros' | 'stream';
+  streamQuality?: Exclude<CameraStreamQuality, 'auto'>;
   cameraInfoTopic?: string;
   distance?: number;
   opacity?: number;
@@ -9,10 +12,15 @@ export interface CameraImageOptions {
   calibrationSync?: 'exact' | 'latest';
   toleranceMs?: number;
 }
+function projectionStreamQuality(value: unknown): Exclude<CameraStreamQuality, 'auto'> {
+  return isCameraStreamQuality(value) && value !== 'auto' ? value : 'medium';
+}
 export function normalizeCameraImageOptions(options: CameraImageOptions = {}, topic = '') {
   const number = (value: unknown, fallback: number, min: number, max: number) =>
     typeof value === 'number' && Number.isFinite(value) ? Math.min(max, Math.max(min, value)) : fallback;
   return {
+    imageSource: options.imageSource === 'stream' ? ('stream' as const) : ('ros' as const),
+    streamQuality: projectionStreamQuality(options.streamQuality),
     cameraInfoTopic: typeof options.cameraInfoTopic === 'string' ? options.cameraInfoTopic.trim() : '',
     distance: number(options.distance, 1, 0.01, 100),
     opacity: number(options.opacity, 1, 0, 1),
