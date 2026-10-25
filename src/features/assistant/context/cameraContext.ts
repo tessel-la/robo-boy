@@ -4,10 +4,11 @@ import {
   COMPRESSED_IMAGE_TYPES,
   compressedImageBlob,
   isImageType,
+  messageBytes,
   rawImageToRgba,
   type RawImage,
   type RgbaFrame,
-} from '../../recordReplay/imageFrames';
+} from '../../../utils/images/imageFrames';
 
 /*
  * One frame of a camera topic for the model to look at. It is read as a ROS message, so it works
@@ -57,18 +58,7 @@ export function cameraFrameTopics(
   });
 }
 
-/** rosbridge sends `uint8[]` as base64 text; a recording holds bytes. */
-export function messageBytes(data: unknown): Uint8Array {
-  if (data instanceof Uint8Array) return data;
-  if (Array.isArray(data)) return Uint8Array.from(data as number[]);
-  if (typeof data === 'string') {
-    const binary = atob(data);
-    const bytes = new Uint8Array(binary.length);
-    for (let index = 0; index < binary.length; index++) bytes[index] = binary.charCodeAt(index);
-    return bytes;
-  }
-  throw new Error('The image message has no pixel data.');
-}
+export { messageBytes } from '../../../utils/images/imageFrames';
 
 const scaled = (width: number, height: number) => {
   const scale = Math.min(1, MAX_SIDE / Math.max(width, height));

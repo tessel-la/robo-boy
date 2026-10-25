@@ -22,6 +22,7 @@ const VIZ_TYPE_ICONS: Record<Exclude<VisualizationConfig['type'], 'tf'>, React.R
   posestamped: <FaArrowRight />, // PoseStamped icon
   path: <FaRoute />,
   occupancygrid: <FaMap />,
+  cameraimage: <FaCamera />,
   // TF icon excluded - controlled via Settings menu
   // Add more icons here as needed:
   // marker: <FaMapMarker />,
@@ -99,6 +100,7 @@ const AddVisualizationModal: React.FC<AddVisualizationModalProps> = ({
     if (type === 'posestamped') return 'PoseStamped';
     if (type === 'laserscan') return 'LaserScan';
     if (type === 'occupancygrid') return 'Occupancy grid';
+    if (type === 'cameraimage') return 'Camera image';
     return type.charAt(0).toUpperCase() + type.slice(1);
   };
 

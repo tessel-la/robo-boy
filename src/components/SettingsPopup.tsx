@@ -7,6 +7,8 @@ import { normalizeMeshOpacity, type MeshDisplayOptions } from '../utils/meshOpac
 import type { NavigationDisplayOptions } from '../utils/navigationOptions';
 import NavigationLayerSettings from './visualizers/NavigationLayerSettings';
 import ScaleField from './ScaleField';
+import CameraImageSettings from './visualizers/CameraImageSettings';
+import type { CameraImageOptions } from '../utils/images/cameraImageOptions';
 import type { TfDisplaySettings } from '../utils/visualizationState';
 import type { VisualizationConfig } from './VisualizationPanel';
 import './VisualizationPanel.css';
@@ -33,7 +35,7 @@ interface SettingsPopupProps {
   onRemoveVisualization: (id: string) => void;
   onAddVisualizationClick: () => void;
   onEditVisualization?: (id: string) => void;
-  onUpdateVisualizationOptions?: (id: string, options: MeshDisplayOptions | NavigationDisplayOptions) => void;
+  onUpdateVisualizationOptions?: (id: string, options: MeshDisplayOptions | NavigationDisplayOptions | CameraImageOptions) => void;
   onUpdateVisualizationTopic?: (id: string, newTopic: string) => void;
   allTopics: TopicInfo[];
   visualizationStatus?: Record<string, string | null>;
@@ -56,6 +58,7 @@ const TYPE_LABELS: Record<VisualizationConfig['type'], string> = {
   posestamped: 'Pose Stamped',
   path: 'Path',
   occupancygrid: 'Occupancy grid',
+  cameraimage: 'Camera image',
 };
 
 const CONFIGURABLE_TYPES = new Set<VisualizationConfig['type']>(['pointcloud', 'laserscan', 'posestamped']);
@@ -444,6 +447,8 @@ const SettingsPopup: React.FC<SettingsPopupProps> = ({
                       <NavigationLayerSettings id={viz.id} type={viz.type} topic={viz.topic}
                         options={viz.options as NavigationDisplayOptions} onChange={onUpdateVisualizationOptions} />
                     )}
+                    {viz.type === 'cameraimage' && onUpdateVisualizationOptions && <CameraImageSettings id={viz.id} topic={viz.topic}
+                      options={viz.options as CameraImageOptions} topics={allTopics} onChange={onUpdateVisualizationOptions} />}
                     {(viz.type === 'urdf' || viz.type === 'markerarray') && onUpdateVisualizationOptions && (
                       <div className="tf-scale-control">
                         <div className="control-heading-row">

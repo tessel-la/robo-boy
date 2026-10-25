@@ -44,6 +44,8 @@ import { getPreferredUrdfTopic } from '../utils/urdfTopics';
 import type { MeshDisplayOptions } from '../utils/meshOpacity';
 import type { NavigationDisplayOptions } from '../utils/navigationOptions';
 import NavigationViz from './visualizers/NavigationViz';
+import CameraImageViz from './visualizers/CameraImageViz';
+import { cameraInfoTopicFor, type CameraImageOptions } from '../utils/images/cameraImageOptions';
 import type { PanelSettingsBridge } from '../features/assistant/types';
 
 interface VisualizationPanelProps {
@@ -59,7 +61,7 @@ export interface VisualizationConfig {
   id: string;
   type: TopicVisualizationType | 'tf';
   topic: string; // For pointcloud/camerainfo/laserscan/posestamped. For URDF, this might be robot_description topic
-  options?: NavigationDisplayOptions | MeshDisplayOptions | PointCloudOptions | CameraInfoOptions | UrdfOptions | LaserScanOptions | LaserScanSettingsOptions | PoseStampedOptions | PoseStampedSettingsOptions; // Union of option types
+  options?: CameraImageOptions | NavigationDisplayOptions | MeshDisplayOptions | PointCloudOptions | CameraInfoOptions | UrdfOptions | LaserScanOptions | LaserScanSettingsOptions | PoseStampedOptions | PoseStampedSettingsOptions; // Union of option types
 }
 
 // Define more specific option types
@@ -93,7 +95,7 @@ const TF_DISPLAY_KEYS: ReadonlyArray<keyof TfDisplaySettings> = [
 const ASSISTANT_SETTINGS_HELP =
   'Keys: "fixedFrame" (a frame name from availableFrames); "showAllTfFrames" (boolean); "showTfFrames" / "hideTfFrames" (arrays of frame names to add to or remove from the displayed list); ' +
   '"tfDisplay" (object with any of showTfAxes, showTfFrameLabels, showTfConnections, showTfLabelBackground as booleans and tfAxesScale (length), tfAxesWidth (diameter), tfLabelScale in metres, tfAxesOpacity, tfLabelOpacity from 0 to 1); ' +
-  '"addVisualizations" (array of {"type": one of pointcloud|camerainfo|urdf|laserscan|posestamped|markerarray|path|occupancygrid, "topic": optional — the first compatible topic is used when omitted}); ' +
+  '"addVisualizations" (array of {"type": one of pointcloud|camerainfo|urdf|laserscan|posestamped|markerarray|path|occupancygrid|cameraimage, "topic": optional — the first compatible topic is used when omitted}); ' +
   '"removeVisualizations" (array of {"id"} or {"type"} or {"topic"} matching entries in visualizations).';
 
 const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({
@@ -614,6 +616,12 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({
               />
             </React.Fragment>
           );
+        } else if (viz.type === 'cameraimage' && ros) {
+          const options = viz.options as CameraImageOptions | undefined;
+          return <CameraImageViz key={viz.id} id={viz.id} ros={ros} viewer={ros3dViewer} provider={customTFProvider}
+            topic={viz.topic} messageType={allTopics.find(item => item.name === viz.topic)?.type
+              ?? (viz.topic.endsWith('/compressed') ? 'sensor_msgs/CompressedImage' : 'sensor_msgs/Image')}
+            options={{ ...options, cameraInfoTopic: options?.cameraInfoTopic ?? cameraInfoTopicFor(viz.topic, allTopics) }} onStatus={reportVisualizationStatus} />;
         } else if (viz.type === 'path' || viz.type === 'occupancygrid') {
           return <NavigationViz key={viz.id} id={viz.id} type={viz.type} topic={viz.topic}
             ros={ros} connected={isRosConnected} viewer={ros3dViewer} provider={customTFProvider}

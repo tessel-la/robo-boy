@@ -51,6 +51,21 @@ describe('SettingsPopup', () => {
     vi.clearAllMocks();
   });
 
+  it('places camera calibration, image-plane and synchronization controls under the camera layer', () => {
+    const update = vi.fn();
+    render(<SettingsPopup {...defaultProps} onUpdateVisualizationOptions={update}
+      activeVisualizations={[{ id: 'cam', type: 'cameraimage', topic: '/front/image_rect/compressed' }]}
+      allTopics={[{ name: '/front/camera_info', type: 'sensor_msgs/msg/CameraInfo' }]} />);
+    fireEvent.click(screen.getByRole('tab', { name: /Visualizations/ }));
+    expect(screen.getByLabelText('CameraInfo topic for Camera image on /front/image_rect/compressed')).toHaveValue('/front/camera_info');
+    expect(screen.getByLabelText('Image geometry for Camera image on /front/image_rect/compressed')).toHaveValue('rectified');
+    expect(screen.getByLabelText('Image plane distance in metres for Camera image on /front/image_rect/compressed')).toHaveValue(1);
+    fireEvent.change(screen.getByLabelText('Image opacity for Camera image on /front/image_rect/compressed'), { target: { value: '0.4' } });
+    expect(update).toHaveBeenLastCalledWith('cam', { opacity: 0.4 });
+    fireEvent.click(screen.getByLabelText('Show frustum for Camera image on /front/image_rect/compressed'));
+    expect(update).toHaveBeenLastCalledWith('cam', { showFrustum: false });
+  });
+
   it('offers independent path/map visibility and appearance controls', () => {
     const onUpdate = vi.fn();
     render(<SettingsPopup {...defaultProps} onUpdateVisualizationOptions={onUpdate} activeVisualizations={[

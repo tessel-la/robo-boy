@@ -68,20 +68,22 @@ describe('pickRecordedCameraTopic', () => {
 describe('RecordedCameraView', () => {
   it('draws the recorded frame at the playback position instead of the live stream', async () => {
     const ros = openRecording(CAMERA_TOPICS);
-    render(<RecordedCameraView ros={ros} preferredTopic="/cam/image_raw" />);
+    const { unmount } = render(<RecordedCameraView ros={ros} preferredTopic="/cam/image_raw" />);
     expect(screen.getByLabelText('Recorded camera topic')).toHaveValue('/cam/image_raw/compressed');
     expect(screen.getByText('Waiting for a frame at the playback position…')).toBeInTheDocument();
     expect(screen.queryByRole('option', { name: '/odom' })).not.toBeInTheDocument();
 
-    await deliver([{ topic: '/cam/image_raw/compressed', time: START, message: { format: 'jpeg', data: Uint8Array.from([0xff, 0xd8]) } }]);
+    await deliver([{ topic: '/cam/image_raw/compressed', time: START, message: { format: 'jpeg', data: Uint8Array.from([0xff, 0xd8, 0xff, 0xc0, 0, 11, 8, 0, 48, 0, 64, 1, 1, 0x11, 0, 0xff, 0xd9]) } }]);
     expect(worker.last('seek').topics).toEqual(['/cam/image_raw/compressed']);
-    expect(createImageBitmap).toHaveBeenCalledWith(expect.objectContaining({ type: 'image/jpeg' }));
+    expect(createImageBitmap).toHaveBeenCalledWith(expect.objectContaining({ type: 'image/jpeg' }), expect.objectContaining({ premultiplyAlpha: 'none' }));
     expect(context.drawImage).toHaveBeenCalledWith(bitmap, 0, 0);
-    expect(bitmap.close).toHaveBeenCalled();
+    expect(bitmap.close).not.toHaveBeenCalled();
     const canvas = screen.getByRole('img', { name: 'Recorded frame from /cam/image_raw/compressed' }) as HTMLCanvasElement;
     expect(canvas).toBeVisible();
     expect([canvas.width, canvas.height]).toEqual([64, 48]);
     expect(screen.getByText('Recording')).toBeInTheDocument();
+    unmount();
+    expect(bitmap.close).toHaveBeenCalledOnce();
   });
 
   it('draws raw images and switches topics from the selector', async () => {
@@ -98,10 +100,22 @@ describe('RecordedCameraView', () => {
     const ros = openRecording(CAMERA_TOPICS.slice(0, 1));
     const { unmount } = render(<RecordedCameraView ros={ros} preferredTopic="/cam/image_raw" />);
     await deliver([{ topic: '/cam/image_raw', time: START, message: { width: 1, height: 1, encoding: 'bayer_rggb8', step: 1, data: new Uint8Array(1) } }]);
-    expect(screen.getByText('Replay cannot show bayer_rggb8 images yet.')).toBeInTheDocument();
+    expect(screen.getByText('Camera cannot show bayer_rggb8 images yet.')).toBeInTheDocument();
     unmount();
 
     render(<RecordedCameraView ros={openRecording(CAMERA_TOPICS.slice(2))} preferredTopic="/cam/image_raw" />);
     expect(screen.getByText('This recording has no camera topics.')).toBeInTheDocument();
+  });
+
+  it('hides frames on a canvas draw failure and recovers on the next valid frame', async () => {
+    const ros = openRecording(CAMERA_TOPICS.slice(0, 1));
+    render(<RecordedCameraView ros={ros} preferredTopic="/cam/image_raw" />);
+    context.putImageData.mockImplementationOnce(() => { throw new Error('Canvas draw failed'); });
+    const frame = { topic: '/cam/image_raw', time: START, message: { width: 1, height: 1, encoding: 'rgb8', step: 3, data: new Uint8Array([1, 2, 3]) } };
+    await deliver([frame]);
+    expect(screen.getByText('This recorded frame could not be drawn.')).toBeVisible();
+    expect(screen.getByLabelText('Recorded frame from /cam/image_raw')).not.toBeVisible();
+    await deliver([frame]);
+    expect(screen.getByRole('img', { name: 'Recorded frame from /cam/image_raw' })).toBeVisible();
   });
 });

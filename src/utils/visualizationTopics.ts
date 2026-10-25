@@ -1,9 +1,10 @@
 import { getUrdfTopics, type RosTopicInfo } from './urdfTopics';
+import { RAW_IMAGE_TYPES, COMPRESSED_IMAGE_TYPES } from './images/imageFrames';
 
 /** Visualization types that bind to a topic; TF is driven by the frame list instead. */
-export type TopicVisualizationType = 'pointcloud' | 'camerainfo' | 'urdf' | 'laserscan' | 'posestamped' | 'markerarray' | 'path' | 'occupancygrid';
+export type TopicVisualizationType = 'pointcloud' | 'camerainfo' | 'urdf' | 'laserscan' | 'posestamped' | 'markerarray' | 'path' | 'occupancygrid' | 'cameraimage';
 
-export const TOPIC_VISUALIZATION_TYPES: readonly TopicVisualizationType[] = ['pointcloud', 'camerainfo', 'urdf', 'laserscan', 'posestamped', 'markerarray', 'path', 'occupancygrid'];
+export const TOPIC_VISUALIZATION_TYPES: readonly TopicVisualizationType[] = ['pointcloud', 'camerainfo', 'urdf', 'laserscan', 'posestamped', 'markerarray', 'path', 'occupancygrid', 'cameraimage'];
 
 /** ROS 1 and ROS 2 spellings of the message types each visualization can render. */
 const MESSAGE_TYPES_BY_VISUALIZATION: Record<Exclude<TopicVisualizationType, 'urdf'>, readonly string[]> = {
@@ -14,6 +15,7 @@ const MESSAGE_TYPES_BY_VISUALIZATION: Record<Exclude<TopicVisualizationType, 'ur
   posestamped: ['geometry_msgs/PoseStamped', 'geometry_msgs/msg/PoseStamped'],
   path: ['nav_msgs/Path', 'nav_msgs/msg/Path'],
   occupancygrid: ['nav_msgs/OccupancyGrid', 'nav_msgs/msg/OccupancyGrid'],
+  cameraimage: [...RAW_IMAGE_TYPES, ...COMPRESSED_IMAGE_TYPES],
 };
 
 export const isTopicVisualizationType = (value: unknown): value is TopicVisualizationType =>
@@ -24,5 +26,9 @@ export const isTopicVisualizationType = (value: unknown): value is TopicVisualiz
 export const getTopicsForVisualizationType = (type: TopicVisualizationType, topics: RosTopicInfo[]): RosTopicInfo[] => {
   if (type === 'urdf') return getUrdfTopics(topics);
   const supported = MESSAGE_TYPES_BY_VISUALIZATION[type];
-  return topics.filter(topic => supported.includes(topic.type));
+  const compatible = topics.filter(topic => supported.includes(topic.type));
+  if (type !== 'cameraimage') return compatible;
+  // Prefer encoded color/mono streams for live 3D bandwidth; compressedDepth is not an image plane.
+  const priority = (topic: RosTopicInfo) => /\/compressedDepth$/.test(topic.name) ? 2 : COMPRESSED_IMAGE_TYPES.includes(topic.type) ? 0 : 1;
+  return compatible.sort((a, b) => priority(a) - priority(b));
 };
