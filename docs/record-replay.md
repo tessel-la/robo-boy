@@ -65,6 +65,14 @@ connected to another host) need the recorder to serve over TCP as well: set `ROB
 ROS host and point Caddy at it with `RECORDINGS_UPSTREAM=<host>:9091`. Like the robot's other services the file
 service is unauthenticated: keep it on a trusted network or VPN.
 
+For a desktop app on the same machine as the ROS host, set `ROBOBOY_RECORDINGS_ADDRESS=127.0.0.1`
+alongside `ROBOBOY_RECORDINGS_PORT=9091` in a host-local Compose override. Recreate only `ros-stack`
+with the installation's existing overlay files and that override, when no recording is active.
+This preserves the browser's shared socket and restricts TCP to the local machine; remote/mobile
+clients cannot reach that loopback listener. Do not expose the unauthenticated service publicly.
+An unavailable `/recordings` browser route indicates a proxy/socket problem, whereas an unavailable
+absolute host/port endpoint indicates a direct TCP/bind/firewall/CORS problem.
+
 Supported files: indexed MCAP (the `ros2 bag` default) with `ros2msg`/CDR, `ros1msg`, or JSON channels, and
 uncompressed, zstd or LZ4 chunks. A file without a chunk index can be fixed with `mcap recover`.
 

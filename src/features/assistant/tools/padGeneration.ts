@@ -113,7 +113,9 @@ const normalizeOperation = (raw: unknown): RosOperation | undefined => {
             : typeof record.actionName === 'string'
               ? record.actionName
               : undefined;
-  if (!name || !messageType) return undefined;
+  if (!name || !messageType) throw new Error('Every event binding needs a resource name and messageType.');
+  if (!payload) throw new Error(`The ${kind} binding "${name}" has no payload. Retrieve its schema and provide the complete payload.`);
+  if (kind === 'action' && Object.keys(payload).length === 0) throw new Error(`The action "${name}" has an empty goal. Provide a complete goal.`);
 
   return {
     kind,
@@ -130,6 +132,7 @@ const normalizeEventOperations = (raw: unknown): GamepadComponentConfig['eventOp
   const result: NonNullable<GamepadComponentConfig['eventOperations']> = {};
   (['press', 'release', 'on', 'off'] as const).forEach(key => {
     const operation = normalizeOperation(record[key]);
+    if (record[key] != null && !operation) throw new Error(`Invalid ${key} operation. Use kind, name, messageType and payload.`);
     if (operation) result[key] = operation;
   });
   return Object.keys(result).length > 0 ? result : undefined;
@@ -160,10 +163,25 @@ const normalizeComponent = (
   while (usedIds.has(id)) id = `${id}-${index}`;
   usedIds.add(id);
 
-  const action = normalizeAction(record.action);
-  const eventOperations = normalizeEventOperations(record.eventOperations);
+  let action = normalizeAction(record.action);
+  if (record.action != null && !action) throw new Error('Invalid primary topic binding. Use action.topic and action.messageType, or eventOperations for service/action calls.');
+  let eventOperations = normalizeEventOperations(record.eventOperations);
   const config = asPlainObject(record.config);
   const style = asPlainObject(record.style);
+
+  // Service/action primary bindings have no executable meaning to the Pad renderer. Preserve
+  // a supplied goal/request by moving it to the event the renderer actually executes.
+  if (action && 'type' in action && (action.type === 'action' || action.type === 'service')) {
+    if (type !== 'button' && type !== 'toggle') throw new Error(`A ${type} cannot execute a primary ${action.type} binding. Use a button's eventOperations.press.`);
+    const event = type === 'toggle' ? 'on' : 'press';
+    if (!eventOperations?.[event]) {
+      const rawAction = asPlainObject(record.action)!;
+      const payload = rawAction.payload ?? rawAction.goal ?? rawAction.request ?? config?.payload ?? config?.goal ?? config?.request;
+      const operation = normalizeOperation({ kind: action.type, name: action.name, messageType: action.messageType, payload });
+      eventOperations = { ...eventOperations, [event]: operation };
+    }
+    action = undefined;
+  }
 
   // Physical-gamepad bindings carry their own nested press/release operations.
   if (config && asPlainObject(config.physicalGamepadBindings)) {

@@ -4,6 +4,13 @@ import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 
+// These exact releases omit upstream license files from their npm tarballs. Keep reviewed,
+// pinned copies offline; unknown packages, versions and license declarations still fail closed.
+const sourceLicenses = new Map([
+  ['@ai-sdk/provider-utils@5.0.56', { license: 'Apache-2.0', file: 'ai-sdk-provider-utils-LICENSE' }],
+  ['@cfworker/json-schema@4.1.1', { license: 'MIT', file: 'cfworker-json-schema-LICENSE' }],
+]);
+
 /** Follow build inputs, not package.json's broader development/optional dependency list. */
 export async function createThirdPartyNotices(moduleIds) {
   const packages = new Map();
@@ -43,8 +50,11 @@ export async function createThirdPartyNotices(moduleIds) {
         if (/^#+\s+licen[cs]e\s*$/im.test(readme) && manifest.license) files.push(entry.name);
       }
     }
-    if (!files.length) throw new Error(`No license text found for bundled dependency ${name}.`);
+    const source = !files.length && sourceLicenses.get(name);
+    if (!files.length && (!source || source.license !== manifest.license))
+      throw new Error(`No license text found for bundled dependency ${name}.`);
     sections.push(`\n=== ${name} (${manifest.license ?? 'see license text'}) ===`);
+    if (source) sections.push(`${source.file}\n${await readFile(path.join(root, 'third-party', source.file), 'utf8')}`);
     for (const file of files) sections.push(`${file}\n${await readFile(path.join(directory, file), 'utf8')}`);
   }
   return sections.join('\n\n') + '\n';

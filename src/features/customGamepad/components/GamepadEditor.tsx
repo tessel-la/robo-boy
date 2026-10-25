@@ -22,6 +22,7 @@ interface GamepadEditorProps {
   onSave: (layout: CustomGamepadLayout) => void;
   initialLayout?: CustomGamepadLayout | null;
   ros: Ros;
+  onRegisterDraftReader?: (reader: (() => CustomGamepadLayout) | null) => void;
 }
 
 type EditorToolPanel = 'components' | 'layout';
@@ -31,7 +32,8 @@ const GamepadEditor: React.FC<GamepadEditorProps> = ({
   onClose,
   onSave,
   initialLayout,
-  ros
+  ros,
+  onRegisterDraftReader
 }) => {
   const [layout, setLayout] = useState<CustomGamepadLayout>(() => {
     if (initialLayout) {
@@ -69,6 +71,21 @@ const GamepadEditor: React.FC<GamepadEditorProps> = ({
   });
 
   const designAreaRef = useRef<HTMLDivElement>(null);
+  const layoutRef = useRef(layout);
+  layoutRef.current = layout;
+  useEffect(() => {
+    onRegisterDraftReader?.(Object.assign(() => layoutRef.current, { replaceDraft: (next: CustomGamepadLayout) => {
+      layoutRef.current = next; setLayout(next);
+      setEditorState(previous => ({ ...previous, gridSize: next.gridSize, cellSize: next.cellSize }));
+    } }));
+    return () => onRegisterDraftReader?.(null);
+  }, [onRegisterDraftReader]);
+  useEffect(() => {
+    if (!initialLayout) return;
+    // Another reviewed proposal can arrive while the editor is already open.
+    setLayout(initialLayout);
+    setEditorState(previous => ({ ...previous, selectedComponentId: null, gridSize: initialLayout.gridSize, cellSize: initialLayout.cellSize }));
+  }, [initialLayout]);
   const modalRef = useRef<HTMLDivElement>(null);
   
   // Use ref for synchronous drag state access (React state is async and causes race conditions)

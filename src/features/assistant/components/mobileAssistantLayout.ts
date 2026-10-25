@@ -12,10 +12,10 @@ export const resolveCompactAssistantFrame = ({ viewportTop, viewportHeight, view
 }): CompactAssistantFrame => {
   const viewportBottom = viewportTop + viewportHeight;
   const contentTop = Math.max(viewportTop, toolbarBottom);
-  const availableHeight = Math.max(240, viewportBottom - contentTop);
+  const availableHeight = Math.max(1, viewportBottom - contentTop);
   const prefersTakeover = availableHeight <= 620 || viewportWidth <= 340;
   const defaultHeight = Math.min(620, Math.max(400, availableHeight * 0.66));
-  const minimumHeight = Math.min(400, Math.max(320, availableHeight * 0.45));
+  const minimumHeight = Math.min(availableHeight, 400, Math.max(320, availableHeight * 0.45));
   const maximumDockedHeight = Math.max(minimumHeight, availableHeight - Math.max(120, availableHeight * 0.15));
   const maximumHeight = prefersTakeover ? availableHeight : maximumDockedHeight;
   const preferredHeight = requestedHeight ?? (prefersTakeover ? availableHeight : defaultHeight);

@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { claudeEnvironment, claudeResult, CLAUDE_CHAT_FLAGS } from './claudeSubscription';
+import { claudeEnvironment, claudeHostToolFlags, claudeResult, CLAUDE_CHAT_FLAGS } from './claudeSubscription';
 
 describe('Claude runtime isolation', () => {
   afterEach(() => vi.unstubAllEnvs());
@@ -26,6 +26,21 @@ describe('Claude runtime isolation', () => {
     expect(env).not.toHaveProperty('CLAUDE_CODE_USE_BEDROCK');
     expect(env).not.toHaveProperty('NODE_OPTIONS');
     expect(env).not.toHaveProperty('BROWSER');
+  });
+  it('keeps telemetry disabled when enabling only explicitly scoped host tools', () => {
+    vi.stubEnv('CLAUDE_CODE_SAFE_MODE', '1');
+    vi.stubEnv('CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC', '0');
+    const env = claudeEnvironment('/private/roboboy/claude', true);
+    expect(env.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC).toBe('1');
+    expect(env).not.toHaveProperty('CLAUDE_CODE_SAFE_MODE');
+    const flags = claudeHostToolFlags('/private/roboboy/mcp.json', ['read_workspace'], true);
+    expect(flags).not.toContain('--safe-mode');
+    expect(flags).toContain('--restricted');
+    expect(flags[flags.indexOf('--tools') + 1]).toBe('');
+    expect(flags).toContain('--strict-mcp-config');
+    expect(flags[flags.indexOf('--mcp-config') + 1]).toBe('/private/roboboy/mcp.json');
+    expect(flags[flags.indexOf('--allowedTools') + 1]).toBe('mcp__roboboy__read_workspace');
+    expect(flags[flags.indexOf('--max-turns') + 1]).toBe('10');
   });
   it('removes all runtime tools and customizations without bypassing permissions', () => {
     expect(CLAUDE_CHAT_FLAGS[CLAUDE_CHAT_FLAGS.indexOf('--tools') + 1]).toBe('');

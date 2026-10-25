@@ -16,6 +16,16 @@ shell and renderer notices together when distributing Electron. Native runtimes,
 libraries, external panels, and robot assets retain separate license obligations; this file does
 not relicense them.
 
+## Source licenses omitted from npm releases
+
+The notice generator includes these unmodified upstream texts for the exact releases below.
+Their npm tarballs declare the license but omit its text. A new version requires a new review.
+
+- `@ai-sdk/provider-utils@5.0.56`: [Vercel AI SDK license](https://github.com/vercel/ai/blob/e7f55a481fe2c39bd2540162ee8b45bd8de3354b/LICENSE),
+  retained as `third-party/ai-sdk-provider-utils-LICENSE` (Apache-2.0).
+- `@cfworker/json-schema@4.1.1`: [cfworker license](https://github.com/cfworker/cfworker/blob/5409fdc2bd144f68e8b28c61c71fcb16600000a6/LICENSE.md),
+  retained as `third-party/cfworker-json-schema-LICENSE` (MIT).
+
 ## Tauri MPL source access
 
 The Tauri lockfile includes the following MPL 2.0 components. If included in a distributed

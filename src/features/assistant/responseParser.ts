@@ -4,6 +4,7 @@ import { parseWorkspaceEditOperations } from './tools/workspaceTool';
 import type { AssistantResponse } from './types';
 import type { BehaviorTreeResourceSchemas } from '../behaviorTree/agent/types';
 import type { RosOperation } from '../../utils/rosOperations';
+import { parseContextReads } from './tools/contextTool';
 
 const stripCodeFence = (value: string): string => {
   const fenced = value.match(/```(?:json)?\s*([\s\S]*?)```/i);
@@ -36,6 +37,8 @@ export const parseAssistantResponse = (text: string, schemas: BehaviorTreeResour
   if (!value || typeof value !== 'object') throw new Error('The model returned an unexpected response.');
 
   switch (value.kind) {
+    case 'contextRequest':
+      return { kind: 'contextRequest', summary: typeof value.summary === 'string' ? value.summary.slice(0, 300) : '', reads: parseContextReads(value.reads) };
     case 'explanation': {
       const message = value.message;
       if (typeof message !== 'string' || !message.trim()) throw new Error('The model returned an empty explanation.');
@@ -56,7 +59,7 @@ export const parseAssistantResponse = (text: string, schemas: BehaviorTreeResour
       return parseBehaviorTreeToolResponse(trimmed, schemas);
     case 'padProposal': {
       // Repair/normalize before anything downstream sees it — see tools/padGeneration.ts.
-      return { kind: 'padProposal', layout: normalizePadLayout(value.layout), issues: [] };
+      return { kind: 'padProposal', layout: normalizePadLayout(value.layout), issues: [], ...(typeof value.baseRevision === 'string' ? { baseRevision: value.baseRevision } : {}) };
     }
     case 'rosAction': {
       const operation = value.operation;

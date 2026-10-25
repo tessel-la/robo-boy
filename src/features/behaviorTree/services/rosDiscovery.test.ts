@@ -25,6 +25,20 @@ describe('fetchActionGoalDetails', () => {
     mockRoslib.response = null;
   });
 
+  it('keeps nested message-array element fields for trajectory goal construction', async () => {
+    mockRoslib.response = { typedefs: [
+      { type: 'control_msgs/action/FollowJointTrajectory_Goal', fieldnames: ['trajectory'], fieldtypes: ['trajectory_msgs/msg/JointTrajectory'], fieldarraylen: [-1] },
+      { type: 'trajectory_msgs/msg/JointTrajectory', fieldnames: ['points'], fieldtypes: ['trajectory_msgs/msg/JointTrajectoryPoint'], fieldarraylen: [0] },
+      { type: 'trajectory_msgs/msg/JointTrajectoryPoint', fieldnames: ['positions', 'time_from_start'], fieldtypes: ['float64', 'builtin_interfaces/msg/Duration'], fieldarraylen: [0, -1] },
+      { type: 'builtin_interfaces/msg/Duration', fieldnames: ['sec', 'nanosec'], fieldtypes: ['int32', 'uint32'], fieldarraylen: [-1, -1] },
+    ] };
+    const details = await fetchActionGoalDetails({} as never, 'control_msgs/action/FollowJointTrajectory');
+    const points = details?.fields[0].subfields?.[0];
+    expect(points?.arrayLen).toBe(0);
+    expect(points?.subfields?.map(field => field.name)).toEqual(['positions', 'time_from_start']);
+    expect(points?.subfields?.[1].subfields?.map(field => field.name)).toEqual(['sec', 'nanosec']);
+  });
+
   it('builds primitive defaults for ROS 2 IDL aliases from action_goal_details', async () => {
     mockRoslib.response = {
       typedefs: [

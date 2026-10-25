@@ -33,8 +33,11 @@ const main = await build({
   bundle: true,
   metafile: true,
   platform: 'node',
-  target: 'node20',
+  target: 'node22',
   format: 'esm',
+  // Native inference dependencies contain CommonJS modules. In an ESM bundle their
+  // built-in imports need Node's actual loader, not esbuild's unsupported-require shim.
+  banner: { js: "import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);" },
   external,
   define: {
     __ROBOBOY_ENTERPRISE_LOGIN__: JSON.stringify(enabled(environment.VITE_ENTERPRISE_LOGIN)),

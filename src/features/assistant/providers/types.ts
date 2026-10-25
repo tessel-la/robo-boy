@@ -26,12 +26,23 @@ export interface AssistantChatTurn {
 }
 
 export interface SendChatRequest {
+  beforeStep?: () => void;
+  onUsage?: (usage: { inputTokens: number; outputTokens: number }) => void;
+  onNativeMessages?: (messages: import('ai').ModelMessage[]) => void;
+  nativeHistory?: import('ai').ModelMessage[];
+  contextWindowTokens?: number;
+  sessionId?: string;
+  shouldYield?: () => boolean;
+  tools?: import('../tools/nativeTools').HostTools;
+  refreshSystemPrompt?: () => string;
   settings: AssistantProviderSettings;
   systemPrompt: string;
   /** Full multi-turn history, oldest first, ending with the current user turn. */
   messages: AssistantChatTurn[];
   signal?: AbortSignal;
   onToken?: (text: string) => void;
+  /** Only provider-exposed reasoning/thinking, kept separate from answer text. */
+  onThinking?: (text: string) => void;
   onProgress?: (message: string) => void;
   /** Ask the provider to constrain output to a single JSON object, using whatever native
    * mechanism it offers (or a system-prompt instruction, for providers with none). */
