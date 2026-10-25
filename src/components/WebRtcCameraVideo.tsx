@@ -6,6 +6,7 @@ export default function WebRtcCameraVideo({ ros, url }: { ros: Ros; url: string 
     [error, setError] = useState('');
   useEffect(() => {
     setError('');
+    const element = video.current;
     if (!url) {
       setError('Choose a WebRTC stream or enter its WHEP URL.');
       return;
@@ -14,17 +15,20 @@ export default function WebRtcCameraVideo({ ros, url }: { ros: Ros; url: string 
     try {
       stop = subscribeToWebRtcVideo(ros, url, event => {
         setError(event.error ?? '');
-        if (!video.current) return;
-        video.current.srcObject = event.stream;
+        if (!element) return;
+        element.srcObject = event.stream;
         if (event.stream)
-          void video.current.play().catch(() => setError('Video playback was blocked. Select Play to start it.'));
+          void element.play().catch(() => setError('Video playback was blocked. Select Play to start it.'));
       });
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'WebRTC is unavailable.');
     }
     return () => {
       stop?.();
-      if (video.current) video.current.srcObject = null;
+      if (element) {
+        element.pause();
+        element.srcObject = null;
+      }
     };
   }, [ros, url]);
   return (
