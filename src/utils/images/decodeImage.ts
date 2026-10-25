@@ -8,7 +8,7 @@ import {
 } from './imageFrames';
 
 export interface DecodedImageFrame {
-  /** Owned by the shared stream. Consumers must not close bitmaps; replace/drop on the next event. */
+  /** Owned by the decoder caller; shared-stream consumers use SharedImageFrame.retain(). */
   image: ImageBitmap | RgbaFrame;
   header?: { frame_id?: string; stamp?: unknown };
   encoding: string;

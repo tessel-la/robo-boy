@@ -99,12 +99,27 @@ test('renders compressed/raw calibrated images, waits for TF and saves controls 
   await expect(panel.locator('.visualization-status').first()).toContainText('CameraInfo');
   await publishRosMessage(page, infoTopic, info());
   for (const sec of [1, 3]) await publishRosMessage(page, '/tf', tf(sec));
-  // The informational flat-plane note is separate from the per-layer error reason.
   await expect(panel.getByRole('status').filter({ hasText: /Waiting|invalid|missing/ })).toHaveCount(0);
   await panel.getByRole('button', { name: 'Close settings', exact: true }).click();
   for (const color of ['red', 'green', 'blue'] as const)
     await expect.poll(() => pixels(panel.locator('canvas'), color)).toBeGreaterThan(20);
   const counts = await Promise.all([imageTopic, infoTopic].map(topic => getRosSubscriptionCount(page, topic)));
+  const heldBlue = await pixels(panel.locator('canvas'), 'blue');
+  await publishRosMessage(page, imageTopic, {
+    header: header(4),
+    format: 'png',
+    data: (await png('red')).toString('base64'),
+  });
+  // The last multicolour bitmap remains GPU-uploadable and visible while TF lags.
+  for (let i = 0; i < 3; i++) expect(await pixels(panel.locator('canvas'), 'blue')).toBeGreaterThan(heldBlue / 2);
+  await openSettings(panel);
+  await expect(panel.getByRole('status').filter({ hasText: 'Showing last valid image' })).toBeVisible();
+  await expect(panel.getByText('Flat image at the selected distance.', { exact: false })).toHaveCount(0);
+  await publishRosMessage(page, '/tf', tf(5));
+  await expect(panel.getByRole('status').filter({ hasText: /Showing last valid|Waiting/ })).toHaveCount(0);
+  await panel.getByRole('button', { name: 'Close settings', exact: true }).click();
+  await expect.poll(() => pixels(panel.locator('canvas'), 'blue')).toBeLessThan(heldBlue / 3);
+  await expect.poll(() => pixels(panel.locator('canvas'), 'red')).toBeGreaterThan(20);
   await openSettings(panel);
   await panel.getByLabel(`Image plane distance in metres for Camera image on ${imageTopic}`).fill('1.5');
   await panel.getByLabel(`Image plane distance in metres for Camera image on ${imageTopic}`).press('Enter');

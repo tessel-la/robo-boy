@@ -213,6 +213,201 @@ it('hides bad/mismatched replacements and recovers, releasing textures and subsc
   subscriptions.forEach(s => expect(s.unsubscribe).toHaveBeenCalledOnce());
 });
 
+it('holds pixels, geometry and pose together during delayed calibration/TF, without flashing status', async () => {
+  const c = make();
+  history.ingest(tf(1, 10), false);
+  history.ingest(tf(3, 30), false);
+  receive('/cam/camera_info', info());
+  receive('/cam/image_raw', image());
+  await flush();
+  const pixels = c.plane.material.map!.image.data;
+  const geometry = c.plane.geometry;
+  status.mockClear();
+  render.mockClear();
+  receive('/cam/image_raw', { ...image(4), data: image().data.map(() => 0) });
+  await flush();
+  expect(c.object.visible).toBe(true);
+  expect(c.object.position.x).toBe(20);
+  expect(c.plane.material.map!.image.data).toBe(pixels);
+  expect(c.plane.geometry).toBe(geometry);
+  receive('/cam/camera_info', { ...info(4), k: [4, 0, 1, 0, 4, 1, 0, 0, 1] });
+  await vi.advanceTimersByTimeAsync(200);
+  expect(status).not.toHaveBeenCalled();
+  expect(render).not.toHaveBeenCalled();
+  expect(c.plane.geometry).toBe(geometry);
+  history.ingest(tf(5, 50), false);
+  expect(c.object.visible).toBe(true);
+  expect(c.object.position.x).toBe(40);
+  expect(c.plane.material.map!.image.data).not.toBe(pixels);
+  expect(c.plane.geometry.getAttribute('position').getX(0)).toBe(-0.25);
+  await vi.advanceTimersByTimeAsync(600);
+  expect(status).not.toHaveBeenCalled();
+});
+
+it('keeps pending frames across newer arrivals, reports sustained waits and catches up without a backlog', async () => {
+  const c = make();
+  history.ingest(tf(1, 10), false);
+  history.ingest(tf(3, 30), false);
+  receive('/cam/camera_info', info(0));
+  receive('/cam/image_raw', image());
+  await flush();
+  status.mockClear();
+  for (let sec = 4; sec <= 10; sec++) {
+    receive('/cam/image_raw', image(sec));
+    await vi.advanceTimersByTimeAsync(100);
+  }
+  expect(c.object.visible).toBe(true);
+  expect(c.object.position.x).toBe(20);
+  expect(status).toHaveBeenCalledOnce();
+  expect(status).toHaveBeenLastCalledWith(expect.stringContaining('Showing last valid image (stale)'));
+  // TF still lags the newest image, but completes the retained t=4 frame.
+  history.ingest(tf(5, 50), false);
+  expect(c.object.visible).toBe(true);
+  expect(c.object.position.x).toBe(40);
+  expect(status).toHaveBeenLastCalledWith(null);
+  history.ingest(tf(11, 110), false);
+  expect(c.object.position.x).toBe(100);
+  expect(c.object.visible).toBe(true);
+});
+
+it('expires unresolvable frames, retains displayed bitmaps and releases every lease on disposal', async () => {
+  const c = make({ topic: '/compressed', messageType: 'sensor_msgs/CompressedImage' });
+  const decoded: ImageBitmap[] = [];
+  vi.mocked(createImageBitmap).mockImplementation(async () => {
+    const frame = bitmap();
+    decoded.push(frame);
+    return frame;
+  });
+  history.ingest(tf(1, 10), false);
+  history.ingest(tf(3, 30), false);
+  receive('/cam/camera_info', info(0));
+  const send = async (sec: number) => {
+    receive('/compressed', { header: header(sec), format: 'png', data: png() });
+    await flush();
+  };
+  await send(2);
+  await send(40); // Broken timestamp cannot resolve.
+  await send(4);
+  await send(5);
+  expect(decoded[2].close).toHaveBeenCalledOnce();
+  expect(decoded[0].close).not.toHaveBeenCalled(); // Held bitmap remains uploadable.
+  expect(decoded[1].close).not.toHaveBeenCalled(); // One oldest pending candidate.
+  // The newest candidate can complete independently of the broken timestamp.
+  history.ingest(tf(6, 60), false);
+  expect(c.object.position.x).toBe(50);
+  expect(c.plane.material.map!.image).toBe(decoded[3]);
+  expect(decoded[0].close).toHaveBeenCalledOnce();
+  expect(decoded[1].close).toHaveBeenCalledOnce();
+  await send(40);
+  await send(8);
+  await vi.advanceTimersByTimeAsync(2100);
+  await send(9); // Expired oldest must no longer occupy the protected slot.
+  expect(decoded[4].close).toHaveBeenCalledOnce(); // Broken timestamp expired.
+  history.ingest(tf(10, 100), false);
+  expect(c.object.position.x).toBe(90);
+  c.dispose();
+  decoded.forEach(frame => expect(frame.close).toHaveBeenCalledOnce());
+  status.mockClear();
+  render.mockClear();
+  await vi.advanceTimersByTimeAsync(3000);
+  history.ingest(tf(50), false);
+  expect(status).not.toHaveBeenCalled();
+  expect(render).not.toHaveBeenCalled();
+});
+
+it('never reuses held coordinates across fixed-frame or calibration-source changes', async () => {
+  const c = make();
+  history.ingest(tf(1, 10), false);
+  history.ingest(tf(3, 30), false);
+  receive('/cam/camera_info', info());
+  receive('/cam/image_raw', image());
+  await flush();
+  receive('/cam/image_raw', image(4)); // Missing both calibration and TF.
+  await flush();
+  expect(c.object.visible).toBe(true);
+  tfClient.updateFixedFrame('unknown');
+  expect(c.object.visible).toBe(false);
+  tfClient.updateFixedFrame('map');
+  expect(c.object.visible).toBe(true);
+  c.updateOptions({ cameraInfoTopic: '/other/camera_info' });
+  expect(c.object.visible).toBe(false);
+  expect(c.plane.material.map).toBeNull();
+  receive('/other/camera_info', info(4));
+  history.ingest(tf(5, 50), false);
+  expect(c.object.visible).toBe(true);
+  expect(c.object.position.x).toBe(40);
+  receive('/cam/image_raw', image(8));
+  await flush();
+  c.dispose();
+  status.mockClear();
+  render.mockClear();
+  await vi.advanceTimersByTimeAsync(3000);
+  history.ingest(tf(9, 90), false);
+  expect(status).not.toHaveBeenCalled();
+  expect(render).not.toHaveBeenCalled();
+});
+
+it('locks a displayed pose against late TF revisions and ignores out-of-order images during motion', async () => {
+  const c = make();
+  history.ingest(tf(1, 10), false);
+  history.ingest(tf(3, 30), false);
+  receive('/cam/camera_info', info(0));
+  receive('/cam/image_raw', image());
+  await flush();
+  expect(c.object.position.x).toBe(20);
+  const pixels = c.plane.material.map!.image.data;
+  // A refined/replaced TF bracket must not drag the already displayed image.
+  history.ingest(tf(2, 200), false);
+  expect(c.object.position.x).toBe(20);
+  receive('/cam/camera_info', info(0));
+  expect(c.object.position.x).toBe(20);
+  receive('/cam/image_raw', image(1));
+  await flush();
+  expect(c.object.position.x).toBe(20);
+  expect(c.plane.material.map!.image.data).toBe(pixels);
+  receive('/cam/image_raw', image(4));
+  await flush();
+  history.ingest(tf(5, 50), false);
+  expect(c.object.position.x).toBe(40);
+});
+
+it('keeps a wrist-camera snapshot coherent through rotated multi-link motion and staggered TF arrival', async () => {
+  const c = make();
+  const base = (sec: number, x: number, angle: number) => {
+    const message = tf(sec, x, 'base');
+    const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), angle);
+    message.transforms[0].transform.rotation = { x: q.x, y: q.y, z: q.z, w: q.w };
+    return message;
+  };
+  const camera = tf(0, 0.2);
+  camera.transforms[0].header.frame_id = 'base';
+  camera.transforms[0].transform.translation.z = 0.5;
+  history.ingest(camera, true);
+  history.ingest(base(1, 0, 0), false);
+  history.ingest(base(3, 2, Math.PI), false);
+  receive('/cam/camera_info', info(0));
+  receive('/cam/image_raw', image(2));
+  await flush();
+  expect(c.object.position.x).toBeCloseTo(1);
+  expect(c.object.position.y).toBeCloseTo(0.2);
+  expect(c.object.position.z).toBeCloseTo(0.5);
+  const heldRotation = c.object.quaternion.clone();
+  receive('/cam/image_raw', image(4));
+  await flush();
+  // A late TF replacement for the old image must not move its frozen snapshot.
+  history.ingest(base(2, 7, 0), false);
+  expect(c.object.position.x).toBeCloseTo(1);
+  expect(c.object.quaternion.angleTo(heldRotation)).toBeCloseTo(0);
+  // The t=4 image can replace it only once its full acquisition-time chain resolves.
+  history.ingest(base(5, 4, Math.PI), false);
+  expect(c.object.position.x).toBeCloseTo(2.8);
+  expect(c.object.position.y).toBeCloseTo(0);
+  expect(c.object.position.z).toBeCloseTo(0.5);
+  expect(
+    c.object.quaternion.angleTo(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), Math.PI))
+  ).toBeCloseTo(0);
+});
+
 it('bounds async decoding to one in-flight and one latest pending image, and closes late completions', async () => {
   const complete: ((bitmap: ImageBitmap) => void)[] = [];
   vi.mocked(createImageBitmap).mockImplementation(() => new Promise(resolve => complete.push(resolve)));

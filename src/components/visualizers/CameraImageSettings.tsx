@@ -138,9 +138,6 @@ export default function CameraImageSettings({
           />
         </div>
       )}
-      <p className="visualization-status">
-        Flat image at the selected distance. Surface projection and depth reconstruction are separate features.
-      </p>
     </div>
   );
 }

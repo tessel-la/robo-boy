@@ -3,7 +3,28 @@ import type { Ros, Topic } from 'roslib';
 import { decodeImageFrame, type DecodedImageFrame } from './decodeImage';
 import { parseCameraInfo, type CameraCalibration } from './cameraCalibration';
 
-type ImageEvent = { frame: DecodedImageFrame | null; error: string | null };
+/** Stream and consumers share bitmap ownership; each retained frame must be released. */
+export type SharedImageFrame = DecodedImageFrame & { retain: () => () => void };
+type ImageEvent = { frame: SharedImageFrame | null; error: string | null };
+function shareFrame(frame: DecodedImageFrame) {
+  let references = 1;
+  const release = () => {
+    if (--references === 0) closeFrame(frame);
+  };
+  const shared: SharedImageFrame = {
+    ...frame,
+    retain: () => {
+      references++;
+      let active = true;
+      return () => {
+        if (!active) return;
+        active = false;
+        release();
+      };
+    },
+  };
+  return { frame: shared, release };
+}
 type InfoEvent = { samples: readonly CameraCalibration[]; error: string | null };
 const imageStreams = new WeakMap<Ros, Map<string, ImageStream>>();
 const infoStreams = new WeakMap<Ros, Map<string, InfoStream>>();
@@ -24,6 +45,7 @@ class ImageStream {
   listeners = new Set<(event: ImageEvent) => void>();
   event: ImageEvent = { frame: null, error: null };
   private subscription: Topic;
+  private releaseFrame?: () => void;
   private pending?: { message: unknown };
   private scheduled = 0;
   private busy = false;
@@ -62,20 +84,23 @@ class ImageStream {
         closeFrame(frame);
         return;
       }
-      const previous = this.event.frame;
-      this.event = { frame, error: null };
+      const previous = this.releaseFrame;
+      const shared = shareFrame(frame);
+      this.releaseFrame = shared.release;
+      this.event = { frame: shared.frame, error: null };
       notify(this.listeners, this.event);
-      closeFrame(previous);
+      previous?.();
     } catch (error) {
       if (!this.disposed) {
-        const previous = this.event.frame;
+        const previous = this.releaseFrame;
+        this.releaseFrame = undefined;
         this.event = {
           frame: null,
           error:
             error instanceof Error ? error.message.replace(/^Replay/, 'Camera') : 'Camera image could not be decoded.',
         };
         notify(this.listeners, this.event);
-        closeFrame(previous);
+        previous?.();
       }
     } finally {
       this.busy = false;
@@ -86,7 +111,8 @@ class ImageStream {
     this.disposed = true;
     cancelAnimationFrame(this.scheduled);
     this.subscription.unsubscribe();
-    closeFrame(this.event.frame);
+    this.releaseFrame?.();
+    this.releaseFrame = undefined;
     this.event = { frame: null, error: null };
     this.pending = undefined;
   }

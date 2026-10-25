@@ -153,6 +153,9 @@ export function cameraPlaneCorners(
   return corners;
 }
 
+/** Missing matching data can recover without invalidating the last complete projection. */
+export class PendingCameraInfoError extends Error {}
+
 export function matchCameraInfo(
   samples: readonly CameraCalibration[],
   header: DecodedHeader | undefined,
@@ -163,10 +166,10 @@ export function matchCameraInfo(
     stamp = rosStamp(header?.stamp);
   if (!frame || stamp === null) throw new Error('Image frame or timestamp is invalid.');
   const matching = samples.filter(sample => sample.frame === frame);
-  if (!matching.length)
-    throw new Error(
-      samples.length ? 'CameraInfo optical frame does not match the image frame.' : 'Waiting for CameraInfo.'
-    );
+  if (!matching.length) {
+    if (samples.length) throw new Error('CameraInfo optical frame does not match the image frame.');
+    throw new PendingCameraInfoError('Waiting for CameraInfo.');
+  }
   if (sync === 'latest' || stamp === 0n) return matching[matching.length - 1];
   const tolerance = BigInt(Math.round(toleranceMs * 1e6));
   let best: CameraCalibration | undefined,
@@ -181,7 +184,7 @@ export function matchCameraInfo(
   }
   const timeless = [...matching].reverse().find(sample => sample.stamp === 0n);
   if (!best && !timeless)
-    throw new Error(
+    throw new PendingCameraInfoError(
       'Waiting for CameraInfo at the image timestamp. Adjust tolerance or select Latest for static calibration.'
     );
   return (best ?? timeless)!;
