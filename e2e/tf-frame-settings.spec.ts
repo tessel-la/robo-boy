@@ -19,15 +19,16 @@ test('keeps axes length and width independent and restores them with the new lab
   await openFrameDisplay();
   const length = panel.getByLabel('Axes length in metres');
   const width = panel.getByLabel('Axes width in metres');
-  await expect(length).toHaveValue('0.10');
-  await expect(width).toHaveValue('0.003');
+  await expect(length).toHaveValue('0.08');
+  await expect(width).toHaveValue('0.004');
+  await expect(panel.getByLabel('Axes opacity', { exact: true })).toHaveValue('0.7');
   await expect(panel.getByLabel('Label size in metres')).toHaveValue('0.35');
   await expect(panel.getByLabel('Label opacity', { exact: true })).toHaveValue('0.8');
   await expect(panel.getByLabel('Label background')).not.toBeChecked();
 
   await width.fill('0.007');
   await width.press('Enter');
-  await expect(length).toHaveValue('0.10');
+  await expect(length).toHaveValue('0.08');
   await length.fill('0.20');
   await length.press('Enter');
   await expect(width).toHaveValue('0.007');

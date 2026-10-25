@@ -41,6 +41,7 @@ import {
 } from '../utils/visualizationState';
 import { getTopicsForVisualizationType, isTopicVisualizationType, TOPIC_VISUALIZATION_TYPES } from '../utils/visualizationTopics';
 import { getPreferredUrdfTopic } from '../utils/urdfTopics';
+import type { MeshDisplayOptions } from '../utils/meshOpacity';
 import type { PanelSettingsBridge } from '../features/assistant/types';
 
 interface VisualizationPanelProps {
@@ -56,7 +57,7 @@ export interface VisualizationConfig {
   id: string;
   type: 'pointcloud' | 'camerainfo' | 'urdf' | 'laserscan' | 'tf' | 'posestamped' | 'markerarray'; // Added 'laserscan', 'tf', and 'posestamped'
   topic: string; // For pointcloud/camerainfo/laserscan/posestamped. For URDF, this might be robot_description topic
-  options?: PointCloudOptions | CameraInfoOptions | UrdfOptions | LaserScanOptions | LaserScanSettingsOptions | PoseStampedOptions | PoseStampedSettingsOptions; // Union of option types
+  options?: MeshDisplayOptions | PointCloudOptions | CameraInfoOptions | UrdfOptions | LaserScanOptions | LaserScanSettingsOptions | PoseStampedOptions | PoseStampedSettingsOptions; // Union of option types
 }
 
 // Define more specific option types
@@ -65,7 +66,7 @@ export interface CameraInfoOptions {
   lineColor?: THREE.Color | number | string;
   lineScale?: number;
 }
-export interface UrdfOptions {
+export interface UrdfOptions extends MeshDisplayOptions {
   robotDescriptionTopic?: string;
   urdfPath?: string;
   // Add other URDF specific options here, e.g., loaderType
@@ -572,7 +573,7 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({
           );
         } else if (viz.type === 'markerarray') {
           return <MarkerArrayViz key={viz.id} ros={ros} topic={viz.topic} viewer={ros3dViewer}
-            provider={customTFProvider} ready={isProviderReady} />;
+            provider={customTFProvider} ready={isProviderReady} opacity={(viz.options as MeshDisplayOptions)?.opacity} />;
         } else if (viz.type === 'urdf') { // Added URDF rendering
           return (
             <React.Fragment key={viz.id}>
@@ -584,6 +585,7 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({
                 dependenciesReady={isProviderReady}
                 robotDescriptionTopic={(viz.options as UrdfOptions)?.robotDescriptionTopic || viz.topic}
                 urdfPath={(viz.options as UrdfOptions)?.urdfPath}
+                opacity={(viz.options as UrdfOptions)?.opacity}
               // Pass other URDF options as needed
               />
             </React.Fragment>
@@ -660,6 +662,7 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({
             onAddVisualizationClick={openAddVizModalFromSettings}
             onEditVisualization={openVisualizationSettings}
             onUpdateVisualizationTopic={updateVisualizationTopic}
+            onUpdateVisualizationOptions={updateVisualizationSettings}
             allTopics={allTopics}
           />
         }

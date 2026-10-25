@@ -11,6 +11,7 @@ interface UrdfVizProps {
   customTFProvider: React.RefObject<CustomTFProvider | null>; // Or ROS3D.TfClient if that's what UrdfClient expects
   dependenciesReady: boolean;
   robotDescriptionTopic?: string;
+  opacity?: number;
   urdfPath?: string; // Base path for mesh resources
   // Add any other URDF specific options here, e.g., loader type if configurable
 }
@@ -23,6 +24,7 @@ const UrdfViz: React.FC<UrdfVizProps> = ({
   dependenciesReady,
   robotDescriptionTopic = '/robot_description',
   urdfPath = '/',
+  opacity = 1,
 }) => {
   // Use the useUrdfClient hook
   const { urdfClient, isUrdfLoaded } = useUrdfClient({
@@ -33,6 +35,7 @@ const UrdfViz: React.FC<UrdfVizProps> = ({
     dependenciesReady,
     robotDescriptionTopic,
     urdfPath,
+    opacity,
   });
 
   useEffect(() => {

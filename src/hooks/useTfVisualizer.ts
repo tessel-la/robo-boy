@@ -207,7 +207,7 @@ export function useTfVisualizer({
   axesScale = DEFAULT_TF_DISPLAY_SETTINGS.tfAxesScale,
   axesWidth = DEFAULT_TF_DISPLAY_SETTINGS.tfAxesWidth,
   labelScale = DEFAULT_TF_DISPLAY_SETTINGS.tfLabelScale,
-  axesOpacity = 1,
+  axesOpacity = DEFAULT_TF_DISPLAY_SETTINGS.tfAxesOpacity,
   labelOpacity = DEFAULT_TF_DISPLAY_SETTINGS.tfLabelOpacity,
   showLabelBackground = DEFAULT_TF_DISPLAY_SETTINGS.showTfLabelBackground,
 }: UseTfVisualizerProps) {

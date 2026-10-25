@@ -9,6 +9,7 @@ import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { LaserScan } from './ros3d/visualizers/LaserScan';
+import { MeshOpacity, normalizeMeshOpacity } from './meshOpacity';
 import { PointCloud2 } from './ros3d/visualizers/PointCloud2';
 import { createRobotResourceManager } from '../runtime/robotResources';
 
@@ -782,6 +783,7 @@ class OrbitControls {
 // UrdfClient implementation
 // Adapted from ROS1 ros3djs example, needs further refinement for ROS2 and mesh loading.
 class UrdfClient extends THREE.Object3D {
+  private meshOpacity = new MeshOpacity();
   private ros: Ros;
   private tfClient: CustomTFProvider;
   private path: string; // Base path for mesh resources
@@ -810,11 +812,13 @@ class UrdfClient extends THREE.Object3D {
     path?: string;
     onComplete?: (model: THREE.Object3D) => void;
     requestRender?: () => void;
+    opacity?: number;
     // Removed loader option, will use internal Collada and STL loaders
   }) {
     super();
     this.ros = options.ros;
     this.tfClient = options.tfClient;
+    this.meshOpacity.set(options.opacity, this);
     this.path = options.path || '/mesh_resources';
     this.rootObject = options.rootObject;
     this.onComplete = options.onComplete;
@@ -865,6 +869,12 @@ class UrdfClient extends THREE.Object3D {
     this.robotDescriptionTopic = null;
     cacheUrdfDescription(this.ros, this.robotDescriptionTopicName, message.data);
     this.loadUrdf(message.data);
+  }
+
+  public setOpacity(opacity: number) {
+    if (this.disposed) return;
+    this.meshOpacity.set(opacity, this);
+    this.requestRender();
   }
 
   private parseUrdf(urdfString: string): XMLDocument | null {
@@ -1059,6 +1069,7 @@ class UrdfClient extends THREE.Object3D {
               });
             }
             
+            this.meshOpacity.apply(daeMesh);
             linkObject.add(daeMesh);
             this.requestRender();
             console.log(`[UrdfClient] Loaded DAE: ${fullPath}`);
@@ -1076,6 +1087,7 @@ class UrdfClient extends THREE.Object3D {
                 if (child instanceof THREE.Mesh) child.material = urdfMaterial;
               });
             }
+            this.meshOpacity.apply(objMesh);
             linkObject.add(objMesh);
             this.requestRender();
             console.log(`[UrdfClient] Loaded OBJ: ${fullPath}`);
@@ -1130,6 +1142,7 @@ class UrdfClient extends THREE.Object3D {
             const stlMesh = new THREE.Mesh(geometry, material);
             stlMesh.scale.copy(scaleVec);
             this.applyOrigin(visualElement, stlMesh);
+            this.meshOpacity.apply(stlMesh);
             linkObject.add(stlMesh);
             this.requestRender();
             console.log(`[UrdfClient] Loaded STL: ${fullPath}`);
@@ -1159,6 +1172,7 @@ class UrdfClient extends THREE.Object3D {
 
     if (mesh) { // For primitive shapes
       this.applyOrigin(visualElement, mesh);
+      this.meshOpacity.apply(mesh);
       linkObject.add(mesh);
     }
   }
@@ -1218,12 +1232,14 @@ class UrdfClient extends THREE.Object3D {
     }
 
     let color = new THREE.Color(0xcccccc); // Default light grey instead of darker grey
+    let opacity = 1;
     let texture = null;
 
     if (colorElement) {
         const rgba = colorElement.getAttribute('rgba')?.split(' ').map(Number);
         if (rgba && rgba.length === 4) {
-            color.setRGB(rgba[0], rgba[1], rgba[2]); // Ignores alpha for now
+            color.setRGB(rgba[0], rgba[1], rgba[2]);
+            opacity = normalizeMeshOpacity(rgba[3]);
         }
     }
     if (textureElement) {
@@ -1251,7 +1267,8 @@ class UrdfClient extends THREE.Object3D {
     return new THREE.MeshLambertMaterial({ 
       color: color, 
       map: texture,
-      transparent: false,
+      opacity,
+      transparent: opacity < 1,
       side: THREE.FrontSide
     });
   }

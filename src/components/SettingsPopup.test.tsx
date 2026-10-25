@@ -242,6 +242,22 @@ describe('SettingsPopup', () => {
       expect(mockOnUpdateVisualizationTopic).toHaveBeenCalledWith('viz-1', '/points_filtered');
     });
 
+    it('offers mesh opacity on each URDF and mesh-marker layer independently', () => {
+      const update = vi.fn();
+      render(<SettingsPopup {...defaultProps} onUpdateVisualizationOptions={update}
+        activeVisualizations={[
+          { id: 'robot', type: 'urdf', topic: '/robot_description', options: { opacity: 0.4 } },
+          { id: 'objects', type: 'markerarray', topic: '/objects' },
+          { id: 'cloud', type: 'pointcloud', topic: '/points' },
+        ]} />);
+      fireEvent.click(screen.getByRole('tab', { name: /Visualizations/ }));
+      expect(screen.getByLabelText('Mesh opacity for URDF on /robot_description')).toHaveValue('0.4');
+      expect(screen.getByLabelText('Mesh opacity for Mesh markers on /objects')).toHaveValue('1');
+      expect(screen.getAllByRole('slider')).toHaveLength(2);
+      fireEvent.change(screen.getByLabelText('Mesh opacity for URDF on /robot_description'), { target: { value: '0' } });
+      expect(update).toHaveBeenCalledWith('robot', { opacity: 0 });
+    });
+
     it('does not offer unrelated String topics for an active URDF visualization', () => {
       render(
         <SettingsPopup

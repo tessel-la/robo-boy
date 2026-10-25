@@ -3,6 +3,7 @@ import { FaCog } from 'react-icons/fa';
 import { FiArrowLeft, FiPlus, FiSettings, FiTrash2, FiX } from 'react-icons/fi';
 
 import { getTopicsForVisualizationType, isTopicVisualizationType } from '../utils/visualizationTopics';
+import { normalizeMeshOpacity, type MeshDisplayOptions } from '../utils/meshOpacity';
 import type { TfDisplaySettings } from '../utils/visualizationState';
 import type { VisualizationConfig } from './VisualizationPanel';
 import './VisualizationPanel.css';
@@ -29,6 +30,7 @@ interface SettingsPopupProps {
   onRemoveVisualization: (id: string) => void;
   onAddVisualizationClick: () => void;
   onEditVisualization?: (id: string) => void;
+  onUpdateVisualizationOptions?: (id: string, options: MeshDisplayOptions) => void;
   onUpdateVisualizationTopic?: (id: string, newTopic: string) => void;
   allTopics: TopicInfo[];
   visualizationStatus?: Record<string, string | null>;
@@ -133,6 +135,7 @@ const SettingsPopup: React.FC<SettingsPopupProps> = ({
   onAddVisualizationClick,
   onEditVisualization,
   onUpdateVisualizationTopic,
+  onUpdateVisualizationOptions,
   allTopics = [],
 }) => {
   const [tab, setTab] = useState<SettingsTab>('frames');
@@ -495,6 +498,21 @@ const SettingsPopup: React.FC<SettingsPopupProps> = ({
                         )}
                       </select>
                     </div>
+                    {(viz.type === 'urdf' || viz.type === 'markerarray') && onUpdateVisualizationOptions && (
+                      <div className="tf-scale-control">
+                        <div className="control-heading-row">
+                          <label htmlFor={`mesh-opacity-${viz.id}`}>Mesh opacity</label>
+                          <output htmlFor={`mesh-opacity-${viz.id}`} className="range-value">
+                            {Math.round(normalizeMeshOpacity((viz.options as MeshDisplayOptions)?.opacity) * 100)}%
+                          </output>
+                        </div>
+                        <input type="range" id={`mesh-opacity-${viz.id}`} min="0" max="1" step="0.05"
+                          aria-label={`Mesh opacity for ${TYPE_LABELS[viz.type]} on ${viz.topic}`}
+                          value={normalizeMeshOpacity((viz.options as MeshDisplayOptions)?.opacity)}
+                          onChange={event => onUpdateVisualizationOptions(viz.id, { opacity: Number(event.target.value) })}
+                          className="range-input" />
+                      </div>
+                    )}
                   </li>
                 );
               })}

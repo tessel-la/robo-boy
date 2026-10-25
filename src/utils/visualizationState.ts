@@ -29,10 +29,10 @@ export const DEFAULT_TF_DISPLAY_SETTINGS: TfDisplaySettings = {
   showTfFrameLabels: true,
   showTfConnections: true,
   // Microduck is only ~0.25 m tall; 0.5 m axes overwhelm compact robots.
-  tfAxesScale: 0.1,
-  tfAxesWidth: 0.003,
+  tfAxesScale: 0.08,
+  tfAxesWidth: 0.004,
   tfLabelScale: 0.35,
-  tfAxesOpacity: 1,
+  tfAxesOpacity: 0.7,
   tfLabelOpacity: 0.8,
   showTfLabelBackground: false,
 };
