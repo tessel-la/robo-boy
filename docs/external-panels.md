@@ -307,8 +307,9 @@ settings and layout intact. See [Native Time Series](native-time-series.md) for 
 interaction, math, architecture and migration details.
 
 The sibling `robo-boy-timeseries-panel` remains a historical SDK reference for brokered ROS,
-storage, connection and viewport APIs. Its old installed catalog entry is superseded by the
-native panel. Installing that artifact does not create a second Time Series menu entry.
+storage, connection and viewport APIs. It is no longer offered in the official Panel Inventory
+or the manager's available catalog. Existing external installations remain removable through
+the manager; removing them preserves migrated native tiles and their settings.
 
 ## WebRTC / RTSP Camera Reference Panel
 
