@@ -1,0 +1,82 @@
+--- a/internal/actions.py
++++ b/internal/actions.py
+@@ -64,6 +64,10 @@
+         GetResultServiceResponse,
+         ROSMessage,
+     )
++
++
++class ActionNotStarted(Exception):
++    """The goal was never submitted or the server explicitly rejected it."""
+ 
+ 
+ class InvalidActionException(Exception):
+@@ -164,7 +168,7 @@
+         assert self.goal_handle is not None
+         if not self.goal_handle.accepted:
+             msg = "Action goal was rejected"
+-            self.result = Exception(msg)
++            self.result = ActionNotStarted(msg)
+             return
+         result_future: Future = self.goal_handle.get_result_async()
+         result_future.add_done_callback(self.get_result_cb)
+@@ -180,19 +184,27 @@
+         args: list | dict[str, Any] | None = None,
+         feedback_cb: Callable[[FeedbackMessage[ROSActionFeedbackT]], None] | None = None,
+     ) -> dict[str, Any]:
+-        # Given the action name and type, fetch a request instance
+-        action_name = expand_topic_name(action, node_handle.get_name(), node_handle.get_namespace())
+-        action_class = get_action_class(action_type)
+-        inst = cast("ROSActionGoalT", get_action_goal_instance(action_type))
+-
+-        # Populate the instance with the provided args
+-        args_to_action_goal_instance(inst, args)
+-
+         self.result = None
+-        client = ActionClient(node_handle, action_class, action_name)
+-        if not client.wait_for_server(timeout_sec=self.server_timeout_time):
+-            msg = "No action server available"
+-            raise Exception(msg)
++        client = None
++        try:
++            # Given the action name and type, fetch a request instance
++            action_name = expand_topic_name(action, node_handle.get_name(), node_handle.get_namespace())
++            action_class = get_action_class(action_type)
++            inst = cast("ROSActionGoalT", get_action_goal_instance(action_type))
++
++            # Populate the instance with the provided args
++            args_to_action_goal_instance(inst, args)
++
++            client = ActionClient(node_handle, action_class, action_name)
++            if not client.wait_for_server(timeout_sec=self.server_timeout_time):
++                msg = "No action server available"
++                raise ActionNotStarted(msg)
++        except Exception as exc:
++            self.result = ActionNotStarted(str(exc))
++            if client is not None:
++                client.destroy()
++            raise self.result from exc
++
+         send_goal_future = client.send_goal_async(inst, feedback_callback=feedback_cb)  # type: ignore[arg-type]
+         send_goal_future.add_done_callback(self.goal_response_cb)
+ 
+--- a/capabilities/send_action_goal.py
++++ b/capabilities/send_action_goal.py
+@@ -40,7 +40,7 @@
+ from action_msgs.msg import GoalStatus
+ 
+ from rosbridge_library.capability import Capability
+-from rosbridge_library.internal.actions import ActionClientHandler
++from rosbridge_library.internal.actions import ActionClientHandler, ActionNotStarted
+ from rosbridge_library.internal.message_conversion import extract_values
+ 
+ if TYPE_CHECKING:
+@@ -204,6 +204,8 @@
+             "status": GoalStatus.STATUS_UNKNOWN,
+             "result": False,
+         }
++        if isinstance(exc, ActionNotStarted):
++            outgoing_message["roboboyWorkOutcome"] = "not_started"
+         if cid is not None:
+             outgoing_message["id"] = cid
+         self.protocol.send(outgoing_message)

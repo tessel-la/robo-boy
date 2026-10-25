@@ -40,7 +40,7 @@ RUN echo 'APT::Acquire::Retries "3";' > /etc/apt/apt.conf.d/80-retries && \
       ros-${ROS_DISTRO}-rmw-cyclonedds-cpp \
       ros-${ROS_DISTRO}-rmw-fastrtps-cpp \
       ros-${ROS_DISTRO}-rosbridge-server \
-      python3-tornado \
+      python3-tornado patch \
       ros-${ROS_DISTRO}-image-transport \
       ros-${ROS_DISTRO}-cv-bridge \
       ros-${ROS_DISTRO}-control-msgs \
@@ -62,6 +62,16 @@ RUN echo 'APT::Acquire::Retries "3";' > /etc/apt/apt.conf.d/80-retries && \
 RUN source /opt/ros/${ROS_DISTRO}/setup.bash && \
     proxy_path="$(python3 -c 'import importlib.util; print(importlib.util.find_spec("rosapi.proxy").origin)')" && \
     sed -i 's|from ros2action.api import get_action_names_and_types|from rclpy.action import get_action_names_and_types|' "${proxy_path}"
+
+# Report proven pre-submission failures and rejected goals separately from uncertain
+# transport failures. Fail the build if upstream no longer matches this safety patch.
+COPY infra/ros/rosbridge_action_outcomes.patch /tmp/rosbridge_action_outcomes.patch
+COPY infra/ros/test_rosbridge_action_outcomes.py /tmp/rosbridge-tests/test_rosbridge_action_outcomes.py
+RUN source /opt/ros/${ROS_DISTRO}/setup.bash && \
+    rosbridge_path="$(python3 -c 'import importlib.util; print(next(iter(importlib.util.find_spec("rosbridge_library").submodule_search_locations)))')" && \
+    patch --batch --fuzz=0 -p1 -d "${rosbridge_path}" < /tmp/rosbridge_action_outcomes.patch && \
+    python3 -m unittest discover -s /tmp/rosbridge-tests -v && \
+    rm -rf /tmp/rosbridge-tests /tmp/rosbridge_action_outcomes.patch
 
 # Pre-create the conventional mount point for robot interface overlays.
 RUN mkdir -p /overlay_ws

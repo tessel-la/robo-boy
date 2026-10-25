@@ -479,7 +479,7 @@ class AuthorityTests(unittest.TestCase):
         self.assertTrue(self.authority.draining)
         self.assertEqual(self.forwarded[self.a][-1]['op'], 'cancel_action_goal')
         self.control(self.b, 'acquire')
-        self.assertEqual(self.authority.owner, self.a)
+        self.assertIsNone(self.authority.owner)
         self.authority.upstream(self.a, dict(op='action_feedback', id='goal'))
         self.authority.upstream(self.a, dict(op='action_result', id='goal', status=2))
         self.assertTrue(self.authority.draining)
@@ -499,6 +499,66 @@ class AuthorityTests(unittest.TestCase):
         self.control(self.a, 'acquire')
         self.command(self.a, 'call_service', id='service', service='/reset')
         self.assertEqual(len(self.forwarded[self.a]), 1)
+
+    def test_not_started_action_recovers_before_or_after_owner_loss_and_cleans_journal(self):
+        for loss in ('release', 'disconnect', 'expiry'):
+            for outcome_first in (False, True):
+                with self.subTest(loss=loss, outcome_first=outcome_first), tempfile.TemporaryDirectory() as directory:
+                    self.now = 0
+                    marker = Path(directory) / 'unconfirmed'
+                    self.reset(marker=marker)
+                    self.control(self.a, 'acquire')
+                    old_token = self.authority.token
+                    self.goal(self.a)
+                    self.assertTrue(marker.exists())
+                    outcome = dict(op='action_result', id='goal', action='/move', result=False,
+                                   status=0, roboboyWorkOutcome='not_started')
+                    if outcome_first:
+                        self.authority.upstream(self.a, outcome)
+                    if loss == 'disconnect':
+                        self.authority.disconnect(self.a)
+                    elif loss == 'release':
+                        self.control(self.a, 'release')
+                    else:
+                        self.now = 11
+                        self.runner()
+                        self.authority.tick()
+                    if not outcome_first:
+                        self.assertTrue(self.authority.draining)
+                        self.authority.upstream(self.a, outcome)
+                    self.assertEqual(self.authority.snapshot(self.b)['state'], 'available')
+                    self.assertFalse(marker.exists())
+                    self.assertFalse(self.authority.pending)
+                    self.control(self.b, 'acquire')
+                    self.assertEqual(self.authority.owner, self.b)
+                    self.assertNotEqual(self.authority.token, old_token)
+
+    def test_unknown_action_outcomes_and_invalid_attestations_keep_reservation(self):
+        self.control(self.a, 'acquire')
+        self.goal(self.a)
+        self.authority.disconnect(self.a)
+        for extra in ({}, {'roboboyWorkOutcome': 'unknown'},
+                      {'roboboyWorkOutcome': 'not_started', 'action': '/other'},
+                      {'roboboyWorkOutcome': 'not_started', 'result': True},
+                      {'roboboyWorkOutcome': 'not_started', 'status': False}):
+            self.authority.upstream(self.a, dict(dict(op='action_result', id='goal', action='/move',
+                                                     result=False, status=0), **extra))
+            self.assertTrue(self.authority.draining)
+            self.assertEqual(len(self.authority.pending), 1)
+        self.now = 86400
+        self.runner()
+        self.authority.tick()
+        self.assertTrue(self.authority.draining)
+
+    def test_not_started_attestation_cannot_clear_services_or_arrive_from_a_client(self):
+        self.control(self.a, 'acquire')
+        self.command(self.a, 'call_service', id='service', service='/reset')
+        self.authority.upstream(self.a, dict(op='service_response', id='service', result=False,
+                                             roboboyWorkOutcome='not_started'))
+        self.goal(self.a)
+        self.authority.receive(self.a, dict(op='action_result', id='goal', action='/move', status=0,
+                                            result=False, roboboyWorkOutcome='not_started'))
+        self.assertEqual(len(self.authority.pending), 2)
 
     def test_action_expiry_retries_cancel_and_keeps_upstream_open(self):
         self.control(self.a, 'acquire')
@@ -555,6 +615,8 @@ class AuthorityTests(unittest.TestCase):
         sent = []
         self.authority.runner_send = sent.append
         self.authority.disconnect(self.a)
+        self.assertIsNone(self.authority.owner)
+        self.assertIsNone(self.authority.snapshot(self.b)['ownerLabel'])
         self.assertTrue(self.authority.adoptable())
         self.assertEqual(sent, [])  # Persist beyond the browser, as promised.
         self.control(self.b, 'adopt')
@@ -570,6 +632,22 @@ class AuthorityTests(unittest.TestCase):
         self.command(self.b, topic='/cmd_vel', msg={})
         self.assertEqual(len(self.forwarded[self.b]), 2)
         self.assertFalse(self.authority.managing)
+
+    def test_heartbeat_loss_releases_owner_without_stopping_paused_persistent_tree(self):
+        self.control(self.a, 'acquire')
+        self.runner('paused', 'tree', 1)
+        sent = []
+        self.authority.runner_send = sent.append
+        self.now = 11
+        self.runner('paused', 'tree', 1)
+        self.authority.tick()
+        snapshot = self.authority.snapshot(self.b)
+        self.assertIsNone(snapshot['owner'])
+        self.assertIsNone(snapshot['ownerLabel'])
+        self.assertTrue(snapshot['adoptable'])
+        self.assertEqual(sent, [])
+        self.control(self.b, 'adopt')
+        self.assertEqual(self.authority.owner, self.b)
 
     def test_explicit_release_stops_persistent_work_and_reused_tree_id_is_rejected(self):
         self.control(self.a, 'acquire')
@@ -780,7 +858,7 @@ class ExternalAuthorityTests(unittest.TestCase):
         self.assertNotEqual(self.forwarded[self.a][-1]['op'], 'publish')
         self.policy()
         self.control(self.b, 'acquire')
-        self.assertEqual(self.authority.owner, self.a)
+        self.assertIsNone(self.authority.owner)
         self.authority.upstream(self.a, dict(op='action_result', id='goal', status=2))
         self.assertTrue(self.authority.pending)
         self.authority.upstream(self.a, dict(op='action_result', id='goal', status=5))
@@ -1115,9 +1193,33 @@ class SocketTests(SocketFixture):
         await b.write_message(json.dumps(dict(op='roboboy_control', action='acquire')))
         blocked = await self.status(b, lambda value: bool(value['error']))
         self.assertEqual(blocked['state'], 'draining')
+        self.assertIsNone(blocked['owner'])
         await self.until(lambda: any(message['op'] == 'cancel_action_goal' for _, message in self.received))
         await upstream.write_message(json.dumps(dict(op='action_result', id='goal', status=5, result=True, values={})))
         await self.until(lambda: not self.authority.pending)
+        await b.write_message(json.dumps(dict(op='roboboy_control', action='acquire')))
+        recovered = await self.status(b, lambda value: bool(value['token']))
+        self.assertEqual(recovered['owner'], bid)
+
+    @tornado.testing.gen_test
+    async def test_not_started_result_releases_disconnected_owners_reservation(self):
+        a, aid = await self.connect()
+        b, bid = await self.connect()
+        await a.write_message(json.dumps(dict(op='roboboy_control', action='acquire')))
+        status = await self.status(a, lambda value: bool(value['token']))
+        await a.write_message(json.dumps(dict(op='send_action_goal', id='goal', action='/move',
+                                              action_type='example/action/Move', args={}, controlToken=status['token'])))
+        await self.until(lambda: bool(self.authority.pending))
+        upstream = next(socket for socket, message in self.received if message['op'] == 'send_action_goal')
+        a.close()
+        await self.until(lambda: self.authority.draining)
+        draining = await self.status(b, lambda value: value['state'] == 'draining')
+        self.assertIsNone(draining['owner'])
+        await upstream.write_message(json.dumps(dict(op='action_result', id='goal', action='/move', status=0,
+                                                     result=False, roboboyWorkOutcome='not_started')))
+        available = await self.status(b, lambda value: value['state'] == 'available')
+        self.assertEqual(available['pending'], 0)
+        await self.until(lambda: aid not in self.authority.clients)
         await b.write_message(json.dumps(dict(op='roboboy_control', action='acquire')))
         recovered = await self.status(b, lambda value: bool(value['token']))
         self.assertEqual(recovered['owner'], bid)
