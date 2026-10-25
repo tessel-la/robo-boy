@@ -296,6 +296,9 @@ class Authority:
         self.token = None
         self.reason = reason
         writers = [self.owner] if self.locking_enabled and self.owner else list(self.clients) if not self.locking_enabled else []
+        # Ownership ends now. Pending work retains its own reservation and transport;
+        # a disconnected session must not continue to appear as the controller.
+        self.owner = self.owner_label = None
         for writer in writers:
             if was_draining or not self.clients[writer]['wrote_topics']:
                 continue
@@ -564,6 +567,12 @@ class Authority:
         if pending:
             terminal = (pending['op'] == 'call_service' and message.get('op') == 'service_response' and message.get('result') is True)
             terminal = terminal or (pending['op'] == 'send_action_goal' and message.get('op') == 'action_result' and message.get('status') in (4, 5, 6))
+            # Only the private, patched rosbridge can attest that a goal never started.
+            # Generic status=0 failures may occur after submission and must stay fenced.
+            terminal = terminal or (pending['op'] == 'send_action_goal' and message.get('op') == 'action_result'
+                                    and message.get('action') == pending['action'] and message.get('result') is False
+                                    and type(message.get('status')) is int and message['status'] == 0
+                                    and message.get('roboboyWorkOutcome') == 'not_started')
             if terminal:
                 del self.pending[key]
                 self.clean_if_safe()

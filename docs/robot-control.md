@@ -207,6 +207,7 @@ The configured inactivity timeout is **not a guaranteed minimum control duration
 | No outstanding work | Recover automatically. Topic publishers first pass a same-socket rosapi response barrier so buffered commands leave rosbridge before handover. |
 | Service already running | Services cannot be cancelled generically. Keep the reservation until a successful transport response confirms completion. |
 | Action already running | Feedback and cancellation acknowledgements do not release it. Wait for terminal ROS goal status 4, 5, or 6. Retry cancellation because the goal may still be registering. |
+| Action never started | The private rosbridge confirms a pre-submission failure or explicit goal rejection. Clear that request and its recovery journal automatically once no other work remains. |
 | Action/service reports an uncertain transport failure | Keep its reservation. rosbridge's generic failure response, including its service timeout, does not establish that the robot stopped. |
 | Runner status missing or more than 10 seconds old | Block acquisition and new mutations; continue subscriptions and discovery. |
 | Upstream lost with pending work, runner restarts with work, or gateway restarts with an unconfirmed-work journal | Fail closed; require operator recovery after verifying the robot is stopped. |
@@ -214,6 +215,10 @@ The configured inactivity timeout is **not a guaranteed minimum control duration
 Read-only forwarding failures retire the affected connection without fencing another session's control. Losing the owner's transport still releases its lease. A failed command write, lost transport with outstanding work, or a recovery-journal failure retains the robot-wide recovery fence because completion is uncertain. Action-cancellation write failures remain fenced and do not escape the recovery loop.
 
 A disconnected session's upstream socket stays alive while a tracked request is outstanding. The gateway continues consuming terminal results even when the viewer is gone or slow. This allows ordinary disconnect recovery without discarding the only completion notification. Mutating service/action results are requested without compression or fragmentation so the gateway can inspect them. Request IDs cannot be reused within a connection.
+
+Release, disconnect, and heartbeat expiry clear the owner and token immediately. Outstanding work reserves the endpoint independently of session ownership. A disconnected session is no longer shown as the controller while that reservation drains; a persistent tree can still be adopted through **Manage running tree**.
+
+The ROS image patches rosbridge to add `roboboyWorkOutcome: "not_started"` to failed action results only when no goal was submitted or the server explicitly rejected it. Missing action packages, invalid goal fields, and unavailable action servers therefore do not leave permanent reservations. The gateway checks the original request, action name, failed result, and unknown status before accepting this private response. Generic failures after submission and service timeouts retain the safety fence. An older, unpatched rosbridge remains conservative and cannot clear these failed-action reservations automatically. Rebuild the ROS stack to install both changes; the image build fails if the patch no longer matches upstream.
 
 ### Persistent behavior trees
 
@@ -274,7 +279,7 @@ This is **browser-origin filtering, not user authentication**. Tornado permits c
 
 ## Verification
 
-`python -m unittest discover -s infra/ros -v` runs policy tests, RobotWork lifetime tests, and real Tornado WebSocket tests with a scripted rosbridge. Tests cover simultaneous contenders, observers, token fencing, transfers, topic barriers, disconnects, expired/idle leases, terminal action results, uncertain service responses, runner restarts, persistent adoption, and durable recovery.
+`python -m unittest discover -s infra/ros -v` runs policy tests, RobotWork lifetime tests, and real Tornado WebSocket tests with a scripted rosbridge. Tests cover simultaneous contenders, observers, token fencing, transfers, topic barriers, disconnects, expired/idle leases, terminal action results, confirmed goals that never started, uncertain service responses, runner restarts, persistent adoption, and durable recovery. `test_rosbridge_action_outcomes.py` also exercises the patched handlers inside the ROS image; host-only runs skip those tests when ROS is unavailable.
 
 Frontend tests cover command envelopes, status updates, heartbeats, stale status, cleanup, and ownership UI. `e2e/robot-control.spec.ts` checks the observer/acquire/release workflow in the browser; existing feature tests use an established controller in the shared ROS mock. These tests do not certify a specific robot's stopping behavior; deployment acceptance should exercise that robot's real ROS actions and watchdog with two clients.
 
@@ -289,7 +294,8 @@ docker run --rm --network none --entrypoint /bin/bash \
 ```
 
 It checks two competing clients, observer rejection, topic forwarding and drain, actual action
-cancellation, service completion, and a persistent run surviving disconnect, being adopted, and stopped.
+cancellation, service completion, missing action types, invalid goal fields, unavailable action servers,
+rejected goals, and a persistent run surviving disconnect, being adopted, and stopped.
 
 Add `-e CONTROL_SMOKE_EXTERNAL_LOCK=true` to the same isolated smoke command to exercise the
 reference ROS policy node, its default-closed parameter, ordinary session acquisition, adoption,

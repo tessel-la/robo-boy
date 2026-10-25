@@ -16,7 +16,7 @@ import uuid
 
 import rclpy
 from control_msgs.action import FollowJointTrajectory
-from rclpy.action import ActionServer, CancelResponse
+from rclpy.action import ActionServer, CancelResponse, GoalResponse
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import MultiThreadedExecutor
 from std_msgs.msg import Int32, String
@@ -41,6 +41,7 @@ async def until(predicate, timeout=15):
 
 status_queues = {}
 service_queues = {}
+action_queues = {}
 
 
 async def status(socket, predicate=lambda value: True):
@@ -93,6 +94,8 @@ async def smoke():
         return FollowJointTrajectory.Result()
     action_server = ActionServer(node, FollowJointTrajectory, '/control_smoke/move', execute,
                                  cancel_callback=lambda _: CancelResponse.ACCEPT, callback_group=group)
+    rejecting_server = ActionServer(node, FollowJointTrajectory, '/control_smoke/reject', execute,
+                                   goal_callback=lambda _: GoalResponse.REJECT, callback_group=group)
     executor = MultiThreadedExecutor(num_threads=6)
     executor.add_node(node)
     thread = threading.Thread(target=executor.spin, daemon=True)
@@ -136,6 +139,7 @@ async def smoke():
                 clients.append(socket)
                 queue = status_queues[socket] = asyncio.Queue()
                 service_queues[socket] = asyncio.Queue()
+                action_queues[socket] = asyncio.Queue()
                 latest = [None]
                 async def consume():
                     while True:
@@ -150,6 +154,8 @@ async def smoke():
                             queue.put_nowait(latest[0])
                         elif message.get('op') == 'service_response':
                             service_queues[socket].put_nowait(message)
+                        elif message.get('op') == 'action_result':
+                            action_queues[socket].put_nowait(message)
                 async def heartbeat():
                     while True:
                         await asyncio.sleep(2)
@@ -200,6 +206,22 @@ async def smoke():
             assert node.get_parameter('speed').value == 2.0
             await until(lambda: not authority.pending)
             print('Native ROS 2 parameters passed: observer list/get/describe, lease-gated atomic update and declared-range rejection.')
+
+            # Real rosbridge must distinguish goals that never started from unknown results.
+            for name, action_type, args in (
+                ('missing_type', 'roboboy_missing_interfaces/action/Move', {}),
+                ('missing_server', 'control_msgs/action/FollowJointTrajectory', {}),
+                ('move', 'control_msgs/action/FollowJointTrajectory', {'not_a_goal_field': True}),
+                ('reject', 'control_msgs/action/FollowJointTrajectory', {}),
+            ):
+                request_id = 'not-started-' + name
+                await send(owner, op='send_action_goal', id=request_id, action='/control_smoke/' + name,
+                           action_type=action_type, args=args, controlToken=lease['token'])
+                response = await asyncio.wait_for(action_queues[owner].get(), 15)
+                assert response['id'] == request_id and response['roboboyWorkOutcome'] == 'not_started', response
+                await until(lambda: not authority.pending)
+                assert not authority.marker.exists(), 'A goal that never started retained its recovery journal'
+            print('Action failures passed: missing type, invalid arguments, missing server, and rejected goal release their reservations.')
             await send(observer, op='publish', topic='/control_smoke/command', msg={'data': 99}, controlToken=lease['token'])
             await status(observer, lambda value: bool(value['error']))
             assert commands == [], commands
@@ -212,8 +234,7 @@ async def smoke():
                        action_type='control_msgs/action/FollowJointTrajectory', args={}, controlToken=lease['token'])
             await until(lambda: bool(authority.pending))
             owner.close()
-            await until(lambda: authority.draining)
-            await until(lambda: authority.owner is None)
+            await until(lambda: authority.owner is None and not authority.pending)
             assert cancelled, 'Browser-owned action was not cancelled'
 
             await send(observer, op='roboboy_control', action='acquire')
@@ -231,6 +252,7 @@ async def smoke():
             await until(lambda: authority.runner_busy)
             observer.close()
             await until(authority.adoptable)
+            assert authority.owner is None, 'Disconnected session retained control ownership'
             assert len(cancelled) == 1, 'Persistent action was unexpectedly cancelled'
             c, cid = await connect()
             await send(c, op='roboboy_control', action='adopt')
@@ -291,6 +313,7 @@ async def smoke():
                     process.wait()
             executor.shutdown()
             action_server.destroy()
+            rejecting_server.destroy()
             node.destroy_node()
             rclpy.shutdown()
             log.close()
