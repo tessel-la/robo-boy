@@ -19,7 +19,7 @@ export function normalizeCameraImageOptions(options: CameraImageOptions = {}, to
   const number = (value: unknown, fallback: number, min: number, max: number) =>
     typeof value === 'number' && Number.isFinite(value) ? Math.min(max, Math.max(min, value)) : fallback;
   return {
-    imageSource: options.imageSource === 'stream' ? ('stream' as const) : ('ros' as const),
+    imageSource: options.imageSource === 'ros' ? ('ros' as const) : ('stream' as const),
     streamQuality: projectionStreamQuality(options.streamQuality),
     cameraInfoTopic: typeof options.cameraInfoTopic === 'string' ? options.cameraInfoTopic.trim() : '',
     distance: number(options.distance, 1, 0.01, 100),

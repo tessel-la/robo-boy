@@ -21,8 +21,6 @@ const config = {
   baseUrl: '/video_stream',
   source: 'stream' as const,
   quality: 'medium' as const,
-  fallbackTopic: '/camera/image_raw/compressed',
-  fallbackType: 'sensor_msgs/CompressedImage',
 };
 const flush = async () => {
   for (let i = 0; i < 4; i++) await Promise.resolve();
@@ -35,7 +33,7 @@ afterEach(() => {
 it('uses only recorded ROS messages during replay, without probing a live endpoint', () => {
   vi.mocked(isReplayRos).mockReturnValueOnce(true);
   const listener = vi.fn();
-  const stop = subscribeToProjectionImages(config, listener, vi.fn());
+  const stop = subscribeToProjectionImages(config, listener);
   expect(subscribeToImages).toHaveBeenCalledWith(config.ros, config.topic, config.messageType, listener);
   expect(probeCameraSourceSize).not.toHaveBeenCalled();
   expect(subscribeToMjpeg).not.toHaveBeenCalled();
@@ -50,7 +48,7 @@ it('does not create a stream if removed while the source size probe is pending',
       complete = resolve;
     })
   );
-  const stop = subscribeToProjectionImages(config, vi.fn(), vi.fn());
+  const stop = subscribeToProjectionImages(config, vi.fn());
   stop();
   complete(null);
   await flush();
@@ -58,34 +56,72 @@ it('does not create a stream if removed while the source size probe is pending',
   expect(subscribeToImages).not.toHaveBeenCalled();
 });
 
-it('releases a synchronously cached legacy stream and falls back to the discovered compressed ROS topic once', async () => {
+it('reports invalid cached metadata and detaches without subscribing to ROS', async () => {
   vi.stubGlobal('createImageBitmap', vi.fn());
   const stopVideo = vi.fn(),
-    stopRos = vi.fn(),
-    listener = vi.fn(),
-    status = vi.fn();
+    listener = vi.fn();
   let receive!: (event: ImageEvent) => void;
   vi.mocked(subscribeToMjpeg).mockImplementationOnce((_ros, _url, _base, callback) => {
     receive = callback;
     callback({ frame: { projectionError: 'missing metadata' } as ImageEvent['frame'], error: null });
     return stopVideo;
   });
-  vi.mocked(subscribeToImages).mockReturnValueOnce(stopRos);
-  const stop = subscribeToProjectionImages(config, listener, status);
+  const stop = subscribeToProjectionImages(config, listener);
   await flush();
   expect(stopVideo).toHaveBeenCalledOnce();
-  expect(subscribeToImages).toHaveBeenCalledWith(
-    config.ros,
-    config.fallbackTopic,
-    config.fallbackType,
-    expect.any(Function)
-  );
-  expect(status).toHaveBeenCalledWith(expect.stringContaining('no valid ROS acquisition metadata'));
+  expect(subscribeToImages).not.toHaveBeenCalled();
+  expect(listener).toHaveBeenCalledWith({
+    frame: null,
+    error: expect.stringContaining('no valid ROS acquisition metadata'),
+  });
+  expect(listener.mock.lastCall![0].error).toContain('Select ROS image messages');
   receive({ frame: null, error: 'late transport error' });
-  expect(subscribeToImages).toHaveBeenCalledOnce();
-  expect(listener).not.toHaveBeenCalled();
+  receive({ frame: { header: { frame_id: 'optical' } } as ImageEvent['frame'], error: null });
+  expect(listener).toHaveBeenCalledOnce();
   stop();
-  expect(stopRos).toHaveBeenCalledOnce();
+  expect(stopVideo).toHaveBeenCalledOnce();
+});
+
+it('subscribes to exactly the chosen ROS topic when ROS messages are selected', () => {
+  const listener = vi.fn();
+  const stop = subscribeToProjectionImages({ ...config, source: 'ros' }, listener);
+  expect(subscribeToImages).toHaveBeenCalledWith(config.ros, config.topic, config.messageType, listener);
+  expect(probeCameraSourceSize).not.toHaveBeenCalled();
+  expect(subscribeToMjpeg).not.toHaveBeenCalled();
+  stop();
+});
+
+it('reports unsupported browser APIs without switching transports', () => {
+  vi.stubGlobal('createImageBitmap', undefined);
+  const listener = vi.fn();
+  const stop = subscribeToProjectionImages(config, listener);
+  expect(listener).toHaveBeenCalledWith({
+    frame: null,
+    error: expect.stringContaining('This browser cannot read timestamped camera streams'),
+  });
+  expect(subscribeToImages).not.toHaveBeenCalled();
+  expect(subscribeToMjpeg).not.toHaveBeenCalled();
+  stop();
+});
+
+it('reports transport failures without switching to ROS', async () => {
+  vi.stubGlobal('createImageBitmap', vi.fn());
+  const stopVideo = vi.fn(),
+    listener = vi.fn();
+  let receive!: (event: ImageEvent) => void;
+  vi.mocked(subscribeToMjpeg).mockImplementationOnce((_ros, _url, _base, callback) => {
+    receive = callback;
+    return stopVideo;
+  });
+  const stop = subscribeToProjectionImages(config, listener);
+  await flush();
+  receive({ frame: null, error: 'HTTP 503' });
+  await flush();
+  expect(listener).toHaveBeenCalledWith({ frame: null, error: expect.stringContaining('HTTP 503') });
+  expect(subscribeToImages).not.toHaveBeenCalled();
+  expect(stopVideo).toHaveBeenCalledOnce();
+  stop();
+  expect(stopVideo).toHaveBeenCalledOnce();
 });
 
 it('samples only projection callbacks while keeping the shared stream subscribed', async () => {
@@ -98,7 +134,7 @@ it('samples only projection callbacks while keeping the shared stream subscribed
     receive = callback;
     return stopVideo;
   });
-  const stop = subscribeToProjectionImages(config, listener, vi.fn());
+  const stop = subscribeToProjectionImages(config, listener);
   await flush();
   for (let time = 0; time <= 300; time += 20) {
     now.mockReturnValue(time);

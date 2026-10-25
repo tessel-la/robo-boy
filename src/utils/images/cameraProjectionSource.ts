@@ -15,34 +15,32 @@ export function subscribeToProjectionImages(
     baseUrl: string;
     source: NonNullable<CameraImageOptions['imageSource']>;
     quality: NonNullable<CameraImageOptions['streamQuality']>;
-    fallbackTopic?: string;
-    fallbackType?: string;
   },
-  listener: (event: ImageEvent) => void,
-  onFallback: (reason: string | null) => void
+  listener: (event: ImageEvent) => void
 ) {
   const { ros, topic, messageType } = config;
   if (config.source === 'ros' || isReplayRos(ros)) return subscribeToImages(ros, topic, messageType, listener);
   let disposed = false;
   let stopVideo: (() => void) | undefined;
-  let stopRos: (() => void) | undefined;
-  let usingRos = false;
+  let failed = false;
   let forwarded = -Infinity;
-  const fallback = (reason: string) => {
-    if (disposed || usingRos) return;
-    usingRos = true;
-    onFallback(`${reason} Using ROS image fallback.`);
+  const stopStream = () => {
+    const stop = stopVideo;
+    stopVideo = undefined;
+    stop?.();
+  };
+  const fail = (reason: string) => {
+    if (disposed || failed) return;
+    failed = true;
     // Cached streams notify synchronously while their unsubscribe is still being installed.
-    queueMicrotask(() => {
-      stopVideo?.();
-      stopVideo = undefined;
-    });
-    stopRos = subscribeToImages(ros, config.fallbackTopic ?? topic, config.fallbackType ?? messageType, event => {
-      if (event.frame || event.error) listener(event);
+    queueMicrotask(stopStream);
+    listener({
+      frame: null,
+      error: `${reason} Select ROS image messages in Image source to use ROS instead.`,
     });
   };
   if (typeof createImageBitmap !== 'function' || typeof ReadableStream === 'undefined') {
-    fallback('This browser cannot read timestamped camera streams.');
+    fail('This browser cannot read timestamped camera streams.');
   } else
     void (async () => {
       try {
@@ -54,28 +52,24 @@ export function subscribeToProjectionImages(
           : { quality: CAMERA_STREAM_PRESETS[config.quality].jpegQuality };
         const url = buildCameraStreamUrl({ topic: streamTopic, baseUrl: config.baseUrl, ...params });
         stopVideo = subscribeToMjpeg(ros, url, config.baseUrl, event => {
-          if (disposed || usingRos) return;
-          if (event.error) return fallback('Camera stream is unavailable.');
+          if (disposed || failed) return;
+          if (event.error) return fail(`Camera streamer: ${event.error}`);
           if (!event.frame) return;
           if (event.frame.projectionError || !event.frame.header)
-            return fallback('Camera stream has no valid ROS acquisition metadata.');
+            return fail('Camera stream has no valid ROS acquisition metadata.');
           // Only the 3D consumer is sampled at 10 fps. Camera keeps the source's playback rate.
           const now = performance.now();
           if (now - forwarded < 100) return;
           forwarded = now;
           listener(event);
         });
-        if (disposed || usingRos) {
-          stopVideo();
-          stopVideo = undefined;
-        }
-      } catch {
-        fallback('Camera stream is unavailable.');
+        if (disposed || failed) stopStream();
+      } catch (error) {
+        fail(error instanceof Error ? `Camera streamer: ${error.message}` : 'Camera streamer is unavailable.');
       }
     })();
   return () => {
     disposed = true;
-    stopVideo?.();
-    stopRos?.();
+    stopStream();
   };
 }

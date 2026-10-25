@@ -25,7 +25,7 @@ presentation and worker/GPU time are not instrumented. Solid-color VGA JPEGs are
 and cheaper than detailed HD camera frames. Measure real cameras and target hardware before
 setting a supported camera-count/resolution budget. The browser test prints its measurements
 on each run; a 3D-only MJPEG source still receives full source-rate traffic. See
-[camera stream architecture](camera-streams.md) for ownership and fallback behavior.
+[camera stream architecture](camera-streams.md) for ownership and explicit source-selection behavior.
 
 Use this guide to reproduce frontend performance checks and review changes that affect panel,
 rendering, or ROS-resource lifecycles. The automated profile lives in

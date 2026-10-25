@@ -1,7 +1,7 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { McapWriter, TempBuffer } from '@mcap/core';
 import sharp from 'sharp';
-import { getRosSubscriptionCount, installRosMock, publishRosMessage, waitForRosSubscription } from './helpers/rosMock';
+import { getActiveRosSubscriptionCount, getRosSubscriptionCount, installRosMock, publishRosMessage, waitForRosSubscription } from './helpers/rosMock';
 
 const imageTopic = '/front/image_rect/compressed';
 const rawTopic = '/front/image_raw';
@@ -73,6 +73,7 @@ async function addLayer(page: Page) {
 test('renders compressed/raw calibrated images, waits for TF and saves controls without resubscribing', async ({
   page,
 }) => {
+  await page.route('**/video_stream/**', route => route.fulfill({ status: 503, body: 'Camera streamer unavailable' }));
   await installRosMock(page, {
     topics: [
       { name: imageTopic, type: 'sensor_msgs/msg/CompressedImage' },
@@ -90,6 +91,10 @@ test('renders compressed/raw calibrated images, waits for TF and saves controls 
   };
   await connect();
   const panel = await addLayer(page);
+  await expect(panel.getByLabel(`Image source for Camera image on ${imageTopic}`)).toHaveValue('stream');
+  await expect(panel.getByRole('status').filter({ hasText: 'Select ROS image messages' })).toBeVisible();
+  expect(await getActiveRosSubscriptionCount(page, imageTopic)).toBe(0);
+  await panel.getByLabel(`Image source for Camera image on ${imageTopic}`).selectOption('ros');
   for (const topic of [imageTopic, infoTopic, '/tf']) await waitForRosSubscription(page, topic);
   await publishRosMessage(page, imageTopic, {
     header: header(),
@@ -142,6 +147,7 @@ test('renders compressed/raw calibrated images, waits for TF and saves controls 
   await page.reload();
   await connect();
   await openSettings(panel);
+  await expect(panel.getByLabel(`Image source for Camera image on ${rawTopic}`)).toHaveValue('ros');
   await expect(panel.getByLabel(`Image plane distance in metres for Camera image on ${rawTopic}`)).toHaveValue('1.50');
   await expect(panel.getByLabel(`Image opacity for Camera image on ${rawTopic}`)).toHaveValue('0.4');
   await expect(panel.getByLabel(`Show frustum for Camera image on ${rawTopic}`)).not.toBeChecked();

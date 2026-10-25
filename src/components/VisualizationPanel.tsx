@@ -618,7 +618,7 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({
           );
         } else if (viz.type === 'cameraimage' && ros) {
           const options = viz.options as CameraImageOptions | undefined;
-          return <CameraImageViz key={viz.id} id={viz.id} topics={allTopics} ros={ros} viewer={ros3dViewer} provider={customTFProvider}
+          return <CameraImageViz key={viz.id} id={viz.id} ros={ros} viewer={ros3dViewer} provider={customTFProvider}
             topic={viz.topic} messageType={allTopics.find(item => item.name === viz.topic)?.type
               ?? (viz.topic.endsWith('/compressed') ? 'sensor_msgs/CompressedImage' : 'sensor_msgs/Image')}
             options={{ ...options, cameraInfoTopic: options?.cameraInfoTopic ?? cameraInfoTopicFor(viz.topic, allTopics) }} onStatus={reportVisualizationStatus} />;

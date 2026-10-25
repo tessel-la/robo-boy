@@ -47,8 +47,8 @@ export default function CameraImageSettings({
         value={values.imageSource}
         onChange={e => onChange(id, { imageSource: e.target.value as 'ros' | 'stream' })}
       >
+        <option value="stream">Camera streamer</option>
         <option value="ros">ROS image messages</option>
-        <option value="stream">Camera streamer (ROS fallback)</option>
       </select>
       {values.imageSource === 'stream' && (
         <>

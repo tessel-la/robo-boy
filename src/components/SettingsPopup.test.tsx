@@ -57,6 +57,10 @@ describe('SettingsPopup', () => {
       activeVisualizations={[{ id: 'cam', type: 'cameraimage', topic: '/front/image_rect/compressed' }]}
       allTopics={[{ name: '/front/camera_info', type: 'sensor_msgs/msg/CameraInfo' }]} />);
     fireEvent.click(screen.getByRole('tab', { name: /Visualizations/ }));
+    expect(screen.getByLabelText('Image source for Camera image on /front/image_rect/compressed')).toHaveValue('stream');
+    expect(screen.getByRole('option', { name: 'Camera streamer' })).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Image source for Camera image on /front/image_rect/compressed'), { target: { value: 'ros' } });
+    expect(update).toHaveBeenLastCalledWith('cam', { imageSource: 'ros' });
     expect(screen.getByLabelText('CameraInfo topic for Camera image on /front/image_rect/compressed')).toHaveValue('/front/camera_info');
     expect(screen.getByLabelText('Image geometry for Camera image on /front/image_rect/compressed')).toHaveValue('rectified');
     expect(screen.getByLabelText('Image plane distance in metres for Camera image on /front/image_rect/compressed')).toHaveValue(1);
