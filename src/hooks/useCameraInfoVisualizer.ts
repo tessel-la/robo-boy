@@ -4,6 +4,7 @@ import * as ROSLIB from 'roslib';
 import * as ROS3D from '../utils/ros3d';
 import * as THREE from 'three';
 import { CustomTFProvider } from '../utils/tfUtils';
+import { pinholeCorners } from '../utils/images/cameraCalibration';
 
 interface UseCameraInfoVisualizerProps {
   ros: Ros | null;
@@ -174,13 +175,9 @@ export function useCameraInfoVisualizer({
     const cy = K[5];
     const Z = lineScale;
 
-    const points = [
-      [0, 0, 0],
-      [((0 - cx) * Z) / fx, ((0 - cy) * Z) / fy, Z],
-      [((width - cx) * Z) / fx, ((0 - cy) * Z) / fy, Z],
-      [((width - cx) * Z) / fx, ((height - cy) * Z) / fy, Z],
-      [((0 - cx) * Z) / fx, ((height - cy) * Z) / fy, Z],
-    ];
+    let points: number[][];
+    try { points = [[0, 0, 0], ...pinholeCorners(width, height, fx, fy, cx, cy, Z)]; }
+    catch { lines.visible = false; ros3dViewer.current?.requestRender?.(); return; }
     const indices = [0, 1, 0, 2, 0, 3, 0, 4, 1, 2, 2, 3, 3, 4, 4, 1];
 
     // Use getAttribute
