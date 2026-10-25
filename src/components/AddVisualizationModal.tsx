@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { VisualizationConfig, UrdfOptions } from './VisualizationPanel'; // Import UrdfOptions
 import './AddVisualizationModal.css';
 // Import icons for visualization types
-import { FaCloud, FaCamera, FaCube, FaDotCircle, FaArrowRight } from 'react-icons/fa';
+import { FaCloud, FaCamera, FaCube, FaDotCircle, FaArrowRight, FaRoute, FaMap } from 'react-icons/fa';
 import { getPreferredUrdfTopic, getUrdfTopics } from '../utils/urdfTopics';
 import { getTopicsForVisualizationType, TOPIC_VISUALIZATION_TYPES } from '../utils/visualizationTopics';
 
@@ -20,6 +20,8 @@ const VIZ_TYPE_ICONS: Record<Exclude<VisualizationConfig['type'], 'tf'>, React.R
   markerarray: <FaCube />,
   laserscan: <FaDotCircle />, // Updated LaserScan icon
   posestamped: <FaArrowRight />, // PoseStamped icon
+  path: <FaRoute />,
+  occupancygrid: <FaMap />,
   // TF icon excluded - controlled via Settings menu
   // Add more icons here as needed:
   // marker: <FaMapMarker />,
@@ -96,6 +98,7 @@ const AddVisualizationModal: React.FC<AddVisualizationModalProps> = ({
     if (type === 'markerarray') return 'Mesh markers';
     if (type === 'posestamped') return 'PoseStamped';
     if (type === 'laserscan') return 'LaserScan';
+    if (type === 'occupancygrid') return 'Occupancy grid';
     return type.charAt(0).toUpperCase() + type.slice(1);
   };
 

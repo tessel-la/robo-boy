@@ -51,6 +51,24 @@ describe('SettingsPopup', () => {
     vi.clearAllMocks();
   });
 
+  it('offers independent path/map visibility and appearance controls', () => {
+    const onUpdate = vi.fn();
+    render(<SettingsPopup {...defaultProps} onUpdateVisualizationOptions={onUpdate} activeVisualizations={[
+      { id: 'plan', type: 'path', topic: '/robot/plan', options: { color: '#123456', lineWidth: 0.05, opacity: 0.4 } },
+      { id: 'map', type: 'occupancygrid', topic: '/robot/map', options: { visible: false } },
+    ]} />);
+    fireEvent.click(screen.getByRole('tab', { name: /Visualizations/ }));
+    expect(screen.getByLabelText('Color for Path on /robot/plan')).toHaveValue('#123456');
+    expect(screen.getByLabelText('Line width in metres for Path on /robot/plan')).toHaveValue(0.05);
+    expect(screen.getByLabelText('Opacity for Path on /robot/plan')).toHaveValue('0.4');
+    expect(screen.getByLabelText('Show Occupancy grid on /robot/map')).not.toBeChecked();
+    expect(screen.getByLabelText('Opacity for Occupancy grid on /robot/map')).toHaveValue('0.7');
+    fireEvent.click(screen.getByLabelText('Show Path on /robot/plan'));
+    expect(onUpdate).toHaveBeenLastCalledWith('plan', { visible: false });
+    fireEvent.change(screen.getByLabelText('Opacity for Occupancy grid on /robot/map'), { target: { value: '0' } });
+    expect(onUpdate).toHaveBeenLastCalledWith('map', { opacity: 0 });
+  });
+
   describe('fixed frame selection', () => {
     it('shows the frame in use, selected automatically, and lets the user pick another', () => {
       render(<SettingsPopup {...defaultProps} fixedFrame="map" />);

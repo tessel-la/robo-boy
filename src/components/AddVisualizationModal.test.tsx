@@ -43,6 +43,17 @@ describe('AddVisualizationModal', () => {
     expect(onAddVisualization).toHaveBeenCalledWith({ type: 'pointcloud', topic: '/points', options: {} });
   });
 
+  it('discovers namespaced Path and OccupancyGrid topics in ROS 1 and ROS 2 spellings', () => {
+    render(<AddVisualizationModal isOpen onClose={onClose} onAddVisualization={onAddVisualization} allTopics={[
+      { name: '/robot/global_plan', type: 'nav_msgs/msg/Path' },
+      { name: '/robot/map', type: 'nav_msgs/OccupancyGrid' },
+    ]} />);
+    fireEvent.click(screen.getByTitle('Add Path (/robot/global_plan)'));
+    expect(onAddVisualization).toHaveBeenLastCalledWith({ type: 'path', topic: '/robot/global_plan', options: {} });
+    fireEvent.click(screen.getByTitle('Add Occupancy grid (/robot/map)'));
+    expect(onAddVisualization).toHaveBeenLastCalledWith({ type: 'occupancygrid', topic: '/robot/map', options: {} });
+  });
+
   it('quick-adds the conventional robot_description topic instead of an ordinary String topic', () => {
     render(
       <AddVisualizationModal isOpen onClose={onClose} onAddVisualization={onAddVisualization} allTopics={topics} />

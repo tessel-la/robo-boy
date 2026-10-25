@@ -39,9 +39,11 @@ import {
   saveVisualizationStateForKey,
   type TfDisplaySettings,
 } from '../utils/visualizationState';
-import { getTopicsForVisualizationType, isTopicVisualizationType, TOPIC_VISUALIZATION_TYPES } from '../utils/visualizationTopics';
+import { getTopicsForVisualizationType, isTopicVisualizationType, TOPIC_VISUALIZATION_TYPES, type TopicVisualizationType } from '../utils/visualizationTopics';
 import { getPreferredUrdfTopic } from '../utils/urdfTopics';
 import type { MeshDisplayOptions } from '../utils/meshOpacity';
+import type { NavigationDisplayOptions } from '../utils/navigationOptions';
+import NavigationViz from './visualizers/NavigationViz';
 import type { PanelSettingsBridge } from '../features/assistant/types';
 
 interface VisualizationPanelProps {
@@ -55,9 +57,9 @@ interface VisualizationPanelProps {
 // Define the structure for a visualization configuration
 export interface VisualizationConfig {
   id: string;
-  type: 'pointcloud' | 'camerainfo' | 'urdf' | 'laserscan' | 'tf' | 'posestamped' | 'markerarray'; // Added 'laserscan', 'tf', and 'posestamped'
+  type: TopicVisualizationType | 'tf';
   topic: string; // For pointcloud/camerainfo/laserscan/posestamped. For URDF, this might be robot_description topic
-  options?: MeshDisplayOptions | PointCloudOptions | CameraInfoOptions | UrdfOptions | LaserScanOptions | LaserScanSettingsOptions | PoseStampedOptions | PoseStampedSettingsOptions; // Union of option types
+  options?: NavigationDisplayOptions | MeshDisplayOptions | PointCloudOptions | CameraInfoOptions | UrdfOptions | LaserScanOptions | LaserScanSettingsOptions | PoseStampedOptions | PoseStampedSettingsOptions; // Union of option types
 }
 
 // Define more specific option types
@@ -80,15 +82,7 @@ interface TopicInfo {
   type: string;
 }
 
-const VALID_VISUALIZATION_TYPES: VisualizationConfig['type'][] = [
-  'pointcloud',
-  'camerainfo',
-  'urdf',
-  'laserscan',
-  'tf',
-  'posestamped',
-  'markerarray',
-];
+const VALID_VISUALIZATION_TYPES: VisualizationConfig['type'][] = [...TOPIC_VISUALIZATION_TYPES, 'tf'];
 
 const DEFAULT_STORAGE_KEY = 'roboboy_3d_visualization_state';
 
@@ -99,7 +93,7 @@ const TF_DISPLAY_KEYS: ReadonlyArray<keyof TfDisplaySettings> = [
 const ASSISTANT_SETTINGS_HELP =
   'Keys: "fixedFrame" (a frame name from availableFrames); "showAllTfFrames" (boolean); "showTfFrames" / "hideTfFrames" (arrays of frame names to add to or remove from the displayed list); ' +
   '"tfDisplay" (object with any of showTfAxes, showTfFrameLabels, showTfConnections, showTfLabelBackground as booleans and tfAxesScale (length), tfAxesWidth (diameter), tfLabelScale in metres, tfAxesOpacity, tfLabelOpacity from 0 to 1); ' +
-  '"addVisualizations" (array of {"type": one of pointcloud|camerainfo|urdf|laserscan|posestamped|markerarray, "topic": optional — the first compatible topic is used when omitted}); ' +
+  '"addVisualizations" (array of {"type": one of pointcloud|camerainfo|urdf|laserscan|posestamped|markerarray|path|occupancygrid, "topic": optional — the first compatible topic is used when omitted}); ' +
   '"removeVisualizations" (array of {"id"} or {"type"} or {"topic"} matching entries in visualizations).';
 
 const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({
@@ -620,6 +614,10 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({
               />
             </React.Fragment>
           );
+        } else if (viz.type === 'path' || viz.type === 'occupancygrid') {
+          return <NavigationViz key={viz.id} id={viz.id} type={viz.type} topic={viz.topic}
+            ros={ros} connected={isRosConnected} viewer={ros3dViewer} provider={customTFProvider}
+            ready={isProviderReady} options={viz.options as NavigationDisplayOptions} onStatus={reportVisualizationStatus} />;
         } else if (viz.type === 'tf') {
           // TF visualization is handled globally by the useTfVisualizer hook,
           // so we don't need to render a specific component here.

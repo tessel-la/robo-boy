@@ -8,6 +8,8 @@ const VISUAL_TYPES: Record<string, string> = {
   CameraInfo: 'camerainfo',
   // PoseStamped is left out for now: its 3D arrow does not show the pose correctly yet.
   MarkerArray: 'markerarray',
+  Path: 'path',
+  OccupancyGrid: 'occupancygrid',
 };
 
 /** Which panel a topic's type opens in, if any: images in Camera, TF in the TF tree, supported types in 3D. */

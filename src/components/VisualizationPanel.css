@@ -714,3 +714,16 @@ input[type='number'].scale-field-number:disabled {
   overflow-wrap: anywhere;
   color: var(--text-color);
 }
+
+.navigation-layer-settings {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.navigation-layer-settings input[type='color'] {
+  width: 44px;
+  height: 30px;
+  padding: 2px;
+  cursor: pointer;
+}

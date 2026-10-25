@@ -52,6 +52,22 @@ describe('VisualizationPanel state restoration', () => {
     vi.restoreAllMocks();
   });
 
+  it('restores path/map layers and their independent appearance settings', () => {
+    const visualizations = [
+      { id: 'route', type: 'path', topic: '/robot/plan', options: { visible: false, color: '#ff0000', lineWidth: 0.08 } },
+      { id: 'map', type: 'occupancygrid', topic: '/robot/map', options: { opacity: 0.2 } },
+    ];
+    localStorage.setItem('roboboy_3d_visualization_state', JSON.stringify({ visualizations }));
+    const ros = { isConnected: true, getTopics: (callback: (value: unknown) => void) => callback({ topics: [], types: [] }) };
+    render(<VisualizationPanel ros={ros as any} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
+    fireEvent.click(screen.getByRole('tab', { name: /Visualizations/ }));
+    expect(screen.getByLabelText('Show Path on /robot/plan')).not.toBeChecked();
+    expect(screen.getByLabelText('Color for Path on /robot/plan')).toHaveValue('#ff0000');
+    expect(screen.getByLabelText('Opacity for Occupancy grid on /robot/map')).toHaveValue('0.2');
+    expect(JSON.parse(localStorage.getItem('roboboy_3d_visualization_state')!).visualizations).toEqual(visualizations);
+  });
+
   it('restores settings before the initial save when there are no visualizations', () => {
     const savedState = {
       visualizations: [],
