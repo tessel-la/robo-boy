@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 
-/** A length in scene metres. The slider is logarithmic so the small end (a few centimetres for a
- * desktop robot) has as much travel as the large end, and the number next to it is typed into
- * directly for an exact value. */
+/** A size, in scene metres unless another unit is given. The slider is logarithmic so the small
+ * end (a few centimetres for a desktop robot) has as much travel as the large end, and the number
+ * next to it is typed into directly for an exact value. */
 const ScaleField: React.FC<{
   id: string;
   label: string;
@@ -12,8 +12,9 @@ const ScaleField: React.FC<{
   max: number;
   disabled?: boolean;
   precision?: number;
+  unit?: string;
   onChange: (value: number) => void;
-}> = ({ id, label, ariaLabel, value, min, max, disabled, precision = 2, onChange }) => {
+}> = ({ id, label, ariaLabel, value, min, max, disabled, precision = 2, unit = 'm', onChange }) => {
   const SLIDER_STEPS = 1000;
   const toSlider = (metres: number) =>
     Math.round((Math.log(Math.min(Math.max(metres, min), max) / min) / Math.log(max / min)) * SLIDER_STEPS);
@@ -34,7 +35,7 @@ const ScaleField: React.FC<{
           <input
             type="number"
             className="scale-field-number"
-            aria-label={ariaLabel ?? `${label} in metres`}
+            aria-label={ariaLabel ?? (unit === 'm' ? `${label} in metres` : `${label} in ${unit}`)}
             min={min}
             max={max}
             step={10 ** -precision}
@@ -46,7 +47,7 @@ const ScaleField: React.FC<{
               if (event.key === 'Enter') commitDraft();
             }}
           />
-          <span>m</span>
+          {unit && <span>{unit}</span>}
         </span>
       </div>
       <input

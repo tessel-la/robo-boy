@@ -10,10 +10,9 @@ import SettingsPopup from './SettingsPopup';
 // Import AddVisualizationModal (will be created later)
 import AddVisualizationModal from './AddVisualizationModal';
 // Import the PointCloudSettings component
-import PointCloudSettings, { PointCloudSettingsOptions } from './visualizers/PointCloudSettings';
-import LaserScanSettings, { LaserScanSettingsOptions } from './visualizers/LaserScanSettings'; // Import LaserScanSettings
-import PoseStampedSettings, { PoseStampedSettingsOptions } from './visualizers/PoseStampedSettings'; // Import PoseStampedSettings
-import './visualizers/TopicSettings.css';
+import type { PointCloudSettingsOptions } from './visualizers/PointCloudSettings';
+import type { LaserScanSettingsOptions } from './visualizers/LaserScanSettings';
+import type { PoseStampedSettingsOptions } from './visualizers/PoseStampedSettings';
 import TreePanelMenu from '../features/treePanel/components/TreePanelMenu';
 
 // Import custom hooks
@@ -144,7 +143,6 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({
   const [isAddVizModalOpen, setIsAddVizModalOpen] = useState(false); // Add modal state
 
   // Add state for point cloud settings popup
-  const [activeSettingsVizId, setActiveSettingsVizId] = useState<string | null>(null);
 
   // State for modular visualizations
   const [visualizations, setVisualizations] = useState<VisualizationConfig[]>(initialState.visualizations);
@@ -276,16 +274,6 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({
   const closeAddVizModalAndReturnToSettings = () => {
     setIsAddVizModalOpen(false);
     setIsSettingsPopupOpen(true);
-  };
-
-  // Function to open settings popup for a specific visualization
-  const openVisualizationSettings = (vizId: string) => {
-    setActiveSettingsVizId(vizId);
-  };
-
-  // Function to close visualization settings popup
-  const closeVisualizationSettings = () => {
-    setActiveSettingsVizId(null);
   };
 
   // Function to update visualization settings
@@ -456,27 +444,6 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({
     return () => onRegisterAssistantBridge(panelId, null);
   }, [panelId, onRegisterAssistantBridge]);
 
-  // Visualization-specific editors still use their legacy popovers. The shared
-  // panel menu and add-visualization sheet handle their own outside clicks.
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      const pcSettingsElement = panelRef.current?.querySelector('.point-cloud-settings-popup');
-      if (activeSettingsVizId && pcSettingsElement && !pcSettingsElement.contains(event.target as Node)) {
-        setActiveSettingsVizId(null);
-      }
-    };
-    if (activeSettingsVizId !== null) {
-      const timerId = setTimeout(() => {
-        document.addEventListener('mousedown', handleClickOutside);
-      }, 0);
-      return () => {
-        clearTimeout(timerId);
-        document.removeEventListener('mousedown', handleClickOutside);
-      };
-    }
-    return () => { };
-  }, [activeSettingsVizId]);
-
   // --- Effect to fetch ALL topics ONCE ---
   useEffect(() => {
     if (ros && isRosConnected) {
@@ -527,11 +494,6 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({
       // setFetchTopicsError(isRosConnected ? null : 'ROS not connected.'); // Keep error logic if needed
     }
   }, [ros, isRosConnected]);
-
-  // Get active visualization data for settings popup if needed
-  const activeViz = activeSettingsVizId
-    ? visualizations.find(viz => viz.id === activeSettingsVizId)
-    : null;
 
   // console.log(`--- VisualizationPanel Render End ---`);
 
@@ -666,7 +628,6 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({
             activeVisualizations={visualizations}
             onRemoveVisualization={removeVisualization}
             onAddVisualizationClick={openAddVizModalFromSettings}
-            onEditVisualization={openVisualizationSettings}
             onUpdateVisualizationTopic={updateVisualizationTopic}
             onUpdateVisualizationOptions={updateVisualizationSettings}
             allTopics={allTopics}
@@ -681,39 +642,6 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({
           allTopics={allTopics}
           onAddVisualization={addVisualization}
           onClose={closeAddVizModalAndReturnToSettings} // Return to Settings after closing
-        />
-      )}
-
-      {/* Point Cloud Settings Popup - only show when a point cloud viz is selected */}
-      {activeSettingsVizId && activeViz?.type === 'pointcloud' && (
-        <PointCloudSettings
-          vizId={activeSettingsVizId}
-          topic={activeViz.topic}
-          initialOptions={activeViz.options as PointCloudOptions}
-          onClose={closeVisualizationSettings}
-          onSaveSettings={updateVisualizationSettings}
-        />
-      )}
-
-      {/* LaserScan Settings Popup */}
-      {activeSettingsVizId && activeViz?.type === 'laserscan' && (
-        <LaserScanSettings
-          vizId={activeSettingsVizId}
-          topic={activeViz.topic}
-          initialOptions={activeViz.options as LaserScanSettingsOptions}
-          onClose={closeVisualizationSettings}
-          onSaveSettings={updateVisualizationSettings}
-        />
-      )}
-
-      {/* PoseStamped Settings Popup */}
-      {activeSettingsVizId && activeViz?.type === 'posestamped' && (
-        <PoseStampedSettings
-          vizId={activeSettingsVizId}
-          topic={activeViz.topic}
-          initialOptions={activeViz.options as PoseStampedSettingsOptions}
-          onClose={closeVisualizationSettings}
-          onSaveSettings={updateVisualizationSettings}
         />
       )}
 

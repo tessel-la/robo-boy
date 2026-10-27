@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { getRosSubscriptionCount, installRosMock, publishRosMessage, waitForRosSubscription } from './helpers/rosMock';
+import { backToLayers, openLayerSettings } from './helpers/layerSettings';
 
 test('saves mesh opacity per layer and updates it without resubscribing', async ({ page }) => {
   await installRosMock(page, {
@@ -34,8 +35,11 @@ test('saves mesh opacity per layer and updates it without resubscribing', async 
   );
   const robot = panel.getByLabel('Mesh opacity for URDF on /robot_description');
   const objects = panel.getByLabel('Mesh opacity for Mesh markers on /objects');
+  await openLayerSettings(panel, 'URDF', '/robot_description');
   await expect(robot).toHaveValue('1');
   await robot.fill('0.45');
+  await backToLayers(panel);
+  await openLayerSettings(panel, 'Mesh markers', '/objects');
   await expect(objects).toHaveValue('1');
   await objects.fill('0.7');
   expect(
@@ -45,6 +49,9 @@ test('saves mesh opacity per layer and updates it without resubscribing', async 
   await connect();
   await panel.getByRole('button', { name: 'Settings', exact: true }).click();
   await panel.getByRole('tab', { name: /^Visualizations/ }).click();
+  await openLayerSettings(panel, 'URDF', '/robot_description');
   await expect(robot).toHaveValue('0.45');
+  await backToLayers(panel);
+  await openLayerSettings(panel, 'Mesh markers', '/objects');
   await expect(objects).toHaveValue('0.7');
 });

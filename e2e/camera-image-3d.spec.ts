@@ -2,6 +2,7 @@ import { expect, test, type Locator, type Page } from '@playwright/test';
 import { McapWriter, TempBuffer } from '@mcap/core';
 import sharp from 'sharp';
 import { getActiveRosSubscriptionCount, getRosSubscriptionCount, installRosMock, publishRosMessage, waitForRosSubscription } from './helpers/rosMock';
+import { backToLayers, openLayerSettings } from './helpers/layerSettings';
 
 const imageTopic = '/front/image_rect/compressed';
 const rawTopic = '/front/image_raw';
@@ -91,6 +92,7 @@ test('renders compressed/raw calibrated images, waits for TF and saves controls 
   };
   await connect();
   const panel = await addLayer(page);
+  await openLayerSettings(panel, 'Camera image', imageTopic);
   await expect(panel.getByLabel(`Image source for Camera image on ${imageTopic}`)).toHaveValue('stream');
   await expect(panel.getByRole('status').filter({ hasText: 'Select ROS image messages' })).toBeVisible();
   expect(await getActiveRosSubscriptionCount(page, imageTopic)).toBe(0);
@@ -126,11 +128,13 @@ test('renders compressed/raw calibrated images, waits for TF and saves controls 
   await expect.poll(() => pixels(panel.locator('canvas'), 'blue')).toBeLessThan(heldBlue / 3);
   await expect.poll(() => pixels(panel.locator('canvas'), 'red')).toBeGreaterThan(20);
   await openSettings(panel);
+  await openLayerSettings(panel, 'Camera image', imageTopic);
   await panel.getByLabel(`Image plane distance in metres for Camera image on ${imageTopic}`).fill('1.5');
   await panel.getByLabel(`Image plane distance in metres for Camera image on ${imageTopic}`).press('Enter');
   await panel.getByLabel(`Image opacity for Camera image on ${imageTopic}`).fill('0.4');
   await panel.getByLabel(`Show frustum for Camera image on ${imageTopic}`).uncheck();
   expect(await Promise.all([imageTopic, infoTopic].map(topic => getRosSubscriptionCount(page, topic)))).toEqual(counts);
+  await backToLayers(panel);
   await panel.locator('[id^="visualization-topic-"]').selectOption(rawTopic);
   await waitForRosSubscription(page, rawTopic);
   await publishRosMessage(page, infoTopic, info());
@@ -147,6 +151,7 @@ test('renders compressed/raw calibrated images, waits for TF and saves controls 
   await page.reload();
   await connect();
   await openSettings(panel);
+  await openLayerSettings(panel, 'Camera image', rawTopic);
   await expect(panel.getByLabel(`Image source for Camera image on ${rawTopic}`)).toHaveValue('ros');
   await expect(panel.getByLabel(`Image plane distance in metres for Camera image on ${rawTopic}`)).toHaveValue('1.50');
   await expect(panel.getByLabel(`Image opacity for Camera image on ${rawTopic}`)).toHaveValue('0.4');
@@ -214,6 +219,7 @@ test('replays camera textures through the real MCAP worker and restores frames a
   });
   await expect(replay.getByRole('button', { name: 'Play recording', exact: true })).toBeEnabled();
   const panel = await addLayer(page);
+  await openLayerSettings(panel, 'Camera image', imageTopic);
   await panel.getByLabel(`Image source for Camera image on ${imageTopic}`).selectOption('stream');
   await panel.getByRole('button', { name: 'Close settings', exact: true }).click();
   await expect.poll(() => pixels(panel.locator('canvas'), 'green')).toBeGreaterThan(20);

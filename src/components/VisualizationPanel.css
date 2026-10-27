@@ -103,9 +103,12 @@
 
 .settings-popup-header h3 {
   margin: 3px 0 0;
+  overflow: hidden;
   color: var(--text-color, #212529);
   font-size: 16px;
   line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .settings-popup .close-button {
@@ -141,9 +144,20 @@
   flex-direction: column;
 }
 
-.frame-display-content {
+/* A detail view (frame display, one layer's settings) scrolls under its fixed header. */
+.frame-display-content,
+.layer-settings-content {
   gap: 10px;
   padding: 14px 15px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+
+.layer-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
 .settings-menu-section {
@@ -308,10 +322,6 @@ input[type='number'].scale-field-number:disabled {
   opacity: 0.55;
 }
 
-.scale-field + .control-heading-row {
-  margin-top: 12px;
-}
-
 .fixed-frame-section {
   padding: 13px 15px 14px;
 }
@@ -411,7 +421,14 @@ input[type='number'].scale-field-number:disabled {
   outline: none;
 }
 
-.tf-scale-control,
+/* A card of related values; a switch that governs them sits just above it. */
+.viz-settings-group {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.viz-settings-group,
 .tf-frame-group {
   padding: 10px;
   border: 1px solid color-mix(in srgb, var(--border-color, #dee2e6) 82%, transparent);
@@ -429,6 +446,11 @@ input[type='number'].scale-field-number:disabled {
   color: var(--text-color, #212529);
   font-size: 11px;
   font-weight: 700;
+}
+
+.control-heading-row.settings-inline-row {
+  min-height: 28px;
+  margin-bottom: 0;
 }
 
 .range-input {
@@ -461,6 +483,15 @@ input[type='number'].scale-field-number:disabled {
   cursor: pointer;
 }
 
+.range-input:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.range-input:disabled::-webkit-slider-thumb {
+  cursor: not-allowed;
+}
+
 .range-value {
   min-width: 32px;
   padding: 2px 6px;
@@ -484,6 +515,11 @@ input[type='number'].scale-field-number:disabled {
   color: var(--text-color, #212529);
   font-size: 12px;
   cursor: pointer;
+}
+
+.settings-toggle-row.is-disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
 }
 
 .settings-toggle-row input,
@@ -708,22 +744,70 @@ input[type='number'].scale-field-number:disabled {
     height: 40px;
     font-size: 14px;
   }
+
+  .frame-display-content,
+  .layer-settings-content {
+    padding: 12px;
+  }
+
+  /* Finger-sized value boxes and swatches on a narrow tile. */
+  input[type='number'].scale-field-number {
+    width: 68px;
+    height: 30px;
+    font-size: 13px;
+  }
+
+  .settings-color-input {
+    width: 52px;
+    height: 34px;
+  }
 }
 .visualization-status {
-  font-size: 0.8rem;
+  margin: 8px 0 0;
+  padding: 7px 9px;
+  border: 1px solid color-mix(in srgb, var(--border-color, #dee2e6) 82%, transparent);
+  border-radius: 7px;
+  background: var(--card-bg, #ffffff);
+  color: var(--text-color-secondary, var(--text-secondary, #6c757d));
+  font-size: 11px;
+  line-height: 1.4;
   overflow-wrap: anywhere;
-  color: var(--text-color);
 }
 
-.navigation-layer-settings {
-  display: grid;
-  gap: 10px;
-  margin-top: 12px;
+.layer-settings-content > .visualization-status {
+  margin: 0;
 }
 
-.navigation-layer-settings input[type='color'] {
+.settings-color-input {
+  box-sizing: border-box;
   width: 44px;
-  height: 30px;
-  padding: 2px;
+  height: 28px;
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 3px;
+  appearance: none;
+  border: 1px solid var(--border-color, #dee2e6);
+  border-radius: 7px;
+  background: var(--card-bg, #ffffff);
   cursor: pointer;
+}
+
+.settings-color-input::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.settings-color-input::-webkit-color-swatch {
+  border: 0;
+  border-radius: 4px;
+}
+
+.settings-color-input::-moz-color-swatch {
+  border: 0;
+  border-radius: 4px;
+}
+
+.settings-color-input:focus-visible {
+  border-color: var(--primary-color, #32cd32);
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary-color, #32cd32) 14%, transparent);
 }

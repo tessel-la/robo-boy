@@ -7,6 +7,7 @@ import {
   publishRosMessage,
   waitForRosSubscription,
 } from './helpers/rosMock';
+import { openLayerSettings } from './helpers/layerSettings';
 
 const topic = '/front/image_raw';
 const header = { frame_id: 'optical', stamp: { sec: 12345, nanosec: 678901234 } };
@@ -162,6 +163,7 @@ test('shares full-rate Camera frames with calibrated 3D, independently of TF and
     await page.getByTitle(`Add Camera image (${topic}/compressed)`, { exact: true }).click();
     await panel.getByRole('tab', { name: /^Visualizations/ }).click();
     await panel.locator('[id^="visualization-topic-"]').selectOption(topic);
+    await openLayerSettings(panel, 'Camera image', topic);
     await expect(panel.getByLabel(`Image source for Camera image on ${topic}`)).toHaveValue('stream');
     await expect.poll(() => getActiveRosSubscriptionCount(page, topic)).toBe(0);
     await expect.poll(() => getActiveRosSubscriptionCount(page, `${topic}/compressed`)).toBe(0);
