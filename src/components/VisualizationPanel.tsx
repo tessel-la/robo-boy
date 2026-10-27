@@ -46,6 +46,8 @@ import type { NavigationDisplayOptions } from '../utils/navigationOptions';
 import NavigationViz from './visualizers/NavigationViz';
 import CameraImageViz from './visualizers/CameraImageViz';
 import { DEFAULT_NEW_CAMERA_IMAGE_OPTIONS, cameraInfoTopicFor, type CameraImageOptions } from '../utils/images/cameraImageOptions';
+import JointStateOverlay from './visualizers/JointStateOverlay';
+import { jointDescriptionTopic, type JointStateOptions } from '../utils/jointStates';
 import type { PanelSettingsBridge } from '../features/assistant/types';
 
 interface VisualizationPanelProps {
@@ -61,7 +63,7 @@ export interface VisualizationConfig {
   id: string;
   type: TopicVisualizationType | 'tf';
   topic: string; // For pointcloud/camerainfo/laserscan/posestamped. For URDF, this might be robot_description topic
-  options?: CameraImageOptions | NavigationDisplayOptions | MeshDisplayOptions | PointCloudOptions | CameraInfoOptions | UrdfOptions | LaserScanOptions | LaserScanSettingsOptions | PoseStampedOptions | PoseStampedSettingsOptions; // Union of option types
+  options?: JointStateOptions | CameraImageOptions | NavigationDisplayOptions | MeshDisplayOptions | PointCloudOptions | CameraInfoOptions | UrdfOptions | LaserScanOptions | LaserScanSettingsOptions | PoseStampedOptions | PoseStampedSettingsOptions; // Union of option types
 }
 
 // Define more specific option types
@@ -95,7 +97,7 @@ const TF_DISPLAY_KEYS: ReadonlyArray<keyof TfDisplaySettings> = [
 const ASSISTANT_SETTINGS_HELP =
   'Keys: "fixedFrame" (a frame name from availableFrames); "showAllTfFrames" (boolean); "showTfFrames" / "hideTfFrames" (arrays of frame names to add to or remove from the displayed list); ' +
   '"tfDisplay" (object with any of showTfAxes, showTfFrameLabels, showTfConnections, showTfLabelBackground as booleans and tfAxesScale (length), tfAxesWidth (diameter), tfLabelScale in metres, tfAxesOpacity, tfLabelOpacity from 0 to 1); ' +
-  '"addVisualizations" (array of {"type": one of pointcloud|camerainfo|urdf|laserscan|posestamped|markerarray|path|occupancygrid|cameraimage, "topic": optional — the first compatible topic is used when omitted}); ' +
+  '"addVisualizations" (array of {"type": one of pointcloud|camerainfo|urdf|laserscan|posestamped|markerarray|path|occupancygrid|cameraimage|jointstate, "topic": optional — the first compatible topic is used when omitted}); ' +
   '"removeVisualizations" (array of {"id"} or {"type"} or {"topic"} matching entries in visualizations).';
 
 const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({
@@ -635,6 +637,14 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({
         }
         return null;
       })}
+
+      {visualizations.filter(viz => viz.type === 'jointstate').map(viz => (
+        <JointStateOverlay key={viz.id} id={viz.id} ros={isRosConnected ? ros : null} topic={viz.topic}
+          messageType={allTopics.find(item => item.name === viz.topic)?.type ?? 'sensor_msgs/JointState'}
+          options={viz.options as JointStateOptions} container={panelRef}
+          descriptionTopic={(viz.options as JointStateOptions)?.robotDescriptionTopic ?? jointDescriptionTopic(viz.topic, allTopics)}
+          onChange={updateVisualizationSettings} onStatus={reportVisualizationStatus} />
+      ))}
 
       {/* Main Viewer Div */}
       <div ref={viewerRef} className="viewer-container" id={viewerIdRef.current}></div>
