@@ -41,6 +41,29 @@ Camera source/quality controls and 3D source/calibration/timing/rate controls ar
 
 ## Deployment and validation
 
+### Remote connections
+
+Web Quick Connect uses the page's same-origin `/webrtc/` proxy, including when the
+page is opened through a LAN IP, VPN hostname, or HTTPS domain. Desktop and direct
+backend connections use the selected robot host and configured WebRTC port.
+Discovery resolves selected stream paths against that runtime endpoint; a manual
+WHEP URL remains an explicit endpoint and is not rewritten when choosing another
+robot. The selected video still needs matching CameraInfo/TF for projection.
+
+WHEP HTTP signaling and WebRTC media take different network paths. The robot
+gateway must advertise ICE addresses reachable by the client and permit its media
+port (Duck defaults to UDP/TCP 8189). Proxying HTTP alone does not relay media.
+For NAT-restricted deployments, configure STUN/TURN on the gateway; the client
+reads standard `rel="ice-server"` Link headers from WHEP OPTIONS responses.
+HTTPS pages need HTTPS signaling or the same-origin proxy.
+
+Duck's loopback RTP input connects its encoder to MediaMTX on the robot host; it
+does not restrict viewers to localhost. Its management API deliberately permits
+only loopback callers. Remote discovery therefore uses Robo-Boy's existing relay;
+a desktop directly accessing a remote gateway can use its manual WHEP URL when
+that deployment does not provide a discovery relay. Keep the management boundary
+intact rather than exposing the API to make discovery work.
+
 `infra/docker/Dockerfile.ros` builds upstream web_video_server 3.1.0 at commit `0b6944deef80db148b3e09d2901fbbf85b199c67`, checks its source archive SHA-256, and applies `infra/ros/web_video_server_metadata.patch`. A separate build stage keeps compilers out of the runtime. The entrypoint sources the installed package overlay at `/opt/roboboy-video/share/web_video_server/local_setup.bash`. Rebuilding/redeploying the ROS service is necessary to enable metadata; frontend-only upgrades against an unpatched streamer support Latest TF; Capture time reports unavailable acquisition metadata. Choose Latest TF or ROS image messages explicitly. An upstream streamer outside Robo-Boy's image needs the same overlay to provide metadata.
 
 `npm run test:camera-metadata` compiles the producer helper and checks exact wire values and unchanged decoded JPEG pixels. Unit tests cover chunk boundaries/limits, metadata validation, sharing, profile/robot isolation, decoder backpressure, frame leases, refresh, disposal and strict source selection, including failures that must not open ROS image subscriptions. `e2e/shared-camera-stream.spec.ts` exercises an ongoing 30 fps HTTP stream through the built-in Camera and 3D, late calibration/TF, refresh/profile changes, actual drawing and final stream closure. Replay E2E asserts zero live video requests.

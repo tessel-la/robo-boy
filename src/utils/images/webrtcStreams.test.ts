@@ -27,7 +27,7 @@ class Peer extends EventTarget {
   localDescription?: object;
   close = vi.fn();
   addTransceiver = vi.fn();
-  constructor() {
+  constructor(public config: RTCConfiguration) {
     super();
     Peer.all.push(this);
   }
@@ -216,4 +216,39 @@ it('captures at the highest requested 3D rate while retaining one native connect
   expect(Peer.all).toHaveLength(1);
   stopSlow();
   stopVideo();
+});
+
+it.each([
+  'http://192.168.1.22:8889/head/whep',
+  'https://robot.vpn.example/webrtc/head/whep',
+  'https://fleet.example/robots/duck/webrtc/head/whep',
+])('negotiates and deletes the remote session at %s with gateway-advertised ICE servers', async endpoint => {
+  const session = endpoint + '/session-1';
+  fetchMock.mockImplementation(async (_url, init) => {
+    if (init.method === 'OPTIONS')
+      return new Response(null, {
+        status: 204,
+        headers: {
+          Link: '<stun:stun.example:3478>; rel="ice-server", <turn:relay.example:3478?transport=tcp>; rel="ice-server"; username="reader"; credential="session-secret"; credential-type="password"',
+        },
+      });
+    if (init.method === 'POST')
+      return new Response('answer', { status: 201, headers: { Location: new URL(session).pathname } });
+    return new Response(null, { status: 204 });
+  });
+  const listener = vi.fn();
+  const stop = subscribeToWebRtcVideo({} as Ros, endpoint, listener);
+  await flush();
+  expect(Peer.all[0].config.iceServers).toEqual([
+    { urls: 'stun:stun.example:3478', username: undefined, credential: undefined },
+    { urls: 'turn:relay.example:3478?transport=tcp', username: 'reader', credential: 'session-secret' },
+  ]);
+  expect(listener).toHaveBeenLastCalledWith({ stream: { id: 'native' }, error: null });
+  stop();
+  await flush();
+  expect(fetchMock.mock.calls.map(([url, init]) => [url, init.method])).toEqual([
+    [endpoint, 'OPTIONS'],
+    [endpoint, 'POST'],
+    [session, 'DELETE'],
+  ]);
 });

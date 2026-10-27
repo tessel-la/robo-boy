@@ -1,9 +1,12 @@
-import { afterEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import WebRtcSourceSettings from './WebRtcSourceSettings';
-vi.mock('../runtime/runtimeConfig', () => ({
-  useRuntimeConfig: () => ({ webrtcWhepBaseUrl: '/webrtc/', webrtcDiscoveryUrl: '/webrtc/discovery' }),
-}));
+const runtime = vi.hoisted(() => ({ webrtcWhepBaseUrl: '/webrtc/', webrtcDiscoveryUrl: '/webrtc/discovery' }));
+vi.mock('../runtime/runtimeConfig', () => ({ useRuntimeConfig: () => runtime }));
+beforeEach(() => {
+  runtime.webrtcWhepBaseUrl = '/webrtc/';
+  runtime.webrtcDiscoveryUrl = '/webrtc/discovery';
+});
 afterEach(() => {
   vi.unstubAllGlobals();
 });
@@ -57,4 +60,28 @@ it('aborts a pending discovery on unmount', () => {
   const view = render(<WebRtcSourceSettings value={{}} onChange={vi.fn()} />);
   view.unmount();
   expect(signal?.aborted).toBe(true);
+});
+
+it.each([
+  ['https://robot.example:8443/', '/webrtc/', 'https://robot.example:8443/webrtc/head/camera/whep'],
+  ['file:///opt/robo-boy/index.html', 'http://10.8.0.22:8889/', 'http://10.8.0.22:8889/head/camera/whep'],
+  ['https://operator.example/', 'https://robot.example:9889/', 'https://robot.example:9889/head/camera/whep'],
+  [
+    'https://fleet.example/',
+    'https://fleet.example/robots/duck/webrtc/',
+    'https://fleet.example/robots/duck/webrtc/head/camera/whep',
+  ],
+  ['http://operator.local/', 'http://[fd00::22]:8889/', 'http://[fd00::22]:8889/head/camera/whep'],
+])('keeps discovered stream URLs on the configured robot from %s', async (pageUrl, base, expected) => {
+  vi.stubGlobal('location', new URL(pageUrl));
+  runtime.webrtcWhepBaseUrl = base;
+  runtime.webrtcDiscoveryUrl = 'https://gateway.example/discovery';
+  const request = vi.fn(async () => new Response(JSON.stringify({ items: [{ name: 'head/camera', ready: true }] })));
+  vi.stubGlobal('fetch', request);
+  const change = vi.fn();
+  render(<WebRtcSourceSettings value={{}} onChange={change} />);
+  await screen.findByRole('option', { name: 'head/camera' });
+  fireEvent.change(screen.getByLabelText('Available WebRTC streams'), { target: { value: 'head/camera' } });
+  expect(request).toHaveBeenCalledWith(runtime.webrtcDiscoveryUrl, expect.objectContaining({ redirect: 'error' }));
+  expect(change).toHaveBeenCalledWith({ whepUrl: expected });
 });
