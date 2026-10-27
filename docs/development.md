@@ -26,9 +26,13 @@ FRONTEND_PORT=3000 npm run dev
 
 ## Icons and release notices
 
-Run `npm run icons:generate` to regenerate manifest-listed web icons from `images/logo.png`.
-Maskable assets retain their declared pixel sizes and use an opaque safe area. Android builds
-copy the native icons from `src-tauri/icons/android/` into the generated project.
+Run `npm run icons:generate` to regenerate the manifest-listed web icons, `favicon.ico` and the
+desktop icons in `src-tauri/icons/` (PNGs, `icon.ico`, `icon.icns`) from `images/logo.png`.
+Linux, Windows and browsers show icons as drawn, so those icons get rounded corners at Apple's
+template radius, and the macOS `.icns` follows Apple's inset template. Icons for platforms that
+apply their own mask stay square and opaque: iOS touch icons, maskable assets (which keep their
+declared pixel sizes and an opaque safe area) and the Android and iOS sets. Android builds copy
+the native icons from `src-tauri/icons/android/` into the generated project.
 
 Vite, Electron-shell, and enterprise builds generate `licenses.txt` from the JavaScript packages
 in their application and worker build inputs. Missing license material fails the build. `THIRD_PARTY_NOTICES.md` supplies
