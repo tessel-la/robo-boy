@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { openLayerSettings } from './helpers/layerSettings';
 import {
   installRosMock,
   publishRosMessage,
@@ -47,7 +48,7 @@ test('shares real plain WebRTC playback with calibrated 3D and persists the expl
   await panel.getByRole('button', { name: 'Add visualization', exact: true }).click();
   await page.getByTitle(`Add Camera image (${topic})`, { exact: true }).click();
   await panel.getByRole('tab', { name: /^Visualizations/ }).click();
-  await panel.getByLabel(`Display settings for Camera image on ${topic}`, { exact: true }).click();
+  await openLayerSettings(panel, 'Camera image', topic);
   await expect(panel.getByLabel(`TF timing for Camera image on ${topic}`)).toHaveValue('latest');
   await panel.getByLabel(`Image source for Camera image on ${topic}`).selectOption('webrtc');
   await panel.getByLabel('WHEP URL', { exact: true }).fill(endpoint!);

@@ -122,12 +122,14 @@ for (const [width, theme, touch] of [
       await viewer.getByRole('button', { name: 'Add visualization', exact: true }).click();
       await page.getByTitle(`Add Camera image (${topic})`, { exact: true }).click();
       await viewer.getByRole('tab', { name: /^Visualizations/ }).click();
-      const details = viewer.locator('.visualization-options');
-      await expect(details).not.toHaveAttribute('open');
-      const summary = viewer.getByLabel(`Display settings for Camera image on ${topic}`, { exact: true });
-      await summary.focus();
+      const list = viewer.locator('.active-visualizations-list');
+      expect(await list.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+      await page.screenshot({ path: testInfo.outputPath('visualization-settings.png') });
+      const edit = viewer.getByRole('button', { name: `Edit Camera image visualization for topic ${topic}`, exact: true });
+      await edit.focus();
       await page.keyboard.press('Enter');
-      await expect(details).toHaveAttribute('open');
+      const details = viewer.locator('.layer-settings');
+      await expect(details).toBeVisible();
       const settings = viewer.locator('.settings-popup');
       const settingsFont = await settings.evaluate(el => getComputedStyle(el).fontFamily);
       for (const control of await details.locator('select, input:not([type="checkbox"]):not([type="range"])').all()) {
@@ -137,16 +139,13 @@ for (const [width, theme, touch] of [
         expect(box.x + box.width).toBeLessThanOrEqual(bounds.x + bounds.width);
         expect(await control.evaluate(el => getComputedStyle(el).fontFamily)).toBe(settingsFont);
       }
-      const list = viewer.locator('.active-visualizations-list');
-      expect(await list.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
-      await list.evaluate(el => {
-        el.scrollTop = 0;
-      });
-      await page.screenshot({ path: testInfo.outputPath('visualization-settings.png') });
+      const content = viewer.locator('.layer-settings-content');
+      expect(await content.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
       await viewer.getByLabel(`Projection update rate for Camera image on ${topic}`).scrollIntoViewIfNeeded();
       await page.screenshot({ path: testInfo.outputPath('visualization-fields.png') });
-      await summary.click();
-      await expect(details).not.toHaveAttribute('open');
+      await viewer.getByRole('button', { name: 'Back to 3D view settings', exact: true }).click();
+      await expect(details).toHaveCount(0);
+      await expect(edit).toBeVisible();
     });
   });
 }

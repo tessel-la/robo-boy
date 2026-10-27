@@ -8,6 +8,7 @@ import {
   publishRosMessage,
   waitForRosSubscription,
 } from './helpers/rosMock';
+import { openLayerSettings } from './helpers/layerSettings';
 const topic = '/global_costmap/costmap',
   updates = topic + '_updates';
 const header = (sec = 0) => ({ frame_id: 'map', stamp: { sec, nanosec: 0 } });
@@ -42,7 +43,7 @@ async function addMap(page: Page) {
   await panel.getByRole('button', { name: 'Add visualization', exact: true }).click();
   await page.getByTitle(`Add Occupancy grid (${topic})`, { exact: true }).click();
   await panel.getByRole('tab', { name: /^Visualizations/ }).click();
-  await panel.getByLabel(`Display settings for Occupancy grid on ${topic}`, { exact: true }).click();
+  await openLayerSettings(panel, 'Occupancy grid', topic);
   await panel.getByLabel(`Color scheme for Occupancy grid on ${topic}`).selectOption('costmap');
   await panel.getByLabel(`Updates topic for Occupancy grid on ${topic}`).selectOption(updates);
   return panel;
@@ -104,7 +105,7 @@ for (const theme of ['dark', 'light', 'solarized', 'custom-cobalt']) {
     const popup = panel.locator('.settings-popup');
     await panel.getByLabel(`Updates topic for Occupancy grid on ${topic}`).scrollIntoViewIfNeeded();
     expect(await popup.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
-    for (const select of await panel.locator('.visualization-options select').all())
+    for (const select of await panel.locator('.layer-settings select').all())
       expect(await select.evaluate(el => getComputedStyle(el).fontFamily)).toBe(
         await popup.evaluate(el => getComputedStyle(el).fontFamily)
       );
@@ -134,7 +135,7 @@ for (const theme of ['dark', 'light', 'solarized', 'custom-cobalt']) {
     await page.reload();
     await connect();
     await settings(panel);
-    await panel.getByLabel(`Display settings for Occupancy grid on ${topic}`, { exact: true }).click();
+    await openLayerSettings(panel, 'Occupancy grid', topic);
     await expect(panel.getByLabel(`Color scheme for Occupancy grid on ${topic}`)).toHaveValue('costmap');
     await expect(panel.getByLabel(`Updates topic for Occupancy grid on ${topic}`)).toHaveValue(updates);
     expect(await getPublishedRosMessages(page, '/cmd_vel')).toEqual([]);
