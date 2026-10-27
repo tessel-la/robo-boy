@@ -19,6 +19,8 @@ export interface ReplayMessage {
   message: Record<string, unknown>;
   /** Bounded acquisition-time TF samples restored alongside the latest scene state on seek. */
   tfHistory?: unknown[];
+  /** Consumer-specific reconstructed map state; never replaces a raw topic sample. */
+  gridSnapshot?: string;
 }
 /** A recording on the ROS host, replayed in place with range requests instead of being copied first. */
 export interface RemoteBag {
@@ -29,10 +31,11 @@ export interface RemoteBag {
 /** What Replay opens: a file on this device, or a recording on the ROS host. */
 export type BagSource = File | RemoteBag;
 export const isRemoteBag = (source: BagSource): source is RemoteBag => 'url' in source;
+export interface ReplayGridSource { key: string; topic: string; updatesTopic: string; }
 export type ReaderRequest =
   | { id: number; op: 'open'; source: BagSource }
   | { id: number; op: 'read'; start: bigint; end: bigint; topics: string[] }
-  | { id: number; op: 'seek'; time: bigint; topics: string[] };
+  | { id: number; op: 'seek'; time: bigint; topics: string[]; grids?: ReplayGridSource[] };
 export type ReaderResponse =
   | { id: number; op: 'opened'; info: BagInfo }
   | { id: number; op: 'messages'; messages: ReplayMessage[]; done: boolean }

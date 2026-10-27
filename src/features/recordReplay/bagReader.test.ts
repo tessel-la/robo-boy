@@ -154,3 +154,85 @@ describe('replay worker', () => {
     vi.unstubAllGlobals();
   });
 });
+
+it('rebuilds a costmap from the latest full map and every following patch for forward and backward seeks', async () => {
+  const buffer = new TempBuffer();
+  const writer = new McapWriter({ writable: buffer, chunkSize: 512 });
+  await writer.start({ profile: '', library: 'costmap-test' });
+  const source = { key: 'costmap-view', topic: '/costmap', updatesTopic: '/costmap_updates' };
+  const header = (sec: number) => ({ frame_id: 'map', stamp: { sec, nanosec: 0 } });
+  const full = (sec: number, x = 0) => ({
+    header: header(sec),
+    info: {
+      width: 2,
+      height: 2,
+      resolution: 1,
+      origin: { position: { x, y: 0, z: 0 }, orientation: { x: 0, y: 0, z: 0, w: 1 } },
+    },
+    data: [0, 0, 0, 0],
+  });
+  const patch = (sec: number, x: number, value: number) => ({
+    header: header(sec),
+    x,
+    y: 0,
+    width: 1,
+    height: 1,
+    data: [value],
+  });
+  for (const [topic, type, messages] of [
+    [
+      '/costmap',
+      'nav_msgs/msg/OccupancyGrid',
+      [
+        [0, full(0)],
+        [3, full(3, 10)],
+      ],
+    ],
+    [
+      '/costmap_updates',
+      'map_msgs/msg/OccupancyGridUpdate',
+      [
+        [1, patch(1, 0, 10)],
+        [2, patch(0, 1, 20)],
+        [4, patch(4, 0, 99)],
+      ],
+    ],
+  ] as const) {
+    const schemaId = await writer.registerSchema({
+      name: type,
+      encoding: 'jsonschema',
+      data: new TextEncoder().encode('{}'),
+    });
+    const channelId = await writer.registerChannel({ topic, schemaId, messageEncoding: 'json', metadata: new Map() });
+    for (const [sec, message] of messages)
+      await writer.addMessage({
+        channelId,
+        sequence: sec,
+        logTime: at(sec),
+        publishTime: at(sec),
+        data: new TextEncoder().encode(JSON.stringify(message)),
+      });
+  }
+  await writer.end();
+  const bytes = buffer.get();
+  const reader = new BagReader();
+  await reader.open({ name: 'costmap.mcap', size: bytes.length, slice: (from:number,to:number) => ({arrayBuffer: async()=>bytes.slice(from,to).buffer}) } as unknown as File);
+  const seek = async (sec: number) =>
+    (await reader.seek(at(sec), [source.updatesTopic, source.topic], () => false, [source])).find(
+      item => item.gridSnapshot === source.key
+    )!;
+  expect([...((await seek(2.5)).message.data as Int8Array)]).toEqual([10, 20, 0, 0]);
+  expect((await seek(2.5)).message.header).toMatchObject({stamp:{sec:1,nanosec:0}});
+  expect([...((await seek(1.5)).message.data as Int8Array)]).toEqual([10, 0, 0, 0]);
+  const moved = await seek(3.5);
+  expect([...(moved.message.data as Int8Array)]).toEqual([0, 0, 0, 0]);
+  expect((moved.message.info as any).origin.position.x).toBe(10);
+  expect([...((await seek(4)).message.data as Int8Array)]).toEqual([99, 0, 0, 0]);
+  const snapshots = await reader.seek(at(2.5), [source.topic], () => false, [source]);
+  expect(snapshots.find(item => !item.gridSnapshot)!.message.data).toEqual([0,0,0,0]);
+  const separate = { ...source, key: 'another-map-view', updatesTopic: '/other_updates' };
+  const pairs = await reader.seek(at(2.5), [source.topic], () => false, [source,separate]);
+  expect(pairs.find(item => item.gridSnapshot === source.key)!.message.data).toEqual(new Int8Array([10,20,0,0]));
+  expect(pairs.find(item => item.gridSnapshot === separate.key)!.message.data).toEqual(new Int8Array([0,0,0,0]));
+  expect(await reader.seek(at(4), [source.topic], () => true, [source])).toEqual([]);
+});
