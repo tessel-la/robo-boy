@@ -7,6 +7,8 @@ import { normalizeMeshOpacity, type MeshDisplayOptions } from '../utils/meshOpac
 import type { NavigationDisplayOptions } from '../utils/navigationOptions';
 import NavigationLayerSettings from './visualizers/NavigationLayerSettings';
 import ScaleField from './ScaleField';
+import JointStateSettings from './visualizers/JointStateSettings';
+import { jointDescriptionTopic, type JointStateOptions } from '../utils/jointStates';
 import CameraImageSettings from './visualizers/CameraImageSettings';
 import type { CameraImageOptions } from '../utils/images/cameraImageOptions';
 import type { TfDisplaySettings } from '../utils/visualizationState';
@@ -38,7 +40,7 @@ interface SettingsPopupProps {
   onEditVisualization?: (id: string) => void;
   onUpdateVisualizationOptions?: (
     id: string,
-    options: MeshDisplayOptions | NavigationDisplayOptions | CameraImageOptions
+    options: JointStateOptions | MeshDisplayOptions | NavigationDisplayOptions | CameraImageOptions
   ) => void;
   onUpdateVisualizationTopic?: (id: string, newTopic: string) => void;
   allTopics: TopicInfo[];
@@ -63,6 +65,7 @@ const TYPE_LABELS: Record<VisualizationConfig['type'], string> = {
   path: 'Path',
   occupancygrid: 'Occupancy grid',
   cameraimage: 'Camera image',
+  jointstate: 'Joint states',
 };
 
 const CONFIGURABLE_TYPES = new Set<VisualizationConfig['type']>(['pointcloud', 'laserscan', 'posestamped']);
@@ -457,7 +460,7 @@ const SettingsPopup: React.FC<SettingsPopupProps> = ({
                         </select>
                       </div>
                       {onUpdateVisualizationOptions &&
-                        ['path', 'occupancygrid', 'cameraimage', 'urdf', 'markerarray'].includes(viz.type) && (
+                        ['path', 'occupancygrid', 'cameraimage', 'urdf', 'markerarray', 'jointstate'].includes(viz.type) && (
                           <details className="visualization-options">
                             <summary aria-label={`Display settings for ${TYPE_LABELS[viz.type]} on ${viz.topic}`}>
                               <FiSettings aria-hidden="true" />
@@ -475,6 +478,11 @@ const SettingsPopup: React.FC<SettingsPopupProps> = ({
                                     onChange={onUpdateVisualizationOptions}
                                   />
                                 )}
+                              {viz.type === 'jointstate' && onUpdateVisualizationOptions && (
+                                <JointStateSettings id={viz.id} topic={viz.topic} options={viz.options as JointStateOptions}
+                                  topics={allTopics} descriptionTopic={(viz.options as JointStateOptions)?.robotDescriptionTopic ?? jointDescriptionTopic(viz.topic, allTopics)}
+                                  onChange={onUpdateVisualizationOptions} />
+                              )}
                               {viz.type === 'cameraimage' && onUpdateVisualizationOptions && (
                                 <CameraImageSettings
                                   id={viz.id}
