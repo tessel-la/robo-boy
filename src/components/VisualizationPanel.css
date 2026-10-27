@@ -144,6 +144,7 @@
 .frame-display-content {
   gap: 10px;
   padding: 14px 15px;
+  overflow-y: auto;
 }
 
 .settings-menu-section {
@@ -382,8 +383,6 @@ input[type='number'].scale-field-number:disabled {
   font-size: 10px;
   font-weight: 800;
 }
-
-
 
 .tf-section-content {
   display: flex;
@@ -717,8 +716,65 @@ input[type='number'].scale-field-number:disabled {
 
 .navigation-layer-settings {
   display: grid;
+  min-width: 0;
   gap: 10px;
-  margin-top: 12px;
+}
+
+.navigation-layer-settings > * {
+  min-width: 0;
+}
+
+.visualization-options {
+  margin-top: 10px;
+  border-top: 1px solid var(--border-color);
+}
+
+.visualization-options > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  list-style: none;
+}
+
+.visualization-options > summary::-webkit-details-marker {
+  display: none;
+}
+
+.visualization-options > summary::after {
+  content: '';
+  width: 6px;
+  height: 6px;
+  margin-left: auto;
+  margin-right: 4px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(45deg);
+}
+
+.visualization-options[open] > summary::after {
+  transform: rotate(225deg);
+}
+
+.visualization-options-content {
+  padding: 4px 0 8px;
+}
+
+.navigation-layer-settings .settings-toggle-row {
+  flex-direction: row-reverse;
+}
+
+.panel-settings .control-heading-row {
+  flex-wrap: wrap;
+}
+
+@media (pointer: coarse) {
+  .visualization-options > summary {
+    min-height: 44px;
+  }
 }
 
 .navigation-layer-settings input[type='color'] {

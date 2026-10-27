@@ -17,8 +17,8 @@ export default function NavigationLayerSettings({
   const values = normalizeNavigationOptions(options, type === 'occupancygrid');
   const label = `${type === 'path' ? 'Path' : 'Occupancy grid'} on ${topic}`;
   return (
-    <div className="navigation-layer-settings">
-      <label className="checkbox-label">
+    <div className="navigation-layer-settings panel-settings">
+      <label className="settings-toggle-row">
         <input
           type="checkbox"
           checked={values.visible}

@@ -38,3 +38,18 @@ it('offers plain WebRTC with explicit calibration and no metadata settings', () 
   expect(screen.getByLabelText('CameraInfo topic for Camera image on /image')).toBeInTheDocument();
   expect(screen.queryByLabelText('TF timing for Camera image on /image')).not.toBeInTheDocument();
 });
+
+it('switches to plain WebRTC with explicit latest TF timing', () => {
+  const onChange = vi.fn();
+  render(
+    <CameraImageSettings
+      id="camera"
+      topic="/image"
+      options={{ imageSource: 'stream', videoTiming: 'capture' }}
+      topics={[]}
+      onChange={onChange}
+    />
+  );
+  fireEvent.change(screen.getByLabelText('Image source for Camera image on /image'), { target: { value: 'webrtc' } });
+  expect(onChange).toHaveBeenCalledWith('camera', { imageSource: 'webrtc', videoTiming: 'latest' });
+});

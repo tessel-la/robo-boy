@@ -146,7 +146,9 @@ test('shares full-rate Camera frames with calibrated 3D, independently of TF and
 
     await page.getByLabel('Add workspace panel').first().click();
     await page.getByRole('button', { name: 'Camera', exact: true }).click();
+    await page.getByRole('button', { name: 'Camera settings', exact: true }).click();
     await page.getByLabel('Stream quality', { exact: true }).selectOption('medium');
+    await page.getByRole('button', { name: 'Close camera settings', exact: true }).click();
     const camera = page.locator('.camera-view canvas');
     await expect(camera).toBeVisible();
     await expect.poll(() => streams.size).toBe(1);
@@ -163,6 +165,7 @@ test('shares full-rate Camera frames with calibrated 3D, independently of TF and
     await panel.getByRole('tab', { name: /^Visualizations/ }).click();
     await panel.locator('[id^="visualization-topic-"]').selectOption(topic);
     await expect(panel.getByLabel(`Image source for Camera image on ${topic}`)).toHaveValue('stream');
+    await panel.getByLabel(`Display settings for Camera image on ${topic}`, { exact: true }).click();
     await panel.getByLabel(`TF timing for Camera image on ${topic}`).selectOption('capture');
     await expect.poll(() => getActiveRosSubscriptionCount(page, topic)).toBe(0);
     await expect.poll(() => getActiveRosSubscriptionCount(page, `${topic}/compressed`)).toBe(0);
@@ -218,12 +221,18 @@ test('shares full-rate Camera frames with calibrated 3D, independently of TF and
     await expect.poll(() => streams.size).toBe(1);
     await page.getByLabel('Add workspace panel').first().click();
     await page.getByRole('button', { name: 'Camera', exact: true }).click();
+    await page.getByRole('button', { name: 'Camera settings', exact: true }).click();
     await page.getByLabel('Stream quality', { exact: true }).selectOption('medium');
+    await page.getByRole('button', { name: 'Close camera settings', exact: true }).click();
     await expect(camera).toBeVisible();
     await expect.poll(() => streams.size).toBe(1);
+    await page.getByRole('button', { name: 'Camera settings', exact: true }).click();
     await page.getByLabel('Stream quality', { exact: true }).selectOption('low');
+    await page.getByRole('button', { name: 'Close camera settings', exact: true }).click();
     await expect.poll(() => streams.size).toBe(2);
+    await page.getByRole('button', { name: 'Camera settings', exact: true }).click();
     await page.getByLabel('Stream quality', { exact: true }).selectOption('medium');
+    await page.getByRole('button', { name: 'Close camera settings', exact: true }).click();
     await expect.poll(() => streams.size).toBe(1);
     await page.getByRole('button', { name: 'Remove 3D view', exact: true }).click();
     await expect(camera).toBeVisible();

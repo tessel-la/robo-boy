@@ -32,13 +32,13 @@ test('shares real plain WebRTC playback with calibrated 3D and persists the expl
   await page.getByLabel('Add workspace panel').first().click();
   await page.getByRole('button', { name: 'Camera', exact: true }).click();
   const camera = page.locator('.camera-view');
+  await camera.getByRole('button', { name: 'Camera settings', exact: true }).click();
   await camera.getByLabel('Camera image source').selectOption('webrtc');
-  await camera.locator('summary').click();
   await camera.getByLabel('WHEP URL', { exact: true }).fill(endpoint!);
   await camera.getByLabel('WHEP URL', { exact: true }).press('Enter');
   const video = camera.getByLabel('WebRTC camera video');
   await expect.poll(() => video.evaluate((v: HTMLVideoElement) => v.videoWidth)).toBe(320);
-  await camera.locator('summary').click();
+  await camera.getByRole('button', { name: 'Close camera settings', exact: true }).click();
   await page.getByLabel('Add workspace panel').first().click();
   await page.getByRole('button', { name: '3D panel', exact: true }).click();
   const panel = page.locator('.visualization-panel');
@@ -47,6 +47,7 @@ test('shares real plain WebRTC playback with calibrated 3D and persists the expl
   await panel.getByRole('button', { name: 'Add visualization', exact: true }).click();
   await page.getByTitle(`Add Camera image (${topic})`, { exact: true }).click();
   await panel.getByRole('tab', { name: /^Visualizations/ }).click();
+  await panel.getByLabel(`Display settings for Camera image on ${topic}`, { exact: true }).click();
   await expect(panel.getByLabel(`TF timing for Camera image on ${topic}`)).toHaveValue('latest');
   await panel.getByLabel(`Image source for Camera image on ${topic}`).selectOption('webrtc');
   await panel.getByLabel('WHEP URL', { exact: true }).fill(endpoint!);
@@ -105,6 +106,7 @@ test('shares real plain WebRTC playback with calibrated 3D and persists the expl
   await page.reload();
   await page.getByRole('button', { name: 'Quick Connect 127.0.0.1', exact: true }).click();
   await expect(page.getByLabel('Status: Connected')).toBeVisible();
+  await camera.getByRole('button', { name: 'Camera settings', exact: true }).click();
   await expect(page.getByLabel('Camera image source')).toHaveValue('webrtc');
   await expect
     .poll(() => page.getByLabel('WebRTC camera video').evaluate((v: HTMLVideoElement) => v.videoWidth))

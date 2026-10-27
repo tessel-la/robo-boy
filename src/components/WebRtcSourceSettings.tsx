@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react';
+import { FiRefreshCw } from 'react-icons/fi';
+import './PanelSettings.css';
 import { useRuntimeConfig } from '../runtime/runtimeConfig';
 import { enterpriseFetch } from '../features/enterprise/session';
 import { readSignalingText, type WebRtcOptions } from '../utils/images/webrtcStreams';
@@ -44,8 +46,8 @@ export default function WebRtcSourceSettings({
     return () => abort.abort();
   }, [webrtcDiscoveryUrl, revision]);
   const text = (label: string, field: keyof WebRtcOptions, placeholder = '') => (
-    <label>
-      {label}
+    <label className="panel-settings-field">
+      <span>{label}</span>
       <input
         key={String(value[field] ?? '')}
         aria-label={label}
@@ -59,9 +61,9 @@ export default function WebRtcSourceSettings({
     </label>
   );
   return (
-    <div className="webrtc-source-settings">
-      <label>
-        Available WebRTC streams
+    <div className="webrtc-source-settings panel-settings">
+      <label className="panel-settings-field">
+        <span>Available WebRTC streams</span>
         <select
           aria-label="Available WebRTC streams"
           value=""
@@ -84,10 +86,15 @@ export default function WebRtcSourceSettings({
           ))}
         </select>
       </label>
-      <button type="button" onClick={() => setRevision(v => v + 1)}>
-        Refresh WebRTC streams
+      <button className="panel-settings-action" type="button" onClick={() => setRevision(v => v + 1)}>
+        <FiRefreshCw aria-hidden="true" />
+        <span>Refresh WebRTC streams</span>
       </button>
-      {error && <p role="status">{error}</p>}
+      {error && (
+        <p className="panel-settings-status" role="status">
+          {error}
+        </p>
+      )}
       {text('WHEP URL', 'whepUrl', 'https://camera.example/stream/whep')}
     </div>
   );

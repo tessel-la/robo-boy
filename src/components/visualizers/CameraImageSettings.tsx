@@ -28,59 +28,63 @@ export default function CameraImageSettings({
   const infoTopics = topics.filter(item => CAMERA_INFO_TYPES.includes(item.type));
   const label = `Camera image on ${topic}`;
   return (
-    <div className="navigation-layer-settings">
-      <label className="checkbox-label">
+    <div className="navigation-layer-settings panel-settings">
+      <label className="settings-toggle-row">
         <input
           type="checkbox"
           checked={values.visible}
           aria-label={`Show ${label}`}
           onChange={e => onChange(id, { visible: e.target.checked })}
-        />{' '}
-        Show layer
+        />
+        <span>Show layer</span>
       </label>
-      <label className="viz-topic-label" htmlFor={`camera-source-${id}`}>
-        Image source
-      </label>
-      <select
-        id={`camera-source-${id}`}
-        className="topic-dropdown"
-        aria-label={`Image source for ${label}`}
-        value={values.imageSource}
-        onChange={e =>
-          onChange(id, {
-            imageSource: e.target.value as CameraImageOptions['imageSource'],
-            ...(e.target.value === 'webrtc' ? { videoTiming: 'latest' as const } : {}),
-          })
-        }
-      >
-        <option value="stream">Camera streamer</option>
-        <option value="ros">ROS image messages</option>
-        <option value="webrtc">WebRTC</option>
-      </select>
+      <div className="panel-settings-field">
+        <label className="viz-topic-label" htmlFor={`camera-source-${id}`}>
+          Image source
+        </label>
+        <select
+          id={`camera-source-${id}`}
+          className="topic-dropdown"
+          aria-label={`Image source for ${label}`}
+          value={values.imageSource}
+          onChange={e =>
+            onChange(id, {
+              imageSource: e.target.value as CameraImageOptions['imageSource'],
+              ...(e.target.value === 'webrtc' ? { videoTiming: 'latest' as const } : {}),
+            })
+          }
+        >
+          <option value="stream">Camera streamer</option>
+          <option value="ros">ROS image messages</option>
+          <option value="webrtc">WebRTC</option>
+        </select>
+      </div>
       {values.imageSource === 'stream' && (
         <>
-          <label className="viz-topic-label" htmlFor={`camera-quality-${id}`}>
-            Stream quality
-          </label>
-          <select
-            id={`camera-quality-${id}`}
-            className="topic-dropdown"
-            aria-label={`Stream quality for ${label}`}
-            value={values.streamQuality}
-            onChange={e => onChange(id, { streamQuality: e.target.value as CameraImageOptions['streamQuality'] })}
-          >
-            {(['low', 'medium', 'high', 'original'] as const).map(quality => (
-              <option key={quality} value={quality}>
-                {CAMERA_STREAM_PRESETS[quality].label}
-              </option>
-            ))}
-          </select>
+          <div className="panel-settings-field">
+            <label className="viz-topic-label" htmlFor={`camera-quality-${id}`}>
+              Stream quality
+            </label>
+            <select
+              id={`camera-quality-${id}`}
+              className="topic-dropdown"
+              aria-label={`Stream quality for ${label}`}
+              value={values.streamQuality}
+              onChange={e => onChange(id, { streamQuality: e.target.value as CameraImageOptions['streamQuality'] })}
+            >
+              {(['low', 'medium', 'high', 'original'] as const).map(quality => (
+                <option key={quality} value={quality}>
+                  {CAMERA_STREAM_PRESETS[quality].label}
+                </option>
+              ))}
+            </select>
+          </div>
         </>
       )}
       {values.imageSource !== 'ros' && (
         <>
           {values.imageSource === 'stream' && (
-            <label>
+            <label className="panel-settings-field">
               TF timing
               <select
                 aria-label={`TF timing for ${label}`}
@@ -93,7 +97,7 @@ export default function CameraImageSettings({
             </label>
           )}
           {(values.videoTiming === 'latest' || values.imageSource === 'webrtc') && (
-            <label>
+            <label className="panel-settings-field">
               Optical frame override
               <input
                 aria-label={`Optical frame for ${label}`}
@@ -106,7 +110,7 @@ export default function CameraImageSettings({
         </>
       )}
       {values.imageSource !== 'ros' && (
-        <label>
+        <label className="panel-settings-field">
           Projection update rate
           <select
             aria-label={`Projection update rate for ${label}`}
@@ -124,39 +128,43 @@ export default function CameraImageSettings({
       {values.imageSource === 'webrtc' && (
         <WebRtcSourceSettings value={values} onChange={patch => onChange(id, patch)} />
       )}
-      <label className="viz-topic-label" htmlFor={`camera-info-${id}`}>
-        CameraInfo topic
-      </label>
-      <select
-        id={`camera-info-${id}`}
-        className="topic-dropdown"
-        aria-label={`CameraInfo topic for ${label}`}
-        value={values.cameraInfoTopic}
-        onChange={e => onChange(id, { cameraInfoTopic: e.target.value })}
-      >
-        <option value="">Select matching calibration</option>
-        {values.cameraInfoTopic && !infoTopics.some(item => item.name === values.cameraInfoTopic) && (
-          <option value={values.cameraInfoTopic}>{values.cameraInfoTopic} (current)</option>
-        )}
-        {infoTopics.map(item => (
-          <option key={item.name} value={item.name}>
-            {item.name}
-          </option>
-        ))}
-      </select>
-      <label className="viz-topic-label" htmlFor={`camera-geometry-${id}`}>
-        Image geometry
-      </label>
-      <select
-        id={`camera-geometry-${id}`}
-        className="topic-dropdown"
-        aria-label={`Image geometry for ${label}`}
-        value={values.imageGeometry}
-        onChange={e => onChange(id, { imageGeometry: e.target.value as 'raw' | 'rectified' })}
-      >
-        <option value="raw">Raw (zero distortion)</option>
-        <option value="rectified">Rectified</option>
-      </select>
+      <div className="panel-settings-field">
+        <label className="viz-topic-label" htmlFor={`camera-info-${id}`}>
+          CameraInfo topic
+        </label>
+        <select
+          id={`camera-info-${id}`}
+          className="topic-dropdown"
+          aria-label={`CameraInfo topic for ${label}`}
+          value={values.cameraInfoTopic}
+          onChange={e => onChange(id, { cameraInfoTopic: e.target.value })}
+        >
+          <option value="">Select matching calibration</option>
+          {values.cameraInfoTopic && !infoTopics.some(item => item.name === values.cameraInfoTopic) && (
+            <option value={values.cameraInfoTopic}>{values.cameraInfoTopic} (current)</option>
+          )}
+          {infoTopics.map(item => (
+            <option key={item.name} value={item.name}>
+              {item.name}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div className="panel-settings-field">
+        <label className="viz-topic-label" htmlFor={`camera-geometry-${id}`}>
+          Image geometry
+        </label>
+        <select
+          id={`camera-geometry-${id}`}
+          className="topic-dropdown"
+          aria-label={`Image geometry for ${label}`}
+          value={values.imageGeometry}
+          onChange={e => onChange(id, { imageGeometry: e.target.value as 'raw' | 'rectified' })}
+        >
+          <option value="raw">Raw (zero distortion)</option>
+          <option value="rectified">Rectified</option>
+        </select>
+      </div>
       <ScaleField
         id={`camera-distance-${id}`}
         label="Image plane distance"
@@ -186,30 +194,32 @@ export default function CameraImageSettings({
           onChange={e => onChange(id, { opacity: Number(e.target.value) })}
         />
       </div>
-      <label className="checkbox-label">
+      <label className="settings-toggle-row">
         <input
           type="checkbox"
           checked={values.showFrustum}
           aria-label={`Show frustum for ${label}`}
           onChange={e => onChange(id, { showFrustum: e.target.checked })}
-        />{' '}
-        Show frustum
+        />
+        <span>Show frustum</span>
       </label>
       {(values.imageSource === 'ros' || (values.imageSource === 'stream' && values.videoTiming !== 'latest')) && (
         <>
-          <label className="viz-topic-label" htmlFor={`camera-sync-${id}`}>
-            Calibration timing
-          </label>
-          <select
-            id={`camera-sync-${id}`}
-            className="topic-dropdown"
-            value={values.calibrationSync}
-            aria-label={`Calibration timing for ${label}`}
-            onChange={e => onChange(id, { calibrationSync: e.target.value as 'exact' | 'latest' })}
-          >
-            <option value="exact">Match image timestamp</option>
-            <option value="latest">Latest (static calibration)</option>
-          </select>
+          <div className="panel-settings-field">
+            <label className="viz-topic-label" htmlFor={`camera-sync-${id}`}>
+              Calibration timing
+            </label>
+            <select
+              id={`camera-sync-${id}`}
+              className="topic-dropdown"
+              value={values.calibrationSync}
+              aria-label={`Calibration timing for ${label}`}
+              onChange={e => onChange(id, { calibrationSync: e.target.value as 'exact' | 'latest' })}
+            >
+              <option value="exact">Match image timestamp</option>
+              <option value="latest">Latest (static calibration)</option>
+            </select>
+          </div>
           {values.calibrationSync === 'exact' && (
             <div className="control-heading-row">
               <label htmlFor={`camera-tolerance-${id}`}>Tolerance (ms)</label>

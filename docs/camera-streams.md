@@ -1,6 +1,6 @@
 # Shared camera streams
 
-The built-in Camera panel defaults to Camera streamer (shared MJPEG where supported). Its Camera image source selector also offers explicit ROS messages and WebRTC choices. WebRTC connection settings offer gateway discovery or a manual WHEP URL and are saved with each workspace panel. In **3D → Settings → Visualizations → Camera image**, **Image source** defaults to **Camera streamer**, using the same transport. Explicitly saved **ROS image messages** choices are preserved. Stream quality is selected independently; matching effective URLs share a connection even if the preset names differ.
+The built-in Camera panel defaults to Camera streamer (shared MJPEG where supported). Open the **Camera** menu for **Image source**, stream quality, and connection settings. The source selector also offers explicit ROS messages and WebRTC choices. WebRTC connection settings offer gateway discovery or a manual WHEP URL and are saved with each workspace panel. In **3D → Settings → Visualizations → Camera image → Display settings**, **Image source** defaults to **Camera streamer**, using the same transport. Explicitly saved **ROS image messages** choices are preserved. Stream quality is selected independently; matching effective URLs share a connection even if the preset names differ.
 
 ## Ownership and performance
 
