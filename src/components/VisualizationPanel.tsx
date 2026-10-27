@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState, memo } from 'react';
+import React, { useCallback, useEffect, useRef, useState, memo, lazy, Suspense } from 'react';
 // Revert to using namespace for roslib types
 import { Ros } from 'roslib';
 import * as THREE from 'three'; // Keep THREE import for potential use, though ROS3D handles Points creation
@@ -46,9 +46,11 @@ import type { NavigationDisplayOptions } from '../utils/navigationOptions';
 import NavigationViz from './visualizers/NavigationViz';
 import CameraImageViz from './visualizers/CameraImageViz';
 import { DEFAULT_NEW_CAMERA_IMAGE_OPTIONS, cameraInfoTopicFor, type CameraImageOptions } from '../utils/images/cameraImageOptions';
-import JointStateOverlay from './visualizers/JointStateOverlay';
 import { jointDescriptionTopic, type JointStateOptions } from '../utils/jointStates';
 import type { PanelSettingsBridge } from '../features/assistant/types';
+
+// Load optional telemetry only when selected; keep the workspace chunk within the PWA precache limit.
+const JointStateOverlay = lazy(() => import('./visualizers/JointStateOverlay'));
 
 interface VisualizationPanelProps {
   ros: Ros | null; // Allow null ros object
@@ -638,13 +640,15 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({
         return null;
       })}
 
-      {visualizations.filter(viz => viz.type === 'jointstate').map(viz => (
-        <JointStateOverlay key={viz.id} id={viz.id} ros={isRosConnected ? ros : null} topic={viz.topic}
-          messageType={allTopics.find(item => item.name === viz.topic)?.type ?? 'sensor_msgs/JointState'}
-          options={viz.options as JointStateOptions} container={panelRef}
-          descriptionTopic={(viz.options as JointStateOptions)?.robotDescriptionTopic ?? jointDescriptionTopic(viz.topic, allTopics)}
-          onChange={updateVisualizationSettings} onStatus={reportVisualizationStatus} />
-      ))}
+      <Suspense fallback={null}>
+        {visualizations.filter(viz => viz.type === 'jointstate').map(viz => (
+          <JointStateOverlay key={viz.id} id={viz.id} ros={isRosConnected ? ros : null} topic={viz.topic}
+            messageType={allTopics.find(item => item.name === viz.topic)?.type ?? 'sensor_msgs/JointState'}
+            options={viz.options as JointStateOptions} container={panelRef}
+            descriptionTopic={(viz.options as JointStateOptions)?.robotDescriptionTopic ?? jointDescriptionTopic(viz.topic, allTopics)}
+            onChange={updateVisualizationSettings} onStatus={reportVisualizationStatus} />
+        ))}
+      </Suspense>
 
       {/* Main Viewer Div */}
       <div ref={viewerRef} className="viewer-container" id={viewerIdRef.current}></div>
