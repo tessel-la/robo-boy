@@ -469,6 +469,7 @@ const SettingsPopup: React.FC<SettingsPopupProps> = ({
                                   <NavigationLayerSettings
                                     id={viz.id}
                                     type={viz.type}
+                                    topics={allTopics}
                                     topic={viz.topic}
                                     options={viz.options as NavigationDisplayOptions}
                                     onChange={onUpdateVisualizationOptions}

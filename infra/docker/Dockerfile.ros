@@ -40,6 +40,7 @@ RUN echo 'APT::Acquire::Retries "3";' > /etc/apt/apt.conf.d/80-retries && \
       ros-${ROS_DISTRO}-rmw-cyclonedds-cpp \
       ros-${ROS_DISTRO}-rmw-fastrtps-cpp \
       ros-${ROS_DISTRO}-rosbridge-server \
+      ros-${ROS_DISTRO}-map-msgs \
       python3-tornado patch \
       ros-${ROS_DISTRO}-image-transport \
       ros-${ROS_DISTRO}-cv-bridge \
