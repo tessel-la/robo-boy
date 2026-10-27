@@ -1,7 +1,7 @@
 import ROSLIB, { type Ros } from 'roslib';
 import { getTfHistory } from '../../utils/tfStream';
 import { enterpriseMediaUrl } from '../enterprise/session';
-import { isRemoteBag, type BagInfo, type BagSource, type ReaderRequest, type ReaderResponse, type ReplayMessage } from './types';
+import { isRemoteBag, type BagInfo, type BagSource, type ReaderRequest, type ReaderResponse, type ReplayMessage, type ReplayGridSource } from './types';
 
 // Keep the canonical source in session state; only worker messages carry a scoped read URL.
 const workerSource = (source: BagSource): BagSource => isRemoteBag(source) ? { ...source, url: enterpriseMediaUrl(source.url) } : source;
@@ -29,6 +29,20 @@ class ReplayRos extends ROSLIB.Ros {
   private subscriptions = new Map<string, string>();
   /** Last message per subscribed topic, so a panel that subscribes later starts from the cursor. */
   private latest = new Map<string, ReplayMessage>();
+  private grids = new Map<string, { source: ReplayGridSource; listeners: Set<(message: unknown) => void> }>();
+  get gridSources() { return [...this.grids.values()].map(entry => entry.source); }
+  get seeking() { return this.session.snapshot.phase === 'seeking'; }
+  registerGrid(topic: string, updatesTopic: string, listener: (message: unknown) => void) {
+    const key = JSON.stringify([topic, updatesTopic]);
+    let entry = this.grids.get(key);
+    if (!entry) this.grids.set(key, entry = { source: { key, topic, updatesTopic }, listeners: new Set() });
+    entry.listeners.add(listener);
+    this.session.refreshTopics();
+    return () => {
+      entry!.listeners.delete(listener);
+      if (!entry!.listeners.size) this.grids.delete(key);
+    };
+  }
   /** TF messages are deltas; their latest state is every child frame's last transform. */
   private frames = new Map<string, Map<string, Transform>>();
   constructor(private session: ReplaySession) {
@@ -87,6 +101,10 @@ class ReplayRos extends ROSLIB.Ros {
     for (const transform of (item.message.transforms ?? []) as Transform[]) frames.set(transform.child_frame_id, transform);
   }
   deliver(item: ReplayMessage) {
+    if (item.gridSnapshot) {
+      for (const listener of this.grids.get(item.gridSnapshot)?.listeners ?? []) listener(item.message);
+      return;
+    }
     if (item.tfHistory) getTfHistory(this).ingest({ transforms: item.tfHistory }, item.topic === '/tf_static');
     this.remember(item);
     this.session.messageTime = Number(item.time / 1000n) / 1000;
@@ -95,13 +113,19 @@ class ReplayRos extends ROSLIB.Ros {
   /** State at a new cursor. `onlyNew` answers late subscribers without repeating others' data. */
   hydrate(items: ReplayMessage[], onlyNew: boolean) {
     if (!onlyNew) { this.latest.clear(); this.frames.clear(); }
-    for (const item of items) if (!onlyNew || !this.latest.has(item.topic)) this.deliver(item);
+    for (const item of items) if (item.gridSnapshot || !onlyNew || !this.latest.has(item.topic)) this.deliver(item);
   }
-  dispose() { this.latest.clear(); this.frames.clear(); this.subscriptions.clear(); (this as unknown as Emitter).removeAllListeners(); }
+  dispose() { this.latest.clear(); this.frames.clear(); this.grids.clear(); this.subscriptions.clear(); (this as unknown as Emitter).removeAllListeners(); }
 }
 
 /** Explicit source identity: recorded views must never open a live camera transport. */
 export const isReplayRos = (ros: Ros): boolean => ros instanceof ReplayRos;
+
+export const isReplaySeeking = (ros: Ros): boolean => ros instanceof ReplayRos && ros.seeking;
+
+export function registerReplayGrid(ros: Ros, topic: string, updatesTopic: string, listener: (message: unknown) => void): () => void {
+  return ros instanceof ReplayRos ? ros.registerGrid(topic, updatesTopic, listener) : () => {};
+}
 
 export class ReplaySession {
   snapshot: ReplaySnapshot = { phase: 'empty', position: 0, playing: false, speed: 1, loop: false, remote: false, buffering: false };
@@ -195,12 +219,13 @@ export class ReplaySession {
     this.seeking = true; this.refreshing = onlyNew && !reset;
     this.update({ phase: 'seeking', position: this.pendingEnd });
     const topics = (this.refreshing ? this.adapter?.unseenTopics : this.adapter?.topics) ?? [];
+    const grids = this.adapter?.gridSources ?? [];
     if (reset) {
       this.adapter?.dispose();
       this.adapter = new ReplayRos(this);
       this.sourceChanged(this.adapter);
     }
-    this.post({ id: ++this.requestId, op: 'seek', time: this.toTime(this.pendingEnd), topics });
+    this.post({ id: ++this.requestId, op: 'seek', time: this.toTime(this.pendingEnd), topics, ...(grids.length ? { grids } : {}) });
     this.lastTick = performance.now();
   }
   private toTime(seconds: number) { return this.snapshot.info!.start + BigInt(Math.round(seconds * 1e9)); }

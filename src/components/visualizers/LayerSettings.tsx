@@ -43,7 +43,7 @@ export default function LayerSettings({
     case 'path':
     case 'occupancygrid':
       return <NavigationLayerSettings id={viz.id} type={viz.type} topic={viz.topic}
-        options={viz.options as NavigationDisplayOptions} onChange={onChange} />;
+        options={viz.options as NavigationDisplayOptions} topics={topics} onChange={onChange} />;
     case 'cameraimage':
       return <CameraImageSettings id={viz.id} topic={viz.topic}
         options={viz.options as CameraImageOptions} topics={topics} onChange={onChange} />;

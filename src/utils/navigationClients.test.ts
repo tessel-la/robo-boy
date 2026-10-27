@@ -7,7 +7,8 @@ import { CustomTFProvider } from './tfUtils';
 import { TfHistory } from './tfHistory';
 
 const topics = vi.hoisted(() => [] as { receive: (value: unknown) => void; unsubscribe: ReturnType<typeof vi.fn> }[]);
-vi.mock('roslib', () => {
+vi.mock('roslib', async importOriginal => {
+  const actual = await importOriginal<typeof import('roslib')>();
   const Topic = vi.fn(function () {
     const topic = {
       receive: (_value: unknown) => {},
@@ -19,7 +20,7 @@ vi.mock('roslib', () => {
     topics.push(topic);
     return topic;
   });
-  return { default: { Topic }, Topic };
+  return { ...actual, default: { ...actual.default, Topic }, Topic };
 });
 
 const header = (frame_id = 'map', sec = 2) => ({ frame_id, stamp: { sec, nanosec: 0 } });
@@ -219,4 +220,99 @@ describe('navigation layer clients', () => {
     history.ingest(tf(3, 20), false);
     expect(render).not.toHaveBeenCalled();
   });
+});
+
+it('updates map cells and palettes in place, resynchronizes invalid patches, and releases both subscriptions', () => {
+  const client = new OccupancyGridClient({
+    ...config('/map'),
+    options: { updatesTopic: '/map_updates', palette: 'costmap' },
+  });
+  clients.push(client);
+  // Updates subscribe first; no patch can establish an initial map.
+  topics[1].receive({ header: header(), x: 0, y: 0, width: 1, height: 1, data: [100] });
+  expect(client.object.visible).toBe(false);
+  topics[0].receive(grid());
+  const mesh = client.object.children[0] as THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>;
+  const texture = mesh.material.map!;
+  const geometry = mesh.geometry;
+  topics[1].receive({ header: header('map', 3), x: 0, y: 0, width: 1, height: 1, data: [99] });
+  expect(client.object.children[0]).toBe(mesh);
+  expect(mesh.geometry).toBe(geometry);
+  expect([...texture.image.data.slice(0, 4)]).toEqual([0, 255, 255, 255]);
+  client.updateOptions({ updatesTopic: '/map_updates', palette: 'occupancy' });
+  expect(client.object.children[0]).toBe(mesh);
+  expect([...texture.image.data.slice(0, 4)]).toEqual([3, 3, 3, 255]);
+  expect(topics).toHaveLength(2);
+  topics[1].receive({ header: header('map', 4), x: 2, y: 0, width: 1, height: 1, data: [100] });
+  expect(client.object.visible).toBe(false);
+  expect(status).toHaveBeenLastCalledWith(expect.stringContaining('fresh full map'));
+  expect(topics[0].unsubscribe).toHaveBeenCalledOnce();
+  topics[1].receive({ header: header('map', 5), x: 0, y: 0, width: 1, height: 1, data: [100] });
+  expect(client.object.children).toHaveLength(0);
+  topics[0].receive(grid()); // A retained snapshot from before the gap cannot repair it.
+  expect(client.object.visible).toBe(false);
+  topics[0].receive({ ...grid(), header: header('map', 6) });
+  expect(client.object.visible).toBe(true);
+  client.dispose();
+  expect(topics[1].unsubscribe).toHaveBeenCalledOnce();
+});
+
+it('moves rolling map origins without reallocating the texture and resets patch sequence on a fresh full map', () => {
+  const client = new OccupancyGridClient({ ...config('/map'), options: { updatesTopic: '/map_updates' } });
+  clients.push(client);
+  topics[0].receive(grid());
+  const mesh = client.object.children[0] as THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>;
+  const texture = mesh.material.map!;
+  topics[1].receive({ header: header('map', 3), x: 0, y: 0, width: 1, height: 1, data: [50] });
+  const moved = grid();
+  moved.info.origin.position.x = 10;
+  topics[0].receive({ ...moved, header: header('map', 4) });
+  expect(client.object.children[0]).toBe(mesh);
+  expect(mesh.material.map).toBe(texture);
+  expect(mesh.position.x).toBe(10);
+  topics[1].receive({ header: header('map', 3), x: 0, y: 0, width: 1, height: 1, data: [100] });
+  expect([...texture.image.data.slice(0, 4)]).toEqual([255, 255, 255, 255]);
+});
+
+it('invalidates the full-map baseline on disconnect and ignores updates until a new snapshot', () => {
+  const events = new Map<string, () => void>();
+  const off = vi.fn();
+  const ros = { on: (name: string, fn: () => void) => events.set(name, fn), off } as unknown as Ros;
+  const client = new OccupancyGridClient({ ...config('/map'), ros, options: { updatesTopic: '/map_updates' } });
+  clients.push(client);
+  topics[0].receive(grid());
+  expect(client.object.visible).toBe(true);
+  events.get('close')!();
+  expect(client.object.visible).toBe(false);
+  topics[1].receive({ header: header('map', 3), x: 0, y: 0, width: 1, height: 1, data: [100] });
+  expect(client.object.children).toHaveLength(0);
+  topics[0].receive({ ...grid(), header: header('map', 4) });
+  expect(client.object.visible).toBe(true);
+  client.dispose();
+  expect(off).toHaveBeenCalledWith('close', expect.any(Function));
+});
+
+it('keeps global and local costmap update chains independent', () => {
+  const global = new OccupancyGridClient({
+    ...config('/global/costmap'),
+    options: { updatesTopic: '/global/costmap_updates', palette: 'costmap' },
+  });
+  const local = new OccupancyGridClient({
+    ...config('/local/costmap'),
+    options: { updatesTopic: '/local/costmap_updates', palette: 'costmap' },
+  });
+  clients.push(global, local);
+  topics[0].receive(grid());
+  topics[2].receive(grid());
+  const globalTexture = (global.object.children[0] as THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>).material
+    .map!;
+  const localTexture = (local.object.children[0] as THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>).material
+    .map!;
+  topics[1].receive({ header: header('map', 3), x: 0, y: 0, width: 1, height: 1, data: [100] });
+  expect([...globalTexture.image.data.slice(0, 4)]).toEqual([255, 0, 255, 255]);
+  expect([...localTexture.image.data.slice(0, 4)]).toEqual([0, 0, 0, 0]);
+  global.dispose();
+  expect(topics[3].unsubscribe).not.toHaveBeenCalled();
+  topics[3].receive({ header: header('map', 4), x: 0, y: 0, width: 1, height: 1, data: [99] });
+  expect([...localTexture.image.data.slice(0, 4)]).toEqual([0, 255, 255, 255]);
 });

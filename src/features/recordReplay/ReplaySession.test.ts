@@ -1,7 +1,7 @@
 import ROSLIB, { type Ros } from 'roslib';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getTfHistory, subscribeToTfStream } from '../../utils/tfStream';
-import { ReplaySession } from './ReplaySession';
+import { ReplaySession, registerReplayGrid } from './ReplaySession';
 import { setEnterpriseSession } from '../enterprise/session';
 import type { BagInfo, ReaderRequest, ReaderResponse, ReplayMessage } from './types';
 
@@ -356,4 +356,27 @@ describe('ReplaySession', () => {
     failing.open(file());
     expect(failing.getSnapshot()).toMatchObject({ phase: 'error', error: 'Error: no workers' });
   });
+});
+
+it('isolates reconstructed map snapshots from raw topics and carries pairs across backward seeks', async () => {
+  const ros = open(), snapshot = vi.fn(), other = vi.fn();
+  const key = JSON.stringify(['/map', '/map_updates']);
+  const release = registerReplayGrid(ros, '/map', '/map_updates', snapshot);
+  const map = listen(ros, '/map'), updates = listen(ros, '/map_updates');
+  await vi.advanceTimersByTimeAsync(50);
+  expect(worker.last('seek')).toMatchObject({ grids: [{key,topic:'/map',updatesTopic:'/map_updates'}] });
+  worker.reply({id:worker.last('seek').id,op:'messages',messages:[
+    message('/map',0,{data:[0,0]}),
+    {...message('/map',2,{data:[10,20]}),gridSnapshot:key},
+  ],done:true});
+  expect(map.received).toEqual([{data:[0,0]}]);
+  expect(snapshot).toHaveBeenLastCalledWith({data:[10,20]});
+  const lateRelease = registerReplayGrid(ros, '/map', '/other_updates', other);
+  await vi.advanceTimersByTimeAsync(50);
+  expect(worker.last('seek')).toMatchObject({grids:expect.arrayContaining([{key,topic:'/map',updatesTopic:'/map_updates'}])});
+  worker.reply({id:worker.last('seek').id,op:'messages',messages:[],done:true});
+  session.seek(10);worker.reply({id:worker.last('seek').id,op:'messages',messages:[],done:true});
+  session.seek(1);
+  expect(worker.last('seek')).toMatchObject({grids:expect.arrayContaining([{key,topic:'/map',updatesTopic:'/map_updates'}])});
+  lateRelease();release();map.topic.unsubscribe();updates.topic.unsubscribe();
 });

@@ -1,3 +1,4 @@
+import { decodeGrid, applyGridUpdate } from '../../utils/occupancyGridData';
 import { McapIndexedReader } from '@mcap/core';
 import { TF_HISTORY_NS, TF_SAMPLES_PER_FRAME, TF_MAX_FRAMES } from '../../utils/tfHistoryLimits';
 import { BlobReadable } from '@mcap/browser';
@@ -7,7 +8,7 @@ import { MessageReader as Ros1Reader } from '@foxglove/rosmsg-serialization';
 import { decompress as zstd } from 'fzstd';
 import { HttpReadable, type RangeReadable } from './httpReadable';
 import { decompressLz4Frame } from './lz4';
-import { isRemoteBag, type BagInfo, type BagSource, type ReplayMessage } from './types';
+import { isRemoteBag, type BagInfo, type BagSource, type ReplayMessage, type ReplayGridSource } from './types';
 
 export interface TimedMessage extends ReplayMessage {
   /** Encoded size, used to bound worker batches. */
@@ -115,12 +116,13 @@ export class BagReader {
    * own, so a sparse topic never forces decoding every dense message in between. TF messages are
    * deltas, so they merge by child frame; dynamic TF only looks back as far as tf2 would keep it.
    */
-  async seek(time: bigint, topics: string[], cancelled: () => boolean): Promise<ReplayMessage[]> {
+  async seek(time: bigint, topics: string[], cancelled: () => boolean, grids: ReplayGridSource[] = []): Promise<ReplayMessage[]> {
     const result: ReplayMessage[] = [];
     for (const topic of topics) {
       if (cancelled()) return [];
       if (topic !== '/tf' && topic !== '/tf_static' && topic !== '/roboboy/tf') {
         for await (const item of this.read(this.info.start, time, [topic], true)) {
+          if (cancelled()) return [];
           result.push({ topic: item.topic, time: item.time, message: item.message });
           break;
         }
@@ -143,6 +145,27 @@ export class BagReader {
       }
       if (frames.size) result.push({ topic, time, message: { transforms: [...frames.values()] }, ...(history.length ? { tfHistory: history } : {}) });
     }
-    return result.sort((a, b) => a.time < b.time ? -1 : a.time > b.time ? 1 : 0);
+    for (const source of grids) {
+      for await (const base of this.read(this.info.start, time, [source.topic], true)) {
+        if (cancelled()) return [];
+        const grid = decodeGrid(base.message);
+        let latest = base;
+        if (grid) for await (const patch of this.read(base.time, time, [source.updatesTopic])) {
+          if (cancelled()) return [];
+          if (applyGridUpdate(grid, patch.message)) latest = patch;
+        }
+        const message = grid ? {
+          ...base.message,
+          header: { ...(latest.message.header as object), stamp: {
+            sec: Number(grid.header.stamp / 1_000_000_000n), nanosec: Number(grid.header.stamp % 1_000_000_000n),
+          } },
+          data: grid.cells,
+        } : base.message;
+        result.push({ topic: source.topic, time: latest.time, message, gridSnapshot: source.key });
+        break;
+      }
+    }
+    // Raw samples keep their meaning; reconstructed snapshots go only to registered map consumers.
+    return result.sort((a, b) => a.time < b.time ? -1 : a.time > b.time ? 1 : Number(!!a.gridSnapshot) - Number(!!b.gridSnapshot));
   }
 }
