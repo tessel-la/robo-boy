@@ -2,12 +2,13 @@ import { getUrdfTopics, type RosTopicInfo } from './urdfTopics';
 import { RAW_IMAGE_TYPES, COMPRESSED_IMAGE_TYPES } from './images/imageFrames';
 
 /** Visualization types that bind to a topic; TF is driven by the frame list instead. */
-export type TopicVisualizationType = 'pointcloud' | 'camerainfo' | 'urdf' | 'laserscan' | 'posestamped' | 'markerarray' | 'path' | 'occupancygrid' | 'cameraimage';
+export type TopicVisualizationType = 'pointcloud' | 'camerainfo' | 'urdf' | 'laserscan' | 'posestamped' | 'markerarray' | 'path' | 'occupancygrid' | 'cameraimage' | 'jointstate';
 
-export const TOPIC_VISUALIZATION_TYPES: readonly TopicVisualizationType[] = ['pointcloud', 'camerainfo', 'urdf', 'laserscan', 'posestamped', 'markerarray', 'path', 'occupancygrid', 'cameraimage'];
+export const TOPIC_VISUALIZATION_TYPES: readonly TopicVisualizationType[] = ['pointcloud', 'camerainfo', 'urdf', 'laserscan', 'posestamped', 'markerarray', 'path', 'occupancygrid', 'cameraimage', 'jointstate'];
 
 /** ROS 1 and ROS 2 spellings of the message types each visualization can render. */
 const MESSAGE_TYPES_BY_VISUALIZATION: Record<Exclude<TopicVisualizationType, 'urdf'>, readonly string[]> = {
+  jointstate: ['sensor_msgs/JointState', 'sensor_msgs/msg/JointState'],
   markerarray: ['visualization_msgs/MarkerArray', 'visualization_msgs/msg/MarkerArray'],
   pointcloud: ['sensor_msgs/PointCloud2', 'sensor_msgs/msg/PointCloud2'],
   camerainfo: ['sensor_msgs/CameraInfo', 'sensor_msgs/msg/CameraInfo'],

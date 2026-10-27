@@ -1,9 +1,11 @@
 import { normalizeMeshOpacity, type MeshDisplayOptions } from '../../utils/meshOpacity';
 import type { NavigationDisplayOptions } from '../../utils/navigationOptions';
 import type { CameraImageOptions } from '../../utils/images/cameraImageOptions';
+import { jointDescriptionTopic, type JointStateOptions } from '../../utils/jointStates';
 import type { VisualizationConfig } from '../VisualizationPanel';
 import { PercentField } from '../SettingsFields';
 import CameraImageSettings from './CameraImageSettings';
+import JointStateSettings from './JointStateSettings';
 import LaserScanSettings, { type LaserScanSettingsOptions } from './LaserScanSettings';
 import NavigationLayerSettings from './NavigationLayerSettings';
 import PointCloudSettings, { type PointCloudSettingsOptions } from './PointCloudSettings';
@@ -12,7 +14,7 @@ import PoseStampedSettings, { type PoseStampedSettingsOptions } from './PoseStam
 export type LayerOptionsPatch = NonNullable<VisualizationConfig['options']>;
 
 const CONFIGURABLE = new Set<VisualizationConfig['type']>([
-  'pointcloud', 'laserscan', 'posestamped', 'path', 'occupancygrid', 'cameraimage', 'urdf', 'markerarray',
+  'pointcloud', 'laserscan', 'posestamped', 'path', 'occupancygrid', 'cameraimage', 'urdf', 'markerarray', 'jointstate',
 ]);
 
 /** Whether a layer type has settings of its own, behind its configure button. */
@@ -47,6 +49,11 @@ export default function LayerSettings({
     case 'cameraimage':
       return <CameraImageSettings id={viz.id} topic={viz.topic}
         options={viz.options as CameraImageOptions} topics={topics} onChange={onChange} />;
+    case 'jointstate': {
+      const options = viz.options as JointStateOptions | undefined;
+      return <JointStateSettings id={viz.id} topic={viz.topic} options={options} topics={topics}
+        descriptionTopic={options?.robotDescriptionTopic ?? jointDescriptionTopic(viz.topic, topics)} onChange={onChange} />;
+    }
     case 'urdf':
     case 'markerarray':
       return (

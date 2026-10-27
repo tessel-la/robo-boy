@@ -9,6 +9,7 @@ const VISUAL_TYPES: Record<string, string> = {
   // PoseStamped is left out for now: its 3D arrow does not show the pose correctly yet.
   MarkerArray: 'markerarray',
   Path: 'path',
+  JointState: 'jointstate',
   OccupancyGrid: 'occupancygrid',
 };
 

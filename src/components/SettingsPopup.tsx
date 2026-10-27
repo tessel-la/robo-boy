@@ -55,6 +55,7 @@ const TYPE_LABELS: Record<VisualizationConfig['type'], string> = {
   path: 'Path',
   occupancygrid: 'Occupancy grid',
   cameraimage: 'Camera image',
+  jointstate: 'Joint states',
 };
 
 const SettingsPopup: React.FC<SettingsPopupProps> = ({

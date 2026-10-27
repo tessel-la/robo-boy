@@ -48,6 +48,7 @@ The 3D view can display:
 - URDF robot models
 - Planned paths (`nav_msgs/Path`)
 - Occupancy maps (`nav_msgs/OccupancyGrid`)
+- Joint-state overlays (`sensor_msgs/JointState`)
 
 Use the visualization settings to select a fixed frame, choose topics, configure render options, and add or remove visualizations. In **Settings → Visualizations**, each layer shows its topic and status; its settings button opens that layer's options as a view of the same menu, on desktop and on phones. Changes apply as you make them, and the back arrow returns to the list. The configuration is saved in browser storage.
 
@@ -58,6 +59,10 @@ PoseStamped and PointCloud2 layers use their message frame and acquisition times
 For **URDF** and **Mesh markers** layers, open the layer's settings from **Settings → Visualizations** and use its **Mesh opacity** slider (0–100%, default 100%). Each layer is independent, updates immediately without reloading meshes or subscriptions, and saves its opacity with the panel. The slider multiplies the opacity already authored in model materials or ROS marker colors; 100% restores the original appearance. Newly loaded meshes use the current setting.
 
 **Point cloud** settings set the point size (m), the maximum number of points kept and the point color. **Laser scan** settings set the point size in screen pixels, the color and the minimum and maximum range (m). **Pose Stamped** settings choose an arrow or axes shape, its scale, the arrow length and width or axes length (m), the color, and an optional trail of up to 500 poses.
+
+**Joint states:** open **Settings → Visualizations → Add visualization → Joint states**, or use **Open in 3D** on a JointState topic in Data Explorer. A read-only overlay starts at the top right of the 3D panel. Drag its header to move it and its bottom-right handle to resize it; both handles also accept arrow keys (Shift increases the step). Placement and size are saved per layer and stay within the panel after resizing it.
+
+In the layer's settings, choose the **Robot description (limits)** topic, angle units, joint-name filter, optional velocity/effort values, and background opacity. **Show overlay** hides it; **Reset overlay position and size** returns it to the top right. A description in the JointState topic's namespace is preferred, then the global `/robot_description`; other robots' descriptions are never selected arbitrarily. Position bars use the URDF's lower/upper limits, with out-of-range values labelled without altering the reported value. Revolute/continuous joints use radians or degrees; prismatic joints use metres. Continuous joints have no position limits. Missing readings or limits remain unavailable, rather than becoming zero or observed extrema. Velocity and effort can show their URDF maxima. Partial messages are merged by joint name; names missing from subsequent messages retain their last reading and become stale after two seconds in a live session. Paused recordings retain their cursor values. The overlay publishes no commands and does not require TF or a rendered URDF model.
 
 To show a route and its environment, open **Settings → Visualizations → Add visualization** and choose **Path** or **Occupancy grid**. Add multiple layers for different robots or global/local plans, then select each layer's topic. ROS 1 and ROS 2 message-type spellings and namespaced topics are supported. The Data Explorer's **Open in 3D** action also opens these types.
 
