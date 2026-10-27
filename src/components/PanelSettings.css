@@ -1,0 +1,122 @@
+/* Shared form treatment for Camera and 3D settings. Runtime theme owns the palette and font. */
+.panel-settings {
+  min-width: 0;
+  font-family: var(--font-family-ui);
+  font-size: 12px;
+  color: var(--text-color);
+}
+
+.panel-settings :is(button, input, select, output) {
+  font-family: inherit;
+}
+
+.panel-settings-field {
+  position: relative;
+  display: grid;
+  min-width: 0;
+  gap: 6px;
+  margin: 0;
+  font-size: 11px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.panel-settings-field > .viz-topic-label {
+  margin: 0;
+  font-size: inherit;
+}
+
+.panel-settings :is(select, input:not([type]), input[type='text'], input[type='url'], input[type='search']) {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  height: 38px;
+  margin: 0;
+  padding: 0 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--background-color);
+  color: var(--text-color);
+  font-size: 12px;
+  font-weight: 400;
+  text-overflow: ellipsis;
+}
+
+.panel-settings select {
+  appearance: none;
+  padding-right: 32px;
+  cursor: pointer;
+}
+
+.panel-settings-field:has(> select)::after {
+  content: '';
+  position: absolute;
+  bottom: 17px;
+  right: 13px;
+  width: 6px;
+  height: 6px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  color: var(--text-secondary);
+  transform: rotate(45deg);
+  pointer-events: none;
+}
+
+.panel-settings :is(button, input, select, summary):focus-visible {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 2px;
+}
+
+.panel-settings :disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.webrtc-source-settings {
+  display: grid;
+  min-width: 0;
+  gap: 12px;
+}
+
+.panel-settings-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--card-bg);
+  color: var(--text-color);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.panel-settings-action:hover {
+  border-color: var(--primary-color);
+  color: var(--primary-color);
+}
+
+.panel-settings-status {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.panel-settings output,
+.panel-settings input[type='number'] {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (pointer: coarse) {
+  .panel-settings :is(select, input:not([type]), input[type='text'], input[type='url']),
+  .panel-settings-action {
+    min-height: 44px;
+  }
+  .panel-settings-field:has(> select)::after {
+    bottom: 20px;
+  }
+}

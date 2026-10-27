@@ -80,7 +80,9 @@ test('refreshes late camera topics and releases MJPEG streams on refresh and rem
       await expect.poll(() => streams.size).toBe(1);
       if (cycle === 0) {
         await page.getByLabel('Camera topic', { exact: true }).selectOption('/camera/late');
+        await page.getByRole('button', { name: 'Camera settings', exact: true }).click();
         await page.getByLabel('Stream quality', { exact: true }).selectOption('low');
+        await page.getByRole('button', { name: 'Close camera settings', exact: true }).click();
         await expect.poll(() => requestedUrls.some(url => /topic=\/camera\/late.*quality=40/.test(url))).toBe(true);
         await expect.poll(() => streams.size).toBe(1);
         const before = requests;
@@ -88,7 +90,9 @@ test('refreshes late camera topics and releases MJPEG streams on refresh and rem
         await expect.poll(() => requests).toBeGreaterThan(before);
         await expect.poll(() => streams.size).toBe(1);
         await expect(page.getByLabel('Camera topic', { exact: true })).toHaveValue('/camera/late');
+        await page.getByRole('button', { name: 'Camera settings', exact: true }).click();
         await expect(page.getByLabel('Stream quality', { exact: true })).toHaveValue('low');
+        await page.getByRole('button', { name: 'Close camera settings', exact: true }).click();
       }
       await page.getByRole('button', { name: 'Remove Camera', exact: true }).click();
       await expect(image).toHaveCount(0);

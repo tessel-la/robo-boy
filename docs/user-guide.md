@@ -34,7 +34,7 @@ Robo-Boy discovers image topics and displays the selected stream through `web_vi
 
 Use **Refresh** in the camera toolbar when a camera publisher starts after connecting, or to retry a failed stream. It updates the topic list for all camera panels without reopening them and reconnects the refreshed panel's stream. The button remains available when the topic list is empty. Your topic and quality choices are preserved; a selected topic that disappears is marked unavailable instead of silently switching cameras. Refresh failures keep the previous list and display a retry message.
 
-**Auto** fits stream resolution to the panel. **Low**, **Medium**, and **High** trade detail for bandwidth; **Original** requests full-size frames. Camera topic discovery and refresh are read-only operations. Topic and quality controls sit above the image and wrap within narrow panels.
+**Auto** fits stream resolution to the panel. **Low**, **Medium**, and **High** trade detail for bandwidth; **Original** requests full-size frames. Camera topic discovery and refresh are read-only operations. The topic picker and refresh stay above the image. Open the **Camera** menu for **Image source** (Camera streamer, ROS messages or WebRTC), stream quality, and WebRTC connection settings. The menu follows the same layout as 3D and TF controls and fits within narrow panels.
 
 ### 3D Visualization
 
@@ -49,7 +49,7 @@ The 3D view can display:
 - Planned paths (`nav_msgs/Path`)
 - Occupancy maps (`nav_msgs/OccupancyGrid`)
 
-Use the visualization settings to select a fixed frame, choose topics, configure render options, and add or remove visualizations. The configuration is saved in browser storage.
+Use the visualization settings to select a fixed frame, choose topics, configure render options, and add or remove visualizations. Expand a layer’s **Display settings** to adjust its appearance, source, or calibration; collapse it to keep other layers reachable. The configuration is saved in browser storage.
 
 The fixed frame defaults to **Auto**: the view anchors to `world`, `map`, or `odom` when the robot publishes one of them, otherwise to the root of the TF tree. Picking a frame explicitly keeps it as long as it exists in the tree. The **Frames** list toggles individual TF frames, **Show all frames** follows the live tree (frames that appear later are added automatically), and the sliders button next to the list opens the frame display settings: axes, labels, parent links, axes length and width, and label size. Axes width is the diameter in scene metres and is independent of length. New panels default to 0.08 m axes length, 0.004 m axes width, 70% axes opacity, and labels without a background, a label size of 0.35 m, and 80% label opacity. Saved custom label settings are preserved.
 

@@ -4,6 +4,13 @@ import React from 'react';
 import CameraView from './CameraView';
 import { clearCameraSourceSizes } from '../utils/cameraStreamQuality';
 
+vi.mock('./WebRtcCameraVideo', () => ({
+  default: ({ url }: { url: string }) => <div data-testid="native-webrtc">{url}</div>,
+}));
+vi.mock('./RosCameraImage', () => ({
+  default: ({ topic }: { topic: string }) => <div data-testid="ros-image">{topic}</div>,
+}));
+vi.mock('./WebRtcSourceSettings', () => ({ default: () => <div>WebRTC settings</div> }));
 // Mock ROSLIB.Ros
 const createMockRos = (isConnected: boolean = true) => ({
   isConnected,
@@ -254,6 +261,7 @@ describe('CameraView', () => {
     it('offers the presets and starts at Auto', () => {
       render(<CameraView {...props} />);
 
+      fireEvent.click(screen.getByRole('button', { name: 'Camera settings' }));
       const select = screen.getByLabelText('Stream quality');
       expect(select).toHaveValue('auto');
       expect([...select.querySelectorAll('option')].map(option => option.value)).toEqual([
@@ -319,9 +327,75 @@ describe('CameraView', () => {
       const onStreamQualityChange = vi.fn();
       render(<CameraView {...props} streamQuality="auto" onStreamQualityChange={onStreamQualityChange} />);
 
+      fireEvent.click(screen.getByRole('button', { name: 'Camera settings' }));
       fireEvent.change(screen.getByLabelText('Stream quality'), { target: { value: 'original' } });
 
       expect(onStreamQualityChange).toHaveBeenCalledWith('original');
     });
   });
+});
+
+it('allows ordinary WebRTC playback with no ROS image topic or metadata', () => {
+  render(
+    <CameraView
+      ros={createMockRos(false) as any}
+      cameraTopic=""
+      availableTopics={[]}
+      onTopicChange={vi.fn()}
+      sourceOptions={{ imageSource: 'webrtc', whepUrl: 'https://camera.example/whep' }}
+      onSourceOptionsChange={vi.fn()}
+    />
+  );
+  expect(screen.getByTestId('native-webrtc')).toHaveTextContent('https://camera.example/whep');
+  expect(screen.queryByLabelText('Camera topic')).not.toBeInTheDocument();
+  expect(screen.queryByRole('img')).not.toBeInTheDocument();
+});
+it('makes ROS an explicit source choice and reports serializable source settings to the owner', () => {
+  const changed = vi.fn();
+  const { rerender } = render(
+    <CameraView
+      ros={createMockRos() as any}
+      cameraTopic="/camera/image_raw"
+      availableTopics={['/camera/image_raw']}
+      onTopicChange={vi.fn()}
+      streamQuality="original"
+      sourceOptions={{}}
+      onSourceOptionsChange={changed}
+    />
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Camera settings' }));
+  fireEvent.change(screen.getByLabelText('Camera image source'), { target: { value: 'ros' } });
+  expect(changed).toHaveBeenCalledWith({ imageSource: 'ros' });
+  rerender(
+    <CameraView
+      ros={createMockRos() as any}
+      cameraTopic="/camera/image_raw"
+      availableTopics={['/camera/image_raw']}
+      onTopicChange={vi.fn()}
+      sourceOptions={{ imageSource: 'ros' }}
+      onSourceOptionsChange={changed}
+    />
+  );
+  expect(screen.getByTestId('ros-image')).toHaveTextContent('/camera/image_raw');
+  expect(screen.queryByRole('img')).not.toBeInTheDocument();
+});
+
+it('uses the shared panel menu and dismisses settings without replacing the image', () => {
+  render(
+    <CameraView
+      ros={createMockRos() as any}
+      cameraTopic="/camera/image_raw"
+      availableTopics={['/camera/image_raw']}
+      onTopicChange={vi.fn()}
+      streamQuality="original"
+    />
+  );
+  const image = screen.getByRole('img');
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Camera settings' }));
+  expect(screen.getByRole('dialog', { name: 'Camera settings' })).toBeInTheDocument();
+  expect(screen.getByLabelText('Camera image source')).toHaveValue('stream');
+  fireEvent.keyDown(window, { key: 'Escape' });
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  expect(screen.getByRole('img')).toBe(image);
 });

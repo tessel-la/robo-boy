@@ -1,7 +1,13 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { McapWriter, TempBuffer } from '@mcap/core';
 import sharp from 'sharp';
-import { getActiveRosSubscriptionCount, getRosSubscriptionCount, installRosMock, publishRosMessage, waitForRosSubscription } from './helpers/rosMock';
+import {
+  getActiveRosSubscriptionCount,
+  getRosSubscriptionCount,
+  installRosMock,
+  publishRosMessage,
+  waitForRosSubscription,
+} from './helpers/rosMock';
 
 const imageTopic = '/front/image_rect/compressed';
 const rawTopic = '/front/image_raw';
@@ -58,6 +64,9 @@ async function pixels(canvas: Locator, color: 'red' | 'green' | 'blue') {
 async function openSettings(panel: Locator) {
   await panel.getByRole('button', { name: 'Settings', exact: true }).click();
   await panel.getByRole('tab', { name: /^Visualizations/ }).click();
+  while (await panel.locator('.visualization-options:not([open]) > summary').count()) {
+    await panel.locator('.visualization-options:not([open]) > summary').first().click();
+  }
 }
 async function addLayer(page: Page) {
   await page.getByLabel('Add workspace panel').first().click();
@@ -67,6 +76,9 @@ async function addLayer(page: Page) {
   await panel.getByRole('button', { name: 'Add visualization', exact: true }).click();
   await page.getByTitle(`Add Camera image (${imageTopic})`, { exact: true }).click();
   await panel.getByRole('tab', { name: /^Visualizations/ }).click();
+  while (await panel.locator('.visualization-options:not([open]) > summary').count()) {
+    await panel.locator('.visualization-options:not([open]) > summary').first().click();
+  }
   return panel;
 }
 

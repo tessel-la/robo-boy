@@ -20,10 +20,16 @@ test('saves mesh opacity per layer and updates it without resubscribing', async 
   await panel.getByRole('button', { name: 'Settings', exact: true }).click();
   for (const title of ['Add URDF (default: /robot_description)', 'Add Mesh markers (/objects)']) {
     await panel.getByRole('tab', { name: /^Visualizations/ }).click();
+    while (await panel.locator('.visualization-options:not([open]) > summary').count()) {
+      await panel.locator('.visualization-options:not([open]) > summary').first().click();
+    }
     await panel.getByRole('button', { name: 'Add visualization', exact: true }).click();
     await page.getByTitle(title, { exact: true }).click();
   }
   await panel.getByRole('tab', { name: /^Visualizations/ }).click();
+  while (await panel.locator('.visualization-options:not([open]) > summary').count()) {
+    await panel.locator('.visualization-options:not([open]) > summary').first().click();
+  }
   await waitForRosSubscription(page, '/robot_description');
   await waitForRosSubscription(page, '/objects');
   await publishRosMessage(page, '/robot_description', {
@@ -45,6 +51,9 @@ test('saves mesh opacity per layer and updates it without resubscribing', async 
   await connect();
   await panel.getByRole('button', { name: 'Settings', exact: true }).click();
   await panel.getByRole('tab', { name: /^Visualizations/ }).click();
+  while (await panel.locator('.visualization-options:not([open]) > summary').count()) {
+    await panel.locator('.visualization-options:not([open]) > summary').first().click();
+  }
   await expect(robot).toHaveValue('0.45');
   await expect(objects).toHaveValue('0.7');
 });

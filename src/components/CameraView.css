@@ -12,6 +12,7 @@
   border: 1px solid var(--border-color);
   border-radius: 8px;
   container-type: inline-size;
+  font-family: var(--font-family-ui);
 }
 /* Floating pills and round actions match the TF / BT canvas controls. */
 .camera-toolbar {
@@ -23,6 +24,7 @@
   display: flex;
   align-items: center;
   gap: 7px;
+  flex-wrap: nowrap;
   pointer-events: none;
 }
 .camera-toolbar > * {
@@ -33,12 +35,9 @@
   min-width: 0;
 }
 .camera-topic-field {
-  flex: 1 1 auto;
+  flex: 1 1 0;
   max-width: 360px;
   margin-right: auto;
-}
-.camera-quality-field {
-  flex: 0 0 110px;
 }
 .camera-toolbar select,
 .camera-refresh {
@@ -152,6 +151,7 @@
   align-items: center;
   flex: 1 1 0;
 }
+.camera-stream-container video,
 .camera-stream-container img,
 .camera-stream-container .shared-camera-frame {
   display: block;
@@ -169,6 +169,17 @@
 }
 .camera-stream-container .error-message {
   color: var(--error-color, #ff7373);
+}
+
+.camera-stream-container > video + .error-message {
+  position: absolute;
+  top: 50%;
+  left: 16px;
+  right: 16px;
+  transform: translateY(-50%);
+  border-radius: 8px;
+  background: var(--card-bg);
+  pointer-events: none;
 }
 /* Recorded cameras keep their topic control over the canvas. */
 .camera-topic-selector.overlay {
@@ -202,9 +213,6 @@
     border-radius: 22px;
     font-size: 16px;
   }
-  .camera-quality-field {
-    flex-basis: 120px;
-  }
   .camera-refresh {
     width: 44px;
     flex-basis: 44px;
@@ -221,4 +229,52 @@
 
 .camera-stream-container .shared-camera-frame[hidden] {
   display: none;
+}
+
+.camera-toolbar .tree-panel-menu-button {
+  height: 36px;
+  flex: 0 0 auto;
+}
+.camera-settings-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 58px;
+  padding: 12px 15px;
+  border-bottom: 1px solid var(--border-color);
+}
+.camera-settings-header h3 {
+  margin: 0;
+  font-size: 16px;
+}
+.camera-settings-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-secondary);
+}
+.camera-settings-close:hover {
+  background: var(--background-color);
+  color: var(--primary-color);
+}
+.camera-settings-content {
+  display: grid;
+  gap: 12px;
+  padding: 12px 15px;
+}
+@media (pointer: coarse) {
+  .camera-toolbar .tree-panel-menu-button,
+  .camera-settings-close {
+    min-height: 44px;
+  }
+  .camera-settings-close {
+    min-width: 44px;
+  }
 }

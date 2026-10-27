@@ -53,18 +53,39 @@ describe('SettingsPopup', () => {
 
   it('places camera calibration, image-plane and synchronization controls under the camera layer', () => {
     const update = vi.fn();
-    render(<SettingsPopup {...defaultProps} onUpdateVisualizationOptions={update}
-      activeVisualizations={[{ id: 'cam', type: 'cameraimage', topic: '/front/image_rect/compressed' }]}
-      allTopics={[{ name: '/front/camera_info', type: 'sensor_msgs/msg/CameraInfo' }]} />);
+    render(
+      <SettingsPopup
+        {...defaultProps}
+        onUpdateVisualizationOptions={update}
+        activeVisualizations={[{ id: 'cam', type: 'cameraimage', topic: '/front/image_rect/compressed' }]}
+        allTopics={[{ name: '/front/camera_info', type: 'sensor_msgs/msg/CameraInfo' }]}
+      />
+    );
     fireEvent.click(screen.getByRole('tab', { name: /Visualizations/ }));
-    expect(screen.getByLabelText('Image source for Camera image on /front/image_rect/compressed')).toHaveValue('stream');
+    expect(screen.getByLabelText('Image source for Camera image on /front/image_rect/compressed')).toHaveValue(
+      'stream'
+    );
+    const details = screen.getByLabelText('Display settings for Camera image on /front/image_rect/compressed')
+      .parentElement as HTMLDetailsElement;
+    expect(details.open).toBe(false);
+    details.open = true;
     expect(screen.getByRole('option', { name: 'Camera streamer' })).toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText('Image source for Camera image on /front/image_rect/compressed'), { target: { value: 'ros' } });
+    fireEvent.change(screen.getByLabelText('Image source for Camera image on /front/image_rect/compressed'), {
+      target: { value: 'ros' },
+    });
     expect(update).toHaveBeenLastCalledWith('cam', { imageSource: 'ros' });
-    expect(screen.getByLabelText('CameraInfo topic for Camera image on /front/image_rect/compressed')).toHaveValue('/front/camera_info');
-    expect(screen.getByLabelText('Image geometry for Camera image on /front/image_rect/compressed')).toHaveValue('rectified');
-    expect(screen.getByLabelText('Image plane distance in metres for Camera image on /front/image_rect/compressed')).toHaveValue(1);
-    fireEvent.change(screen.getByLabelText('Image opacity for Camera image on /front/image_rect/compressed'), { target: { value: '0.4' } });
+    expect(screen.getByLabelText('CameraInfo topic for Camera image on /front/image_rect/compressed')).toHaveValue(
+      '/front/camera_info'
+    );
+    expect(screen.getByLabelText('Image geometry for Camera image on /front/image_rect/compressed')).toHaveValue(
+      'rectified'
+    );
+    expect(
+      screen.getByLabelText('Image plane distance in metres for Camera image on /front/image_rect/compressed')
+    ).toHaveValue(1);
+    fireEvent.change(screen.getByLabelText('Image opacity for Camera image on /front/image_rect/compressed'), {
+      target: { value: '0.4' },
+    });
     expect(update).toHaveBeenLastCalledWith('cam', { opacity: 0.4 });
     fireEvent.click(screen.getByLabelText('Show frustum for Camera image on /front/image_rect/compressed'));
     expect(update).toHaveBeenLastCalledWith('cam', { showFrustum: false });
@@ -72,10 +93,21 @@ describe('SettingsPopup', () => {
 
   it('offers independent path/map visibility and appearance controls', () => {
     const onUpdate = vi.fn();
-    render(<SettingsPopup {...defaultProps} onUpdateVisualizationOptions={onUpdate} activeVisualizations={[
-      { id: 'plan', type: 'path', topic: '/robot/plan', options: { color: '#123456', lineWidth: 0.05, opacity: 0.4 } },
-      { id: 'map', type: 'occupancygrid', topic: '/robot/map', options: { visible: false } },
-    ]} />);
+    render(
+      <SettingsPopup
+        {...defaultProps}
+        onUpdateVisualizationOptions={onUpdate}
+        activeVisualizations={[
+          {
+            id: 'plan',
+            type: 'path',
+            topic: '/robot/plan',
+            options: { color: '#123456', lineWidth: 0.05, opacity: 0.4 },
+          },
+          { id: 'map', type: 'occupancygrid', topic: '/robot/map', options: { visible: false } },
+        ]}
+      />
+    );
     fireEvent.click(screen.getByRole('tab', { name: /Visualizations/ }));
     expect(screen.getByLabelText('Color for Path on /robot/plan')).toHaveValue('#123456');
     expect(screen.getByLabelText('Line width in metres for Path on /robot/plan')).toHaveValue(0.05);
@@ -281,17 +313,24 @@ describe('SettingsPopup', () => {
 
     it('offers mesh opacity on each URDF and mesh-marker layer independently', () => {
       const update = vi.fn();
-      render(<SettingsPopup {...defaultProps} onUpdateVisualizationOptions={update}
-        activeVisualizations={[
-          { id: 'robot', type: 'urdf', topic: '/robot_description', options: { opacity: 0.4 } },
-          { id: 'objects', type: 'markerarray', topic: '/objects' },
-          { id: 'cloud', type: 'pointcloud', topic: '/points' },
-        ]} />);
+      render(
+        <SettingsPopup
+          {...defaultProps}
+          onUpdateVisualizationOptions={update}
+          activeVisualizations={[
+            { id: 'robot', type: 'urdf', topic: '/robot_description', options: { opacity: 0.4 } },
+            { id: 'objects', type: 'markerarray', topic: '/objects' },
+            { id: 'cloud', type: 'pointcloud', topic: '/points' },
+          ]}
+        />
+      );
       fireEvent.click(screen.getByRole('tab', { name: /Visualizations/ }));
       expect(screen.getByLabelText('Mesh opacity for URDF on /robot_description')).toHaveValue('0.4');
       expect(screen.getByLabelText('Mesh opacity for Mesh markers on /objects')).toHaveValue('1');
       expect(screen.getAllByRole('slider')).toHaveLength(2);
-      fireEvent.change(screen.getByLabelText('Mesh opacity for URDF on /robot_description'), { target: { value: '0' } });
+      fireEvent.change(screen.getByLabelText('Mesh opacity for URDF on /robot_description'), {
+        target: { value: '0' },
+      });
       expect(update).toHaveBeenCalledWith('robot', { opacity: 0 });
     });
 

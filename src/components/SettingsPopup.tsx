@@ -12,6 +12,7 @@ import type { CameraImageOptions } from '../utils/images/cameraImageOptions';
 import type { TfDisplaySettings } from '../utils/visualizationState';
 import type { VisualizationConfig } from './VisualizationPanel';
 import './VisualizationPanel.css';
+import './PanelSettings.css';
 
 interface TopicInfo {
   name: string;
@@ -35,7 +36,10 @@ interface SettingsPopupProps {
   onRemoveVisualization: (id: string) => void;
   onAddVisualizationClick: () => void;
   onEditVisualization?: (id: string) => void;
-  onUpdateVisualizationOptions?: (id: string, options: MeshDisplayOptions | NavigationDisplayOptions | CameraImageOptions) => void;
+  onUpdateVisualizationOptions?: (
+    id: string,
+    options: MeshDisplayOptions | NavigationDisplayOptions | CameraImageOptions
+  ) => void;
   onUpdateVisualizationTopic?: (id: string, newTopic: string) => void;
   allTopics: TopicInfo[];
   visualizationStatus?: Record<string, string | null>;
@@ -114,7 +118,7 @@ const SettingsPopup: React.FC<SettingsPopupProps> = ({
 
   if (view === 'frameDisplay') {
     return (
-      <div className="settings-popup">
+      <div className="settings-popup panel-settings">
         <header className="settings-popup-header">
           <button
             type="button"
@@ -241,7 +245,7 @@ const SettingsPopup: React.FC<SettingsPopupProps> = ({
   }
 
   return (
-    <div className="settings-popup">
+    <div className="settings-popup panel-settings">
       <header className="settings-popup-header">
         <div className="settings-popup-heading">
           <span className="settings-popup-kicker">Panel controls</span>
@@ -378,99 +382,143 @@ const SettingsPopup: React.FC<SettingsPopupProps> = ({
             id="settings-tabpanel-visualizations"
             aria-labelledby="settings-tab-visualizations"
           >
-            <button type="button" className="settings-nav-row is-primary" onClick={onAddVisualizationClick} aria-label="Add visualization">
+            <button
+              type="button"
+              className="settings-nav-row is-primary"
+              onClick={onAddVisualizationClick}
+              aria-label="Add visualization"
+            >
               <FiPlus aria-hidden="true" />
               <span>Add visualization</span>
             </button>
-          {activeVisualizations.length > 0 ? (
-            <ul>
-              {activeVisualizations.map(viz => {
-                const compatibleTopics = compatibleTopicsFor(viz.type);
-                const currentTopicIsDiscovered = compatibleTopics.some(topic => topic.name === viz.topic);
-                const selectId = `visualization-topic-${viz.id}`;
+            {activeVisualizations.length > 0 ? (
+              <ul>
+                {activeVisualizations.map(viz => {
+                  const compatibleTopics = compatibleTopicsFor(viz.type);
+                  const currentTopicIsDiscovered = compatibleTopics.some(topic => topic.name === viz.topic);
+                  const selectId = `visualization-topic-${viz.id}`;
 
-                return (
-                  <li key={viz.id} className="visualization-item">
-                    {visualizationStatus?.[viz.id] && <p role="status" className="visualization-status">{visualizationStatus[viz.id]}</p>}
-                    <div className="visualization-item-heading">
-                      <span className="viz-type">{TYPE_LABELS[viz.type]}</span>
-                      <div className="visualization-item-actions">
-                        {CONFIGURABLE_TYPES.has(viz.type) && onEditVisualization && (
+                  return (
+                    <li key={viz.id} className="visualization-item">
+                      {visualizationStatus?.[viz.id] && (
+                        <p role="status" className="visualization-status">
+                          {visualizationStatus[viz.id]}
+                        </p>
+                      )}
+                      <div className="visualization-item-heading">
+                        <span className="viz-type">{TYPE_LABELS[viz.type]}</span>
+                        <div className="visualization-item-actions">
+                          {CONFIGURABLE_TYPES.has(viz.type) && onEditVisualization && (
+                            <button
+                              type="button"
+                              className="viz-settings-button"
+                              onClick={() => handleEditClick(viz.id)}
+                              title={`Configure ${TYPE_LABELS[viz.type]}`}
+                              aria-label={`Edit ${TYPE_LABELS[viz.type]} visualization for topic ${viz.topic}`}
+                            >
+                              <FaCog aria-hidden="true" />
+                            </button>
+                          )}
                           <button
                             type="button"
-                            className="viz-settings-button"
-                            onClick={() => handleEditClick(viz.id)}
-                            title={`Configure ${TYPE_LABELS[viz.type]}`}
-                            aria-label={`Edit ${TYPE_LABELS[viz.type]} visualization for topic ${viz.topic}`}
+                            className="remove-viz-button"
+                            onClick={() => onRemoveVisualization(viz.id)}
+                            title="Remove visualization"
+                            aria-label={`Remove ${TYPE_LABELS[viz.type]} visualization for topic ${viz.topic}`}
                           >
-                            <FaCog aria-hidden="true" />
+                            <FiTrash2 aria-hidden="true" />
                           </button>
-                        )}
-                        <button
-                          type="button"
-                          className="remove-viz-button"
-                          onClick={() => onRemoveVisualization(viz.id)}
-                          title="Remove visualization"
-                          aria-label={`Remove ${TYPE_LABELS[viz.type]} visualization for topic ${viz.topic}`}
-                        >
-                          <FiTrash2 aria-hidden="true" />
-                        </button>
-                      </div>
-                    </div>
-
-                    <label className="viz-topic-label" htmlFor={selectId}>
-                      Topic
-                    </label>
-                    <div className="topic-dropdown-container">
-                      <select
-                        id={selectId}
-                        value={viz.topic}
-                        onChange={event => handleTopicChange(viz.id, event)}
-                        className="topic-dropdown"
-                        title={viz.topic}
-                      >
-                        {!currentTopicIsDiscovered && <option value={viz.topic}>{viz.topic} (current)</option>}
-                        {compatibleTopics.length > 0 ? (
-                          compatibleTopics.map(topic => (
-                            <option key={topic.name} value={topic.name}>
-                              {topic.name}
-                            </option>
-                          ))
-                        ) : (
-                          <option value="" disabled>
-                            No compatible topics available
-                          </option>
-                        )}
-                      </select>
-                    </div>
-                    {(viz.type === 'path' || viz.type === 'occupancygrid') && onUpdateVisualizationOptions && (
-                      <NavigationLayerSettings id={viz.id} type={viz.type} topic={viz.topic}
-                        options={viz.options as NavigationDisplayOptions} onChange={onUpdateVisualizationOptions} />
-                    )}
-                    {viz.type === 'cameraimage' && onUpdateVisualizationOptions && <CameraImageSettings id={viz.id} topic={viz.topic}
-                      options={viz.options as CameraImageOptions} topics={allTopics} onChange={onUpdateVisualizationOptions} />}
-                    {(viz.type === 'urdf' || viz.type === 'markerarray') && onUpdateVisualizationOptions && (
-                      <div className="tf-scale-control">
-                        <div className="control-heading-row">
-                          <label htmlFor={`mesh-opacity-${viz.id}`}>Mesh opacity</label>
-                          <output htmlFor={`mesh-opacity-${viz.id}`} className="range-value">
-                            {Math.round(normalizeMeshOpacity((viz.options as MeshDisplayOptions)?.opacity) * 100)}%
-                          </output>
                         </div>
-                        <input type="range" id={`mesh-opacity-${viz.id}`} min="0" max="1" step="0.05"
-                          aria-label={`Mesh opacity for ${TYPE_LABELS[viz.type]} on ${viz.topic}`}
-                          value={normalizeMeshOpacity((viz.options as MeshDisplayOptions)?.opacity)}
-                          onChange={event => onUpdateVisualizationOptions(viz.id, { opacity: Number(event.target.value) })}
-                          className="range-input" />
                       </div>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
-          ) : (
-            <p className="no-visualizations-message">No active visualizations.</p>
-          )}
+
+                      <label className="viz-topic-label" htmlFor={selectId}>
+                        Topic
+                      </label>
+                      <div className="topic-dropdown-container">
+                        <select
+                          id={selectId}
+                          value={viz.topic}
+                          onChange={event => handleTopicChange(viz.id, event)}
+                          className="topic-dropdown"
+                          title={viz.topic}
+                        >
+                          {!currentTopicIsDiscovered && <option value={viz.topic}>{viz.topic} (current)</option>}
+                          {compatibleTopics.length > 0 ? (
+                            compatibleTopics.map(topic => (
+                              <option key={topic.name} value={topic.name}>
+                                {topic.name}
+                              </option>
+                            ))
+                          ) : (
+                            <option value="" disabled>
+                              No compatible topics available
+                            </option>
+                          )}
+                        </select>
+                      </div>
+                      {onUpdateVisualizationOptions &&
+                        ['path', 'occupancygrid', 'cameraimage', 'urdf', 'markerarray'].includes(viz.type) && (
+                          <details className="visualization-options">
+                            <summary aria-label={`Display settings for ${TYPE_LABELS[viz.type]} on ${viz.topic}`}>
+                              <FiSettings aria-hidden="true" />
+                              <span>Display settings</span>
+                            </summary>
+                            <div className="visualization-options-content">
+                              {(viz.type === 'path' || viz.type === 'occupancygrid') &&
+                                onUpdateVisualizationOptions && (
+                                  <NavigationLayerSettings
+                                    id={viz.id}
+                                    type={viz.type}
+                                    topic={viz.topic}
+                                    options={viz.options as NavigationDisplayOptions}
+                                    onChange={onUpdateVisualizationOptions}
+                                  />
+                                )}
+                              {viz.type === 'cameraimage' && onUpdateVisualizationOptions && (
+                                <CameraImageSettings
+                                  id={viz.id}
+                                  topic={viz.topic}
+                                  options={viz.options as CameraImageOptions}
+                                  topics={allTopics}
+                                  onChange={onUpdateVisualizationOptions}
+                                />
+                              )}
+                              {(viz.type === 'urdf' || viz.type === 'markerarray') && onUpdateVisualizationOptions && (
+                                <div className="tf-scale-control">
+                                  <div className="control-heading-row">
+                                    <label htmlFor={`mesh-opacity-${viz.id}`}>Mesh opacity</label>
+                                    <output htmlFor={`mesh-opacity-${viz.id}`} className="range-value">
+                                      {Math.round(
+                                        normalizeMeshOpacity((viz.options as MeshDisplayOptions)?.opacity) * 100
+                                      )}
+                                      %
+                                    </output>
+                                  </div>
+                                  <input
+                                    type="range"
+                                    id={`mesh-opacity-${viz.id}`}
+                                    min="0"
+                                    max="1"
+                                    step="0.05"
+                                    aria-label={`Mesh opacity for ${TYPE_LABELS[viz.type]} on ${viz.topic}`}
+                                    value={normalizeMeshOpacity((viz.options as MeshDisplayOptions)?.opacity)}
+                                    onChange={event =>
+                                      onUpdateVisualizationOptions(viz.id, { opacity: Number(event.target.value) })
+                                    }
+                                    className="range-input"
+                                  />
+                                </div>
+                              )}
+                            </div>
+                          </details>
+                        )}
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : (
+              <p className="no-visualizations-message">No active visualizations.</p>
+            )}
           </section>
         )}
       </div>

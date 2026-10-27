@@ -6,6 +6,7 @@ import type { CameraImageOptions } from '../../utils/images/cameraImageOptions';
 import { useRuntimeConfig } from '../../runtime/runtimeConfig';
 import { normalizeCameraImageOptions } from '../../utils/images/cameraImageOptions';
 import { subscribeToProjectionImages } from '../../utils/images/cameraProjectionSource';
+import { isReplayRos } from '../../features/recordReplay/ReplaySession';
 import { CameraImageClient } from '../../utils/ros3d/visualizers/CameraImage';
 
 export default memo(function CameraImageViz({
@@ -46,6 +47,7 @@ export default memo(function CameraImageViz({
       subscribeImages: listener =>
         subscribeToProjectionImages(
           {
+            ...normalized,
             ros,
             topic,
             messageType,
@@ -55,7 +57,20 @@ export default memo(function CameraImageViz({
           },
           listener
         ),
-      onStatus: value => latest.current.onStatus(id, value),
+      onStatus: value =>
+        latest.current.onStatus(
+          id,
+          [
+            !isReplayRos(ros) &&
+            normalized.imageSource !== 'ros' &&
+            (normalized.videoTiming === 'latest' || normalized.imageSource === 'webrtc')
+              ? 'Latest TF; video is not time-synchronized.'
+              : null,
+            value,
+          ]
+            .filter(Boolean)
+            .join(' ') || null
+        ),
     });
     client.current = instance;
     return () => {
@@ -72,6 +87,11 @@ export default memo(function CameraImageViz({
     videoStreamBaseUrl,
     normalized.imageSource,
     normalized.streamQuality,
+    normalized.projectionFps,
+    normalized.whepUrl,
+    normalized.videoTiming,
+    normalized.opticalFrame,
+    normalized.cameraInfoTopic,
   ]);
   useEffect(() => {
     client.current?.updateOptions(options);

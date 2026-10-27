@@ -1,13 +1,18 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import type { Ros } from 'roslib';
+import { subscribeToWebRtcFrames } from './webrtcStreams';
 import { subscribeToProjectionImages } from './cameraProjectionSource';
-import { subscribeToImages } from './cameraStreams';
+import { subscribeToImages, subscribeToCameraInfo } from './cameraStreams';
 import { subscribeToMjpeg } from './mjpegStreams';
 import { probeCameraSourceSize } from '../cameraStreamQuality';
 import { isReplayRos } from '../../features/recordReplay/ReplaySession';
 import type { ImageEvent } from './sharedImageFrame';
 
-vi.mock('./cameraStreams', () => ({ subscribeToImages: vi.fn(() => vi.fn()) }));
+vi.mock('./webrtcStreams', () => ({ subscribeToWebRtcFrames: vi.fn(() => vi.fn()) }));
+vi.mock('./cameraStreams', () => ({
+  subscribeToImages: vi.fn(() => vi.fn()),
+  subscribeToCameraInfo: vi.fn(() => vi.fn()),
+}));
 vi.mock('./mjpegStreams', () => ({ subscribeToMjpeg: vi.fn(() => vi.fn()) }));
 vi.mock('../../features/recordReplay/ReplaySession', () => ({ isReplayRos: vi.fn(() => false) }));
 vi.mock('../cameraStreamQuality', async importOriginal => ({
@@ -149,4 +154,90 @@ it('samples only projection callbacks while keeping the shared stream subscribed
   stop();
   now.mockRestore();
   expect(stopVideo).toHaveBeenCalledOnce();
+});
+
+it('projects standard MJPEG using explicitly selected latest TF and CameraInfo without metadata', async () => {
+  vi.stubGlobal('createImageBitmap', vi.fn());
+  const listener = vi.fn(),
+    stopInfo = vi.fn();
+  vi.mocked(subscribeToCameraInfo).mockImplementationOnce((_ros, _topic, receive) => {
+    receive({ samples: [{ frame: 'optical' }] as any, error: null });
+    return stopInfo;
+  });
+  let receive!: (event: ImageEvent) => void;
+  vi.mocked(subscribeToMjpeg).mockImplementationOnce((_ros, _url, _base, callback) => {
+    receive = callback;
+    return vi.fn();
+  });
+  const stop = subscribeToProjectionImages(
+    { ...config, videoTiming: 'latest', cameraInfoTopic: '/camera/camera_info' },
+    listener
+  );
+  await flush();
+  receive({ frame: { projectionError: 'No metadata', image: { width: 320, height: 240 } } as any, error: null });
+  expect(listener.mock.lastCall![0].frame.header).toEqual({ frame_id: 'optical', stamp: { sec: 0, nanosec: 0 } });
+  expect(listener.mock.lastCall![0].frame.projectionError).toBeUndefined();
+  expect(listener.mock.lastCall![0].frame.sourceSize).toEqual({ width: 640, height: 480 });
+  expect(subscribeToImages).not.toHaveBeenCalled();
+  stop();
+  expect(stopInfo).toHaveBeenCalledOnce();
+});
+
+it('maps ordinary WebRTC frames to explicitly selected calibration without metadata or MJPEG requests', () => {
+  const listener = vi.fn(),
+    stopInfo = vi.fn();
+  vi.mocked(subscribeToCameraInfo).mockImplementationOnce((_ros, _topic, receive) => {
+    receive({ samples: [{ frame: 'selected_optical' }] as any, error: null });
+    return stopInfo;
+  });
+  let receive!: (event: ImageEvent) => void;
+  vi.mocked(subscribeToWebRtcFrames).mockImplementationOnce((_ros, _url, callback) => {
+    receive = callback;
+    return vi.fn();
+  });
+  const stop = subscribeToProjectionImages(
+    { ...config, source: 'webrtc', whepUrl: 'https://camera.example/whep', cameraInfoTopic: '/camera/camera_info' },
+    listener
+  );
+  receive({ frame: { image: { width: 640, height: 480 } } as any, error: null });
+  expect(listener.mock.lastCall![0].frame.header).toEqual({
+    frame_id: 'selected_optical',
+    stamp: { sec: 0, nanosec: 0 },
+  });
+  expect(probeCameraSourceSize).not.toHaveBeenCalled();
+  expect(subscribeToMjpeg).not.toHaveBeenCalled();
+  expect(subscribeToImages).not.toHaveBeenCalled();
+  stop();
+  expect(stopInfo).toHaveBeenCalledOnce();
+});
+it('replay bypasses saved WebRTC settings without contacting the stream', () => {
+  vi.mocked(isReplayRos).mockReturnValueOnce(true);
+  const stop = subscribeToProjectionImages(
+    { ...config, source: 'webrtc', whepUrl: 'https://camera.example/whep' },
+    vi.fn()
+  );
+  expect(subscribeToImages).toHaveBeenCalledOnce();
+  expect(subscribeToWebRtcFrames).not.toHaveBeenCalled();
+  stop();
+});
+
+it('can follow the MJPEG source rate without affecting the shared subscription', async () => {
+  vi.stubGlobal('createImageBitmap', vi.fn());
+  const now = vi.spyOn(performance, 'now');
+  let receive!: (event: ImageEvent) => void;
+  vi.mocked(subscribeToMjpeg).mockImplementationOnce((_ros, _url, _base, callback) => {
+    receive = callback;
+    return vi.fn();
+  });
+  const listener = vi.fn(),
+    stop = subscribeToProjectionImages({ ...config, projectionFps: 0 }, listener);
+  await flush();
+  for (let time = 0; time <= 300; time += 20) {
+    now.mockReturnValue(time);
+    receive({ frame: { header: { frame_id: 'optical', stamp: { sec: 1, nanosec: 0 } } } as any, error: null });
+  }
+  expect(listener).toHaveBeenCalledTimes(16);
+  expect(subscribeToMjpeg).toHaveBeenCalledOnce();
+  stop();
+  now.mockRestore();
 });
