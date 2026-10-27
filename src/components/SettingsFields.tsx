@@ -54,6 +54,38 @@ export const SelectField: React.FC<{
   </div>
 );
 
+/** A labelled line of text, committed on blur or Enter. */
+export const TextField: React.FC<{
+  id: string;
+  label: string;
+  ariaLabel?: string;
+  value: string;
+  placeholder?: string;
+  onChange: (value: string) => void;
+}> = ({ id, label, ariaLabel, value, placeholder, onChange }) => (
+  <div className="settings-field">
+    <label className="viz-topic-label" htmlFor={id}>
+      {label}
+    </label>
+    <input
+      key={value}
+      id={id}
+      type="text"
+      className="settings-text-input"
+      aria-label={ariaLabel}
+      defaultValue={value}
+      placeholder={placeholder}
+      onBlur={event => {
+        const next = event.currentTarget.value.trim();
+        if (next !== value) onChange(next);
+      }}
+      onKeyDown={event => {
+        if (event.key === 'Enter') event.currentTarget.blur();
+      }}
+    />
+  </div>
+);
+
 /** A label with a colour swatch that opens the system picker. */
 export const ColorField: React.FC<{
   id: string;

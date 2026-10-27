@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { FiCamera, FiChevronDown, FiRefreshCw } from 'react-icons/fi';
+import { FiCamera, FiChevronDown, FiRefreshCw, FiX } from 'react-icons/fi';
 import type { Ros } from 'roslib';
 import './CameraView.css';
+import './PanelSettings.css';
+import TreePanelMenu from '../features/treePanel/components/TreePanelMenu';
 import { useRuntimeConfig } from '../runtime/runtimeConfig';
 import { buildCameraStreamUrl } from '../utils/cameraStreamUrl';
 import { createUuid } from '../utils/uuid';
@@ -16,6 +18,11 @@ import {
 } from '../utils/cameraStreamQuality';
 import SafeCameraImage from './SafeCameraImage';
 import SharedCameraImage from './SharedCameraImage';
+import WebRtcCameraVideo from './WebRtcCameraVideo';
+import WebRtcSourceSettings from './WebRtcSourceSettings';
+import RosCameraImage from './RosCameraImage';
+import type { CameraImageOptions } from '../utils/images/cameraImageOptions';
+import { normalizeCameraImageOptions } from '../utils/images/cameraImageOptions';
 
 const PANEL_RESIZE_SETTLE_MS = 300;
 
@@ -52,6 +59,8 @@ interface CameraViewProps {
   selectId?: string;
   /** Stream preset; uncontrolled (starting at Auto) when no change handler is given. */
   streamQuality?: CameraStreamQuality;
+  sourceOptions?: CameraImageOptions;
+  onSourceOptionsChange?: (patch: CameraImageOptions) => void;
   onStreamQualityChange?: (quality: CameraStreamQuality) => void;
   onRefreshTopics?: () => Promise<boolean>;
   refreshingTopics?: boolean;
@@ -68,12 +77,22 @@ const CameraView: React.FC<CameraViewProps> = ({
   onTopicChange,
   selectId = 'camera-topic-select',
   streamQuality,
+  sourceOptions,
+  onSourceOptionsChange,
   onStreamQualityChange,
   onRefreshTopics,
   refreshingTopics = false,
   topicsError = '',
 }) => {
   const { videoStreamBaseUrl } = useRuntimeConfig();
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [localOptions, setLocalOptions] = useState<CameraImageOptions>({});
+  const settings = normalizeCameraImageOptions(onSourceOptionsChange ? sourceOptions : localOptions, cameraTopic);
+  const setOptions = (patch: CameraImageOptions) => {
+    if (onSourceOptionsChange) onSourceOptionsChange(patch);
+    else setLocalOptions(previous => ({ ...previous, ...patch }));
+  };
+  const imageSource = settings.imageSource;
   const [streamUrl, setStreamUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [streamRevision, setStreamRevision] = useState<string>();
@@ -87,7 +106,7 @@ const CameraView: React.FC<CameraViewProps> = ({
   const sourceKey = `${videoStreamBaseUrl}\n${cameraTopic}`;
   const isTopicLive = Boolean(ros && ros.isConnected && cameraTopic && availableTopics.includes(cameraTopic));
   const explicitSize = Boolean(streamWidth || streamHeight);
-  const needsSourceSize = !explicitSize && Boolean(CAMERA_STREAM_PRESETS[quality].maxWidth);
+  const needsSourceSize = imageSource === 'stream' && !explicitSize && Boolean(CAMERA_STREAM_PRESETS[quality].maxWidth);
   const sourceSize = source?.key === sourceKey ? source.size : undefined;
   const latestSourceKey = useRef(sourceKey);
   latestSourceKey.current = sourceKey;
@@ -100,7 +119,7 @@ const CameraView: React.FC<CameraViewProps> = ({
 
   const refreshCamera = async () => {
     const generation = ++refreshGeneration.current;
-    const refreshed = onRefreshTopics ? await onRefreshTopics() : true;
+    const refreshed = imageSource === 'webrtc' ? true : onRefreshTopics ? await onRefreshTopics() : true;
     if (refreshed && generation === refreshGeneration.current) setStreamRevision(createUuid());
   };
 
@@ -122,6 +141,11 @@ const CameraView: React.FC<CameraViewProps> = ({
     // multipart response, which WebKitGTK 2.52.6 dereferences null on: it takes the whole
     // renderer down, so the window freezes on its last frame. A saved layout outlives the
     // topics it was built against, so availability is checked rather than assumed.
+    if (imageSource !== 'stream') {
+      setStreamUrl(null);
+      setError(null);
+      return;
+    }
     if (isTopicLive) {
       const awaitingPanelSize =
         !explicitSize && CAMERA_STREAM_PRESETS[quality].fitPanel && typeof ResizeObserver !== 'undefined' && !panelSize;
@@ -171,6 +195,7 @@ const CameraView: React.FC<CameraViewProps> = ({
     cameraTopic,
     availableTopics.length,
     isTopicLive,
+    imageSource,
     streamType,
     streamWidth,
     streamHeight,
@@ -185,65 +210,122 @@ const CameraView: React.FC<CameraViewProps> = ({
 
   return (
     <div className="camera-view">
-      <div className="camera-toolbar" aria-label="Camera controls">
-        <div className="camera-field camera-topic-field">
-          <FiCamera className="camera-topic-icon" aria-hidden="true" />
-          <select
-            id={selectId}
-            aria-label="Camera topic"
-            value={cameraTopic}
-            disabled={!availableTopics.length}
-            title={cameraTopic || 'Choose a camera topic'}
-            onChange={event => onTopicChange(event.target.value)}
-          >
-            {!availableTopics.includes(cameraTopic) && (
-              <option value={cameraTopic} disabled>
-                {cameraTopic ? `${cameraTopic} (unavailable)` : 'No topic selected'}
-              </option>
+      <TreePanelMenu
+        open={settingsOpen}
+        onOpen={() => setSettingsOpen(true)}
+        onClose={() => setSettingsOpen(false)}
+        buttonLabel="Camera settings"
+        buttonTitle="Camera settings"
+        panelLabel="Camera settings"
+        triggerBarClassName="camera-toolbar"
+        triggerContent={<span>Camera</span>}
+        triggerAfter={
+          <>
+            {imageSource !== 'webrtc' && (
+              <div className="camera-field camera-topic-field">
+                <FiCamera className="camera-topic-icon" aria-hidden="true" />
+                <select
+                  id={selectId}
+                  aria-label="Camera topic"
+                  value={cameraTopic}
+                  disabled={!availableTopics.length}
+                  title={cameraTopic || 'Choose a camera topic'}
+                  onChange={event => onTopicChange(event.target.value)}
+                >
+                  {!availableTopics.includes(cameraTopic) && (
+                    <option value={cameraTopic} disabled>
+                      {cameraTopic ? `${cameraTopic} (unavailable)` : 'No topic selected'}
+                    </option>
+                  )}
+                  {availableTopics.map(topic => (
+                    <option key={topic} value={topic}>
+                      {topic}
+                    </option>
+                  ))}
+                </select>
+                <FiChevronDown className="camera-select-chevron" aria-hidden="true" />
+              </div>
             )}
-            {availableTopics.map(topic => (
-              <option key={topic} value={topic}>
-                {topic}
-              </option>
-            ))}
-          </select>
-          <FiChevronDown className="camera-select-chevron" aria-hidden="true" />
-        </div>
-        <div className="camera-field camera-quality-field">
-          <select
-            id={`${selectId}-quality`}
-            aria-label="Stream quality"
-            title="Auto fits this panel. Original uses full-size frames and more bandwidth."
-            value={quality}
-            onChange={event => setQuality(event.target.value as CameraStreamQuality)}
-          >
-            {CAMERA_STREAM_QUALITIES.map(option => (
-              <option key={option} value={option}>
-                {CAMERA_STREAM_PRESETS[option].label}
-              </option>
-            ))}
-          </select>
-          <FiChevronDown className="camera-select-chevron" aria-hidden="true" />
-        </div>
-        <button
-          type="button"
-          className="camera-refresh"
-          aria-label="Refresh camera topics and stream"
-          title={refreshingTopics ? 'Refreshing camera topics…' : 'Refresh camera topics and retry the stream'}
-          disabled={!ros?.isConnected || refreshingTopics}
-          aria-busy={refreshingTopics}
-          onClick={() => void refreshCamera()}
-        >
-          <FiRefreshCw aria-hidden="true" />
-        </button>
-      </div>
-      {topicsError && (
+            <button
+              type="button"
+              className="camera-refresh"
+              aria-label="Refresh camera topics and stream"
+              title={refreshingTopics ? 'Refreshing camera topics…' : 'Refresh camera topics and retry the stream'}
+              disabled={(imageSource !== 'webrtc' && !ros?.isConnected) || refreshingTopics}
+              aria-busy={refreshingTopics}
+              onClick={() => void refreshCamera()}
+            >
+              <FiRefreshCw aria-hidden="true" />
+            </button>
+          </>
+        }
+        menuContent={
+          <div className="camera-settings panel-settings">
+            <header className="camera-settings-header">
+              <h3>Camera</h3>
+              <button
+                type="button"
+                className="camera-settings-close"
+                aria-label="Close camera settings"
+                onClick={() => setSettingsOpen(false)}
+              >
+                <FiX aria-hidden="true" />
+              </button>
+            </header>
+            <div className="camera-settings-content">
+              <label className="panel-settings-field">
+                <span>Image source</span>
+                <select
+                  aria-label="Camera image source"
+                  value={imageSource}
+                  onChange={event =>
+                    setOptions({ imageSource: event.target.value as CameraImageOptions['imageSource'] })
+                  }
+                >
+                  <option value="stream">Camera streamer</option>
+                  <option value="ros">ROS messages</option>
+                  <option value="webrtc">WebRTC</option>
+                </select>
+              </label>
+              {imageSource === 'stream' && (
+                <label className="panel-settings-field">
+                  <span>Stream quality</span>
+                  <select
+                    id={`${selectId}-quality`}
+                    aria-label="Stream quality"
+                    title="Auto fits this panel. Original uses full-size frames and more bandwidth."
+                    value={quality}
+                    onChange={event => setQuality(event.target.value as CameraStreamQuality)}
+                  >
+                    {CAMERA_STREAM_QUALITIES.map(option => (
+                      <option key={option} value={option}>
+                        {CAMERA_STREAM_PRESETS[option].label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+
+              {imageSource === 'webrtc' && <WebRtcSourceSettings value={settings} onChange={setOptions} />}
+            </div>
+          </div>
+        }
+      />
+      {imageSource !== 'webrtc' && topicsError && (
         <p className="camera-discovery-error" role="alert">
           {topicsError}
         </p>
       )}
       <div className="camera-stream-container" ref={setContainer}>
-        {error ? (
+        {imageSource === 'webrtc' ? (
+          <WebRtcCameraVideo key={streamRevision} ros={ros} url={settings.whepUrl} />
+        ) : imageSource === 'ros' ? (
+          isTopicLive ? (
+            <RosCameraImage key={streamRevision} ros={ros} topic={cameraTopic} />
+          ) : (
+            <div className="placeholder">Waiting for the selected ROS camera topic.</div>
+          )
+        ) : error ? (
           <div className="error-message">{error}</div>
         ) : streamUrl && isTopicLive ? (
           streamType === 'mjpeg' ? (

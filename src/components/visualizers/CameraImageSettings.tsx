@@ -1,5 +1,6 @@
 import ScaleField from '../ScaleField';
-import { NumberField, PercentField, SelectField, ToggleRow } from '../SettingsFields';
+import WebRtcSourceSettings from '../WebRtcSourceSettings';
+import { NumberField, PercentField, SelectField, TextField, ToggleRow } from '../SettingsFields';
 import { CAMERA_STREAM_PRESETS } from '../../utils/cameraStreamQuality';
 import { CAMERA_INFO_TYPES } from '../../utils/images/cameraCalibration';
 import {
@@ -27,6 +28,8 @@ export default function CameraImageSettings({
   );
   const infoTopics = topics.filter(item => CAMERA_INFO_TYPES.includes(item.type));
   const label = `Camera image on ${topic}`;
+  const isVideo = values.imageSource !== 'ros';
+  const usesLatestTf = values.imageSource === 'webrtc' || (values.imageSource === 'stream' && values.videoTiming === 'latest');
   return (
     <div className="layer-settings">
       <ToggleRow
@@ -40,22 +43,68 @@ export default function CameraImageSettings({
         label="Image source"
         ariaLabel={`Image source for ${label}`}
         value={values.imageSource}
-        onChange={imageSource => onChange(id, { imageSource: imageSource as 'ros' | 'stream' })}
+        onChange={imageSource =>
+          onChange(id, {
+            imageSource: imageSource as CameraImageOptions['imageSource'],
+            ...(imageSource === 'webrtc' ? { videoTiming: 'latest' as const } : {}),
+          })
+        }
       >
         <option value="stream">Camera streamer</option>
         <option value="ros">ROS image messages</option>
+        <option value="webrtc">WebRTC</option>
       </SelectField>
       {values.imageSource === 'stream' && (
+        <>
+          <SelectField
+            id={`camera-quality-${id}`}
+            label="Stream quality"
+            ariaLabel={`Stream quality for ${label}`}
+            value={values.streamQuality}
+            onChange={quality => onChange(id, { streamQuality: quality as CameraImageOptions['streamQuality'] })}
+          >
+            {(['low', 'medium', 'high', 'original'] as const).map(quality => (
+              <option key={quality} value={quality}>
+                {CAMERA_STREAM_PRESETS[quality].label}
+              </option>
+            ))}
+          </SelectField>
+          <SelectField
+            id={`camera-timing-${id}`}
+            label="TF timing"
+            ariaLabel={`TF timing for ${label}`}
+            value={values.videoTiming}
+            onChange={videoTiming => onChange(id, { videoTiming: videoTiming as 'capture' | 'latest' })}
+          >
+            <option value="capture">Capture time (requires frame timestamps)</option>
+            <option value="latest">Latest TF (not time-synchronized)</option>
+          </SelectField>
+        </>
+      )}
+      {values.imageSource === 'webrtc' && (
+        <WebRtcSourceSettings value={values} onChange={patch => onChange(id, patch)} />
+      )}
+      {usesLatestTf && (
+        <TextField
+          id={`camera-optical-frame-${id}`}
+          label="Optical frame override"
+          ariaLabel={`Optical frame for ${label}`}
+          value={values.opticalFrame}
+          placeholder="Use selected CameraInfo frame"
+          onChange={opticalFrame => onChange(id, { opticalFrame })}
+        />
+      )}
+      {isVideo && (
         <SelectField
-          id={`camera-quality-${id}`}
-          label="Stream quality"
-          ariaLabel={`Stream quality for ${label}`}
-          value={values.streamQuality}
-          onChange={quality => onChange(id, { streamQuality: quality as CameraImageOptions['streamQuality'] })}
+          id={`camera-projection-rate-${id}`}
+          label="Projection update rate"
+          ariaLabel={`Projection update rate for ${label}`}
+          value={String(values.projectionFps)}
+          onChange={fps => onChange(id, { projectionFps: Number(fps) })}
         >
-          {(['low', 'medium', 'high', 'original'] as const).map(quality => (
-            <option key={quality} value={quality}>
-              {CAMERA_STREAM_PRESETS[quality].label}
+          {[0, 5, 10, 15, 30, 60].map(fps => (
+            <option key={fps} value={fps}>
+              {fps ? `${fps} fps` : 'Source frame rate'}
             </option>
           ))}
         </SelectField>
@@ -112,29 +161,33 @@ export default function CameraImageSettings({
         checked={values.showFrustum}
         onChange={showFrustum => onChange(id, { showFrustum })}
       />
-      <SelectField
-        id={`camera-sync-${id}`}
-        label="Calibration timing"
-        ariaLabel={`Calibration timing for ${label}`}
-        value={values.calibrationSync}
-        onChange={calibrationSync => onChange(id, { calibrationSync: calibrationSync as 'exact' | 'latest' })}
-      >
-        <option value="exact">Match image timestamp</option>
-        <option value="latest">Latest (static calibration)</option>
-      </SelectField>
-      {values.calibrationSync === 'exact' && (
-        <div className="viz-settings-group">
-          <NumberField
-            id={`camera-tolerance-${id}`}
-            label="Tolerance"
-            ariaLabel={`Calibration tolerance in milliseconds for ${label}`}
-            value={values.toleranceMs}
-            unit="ms"
-            min={0}
-            max={1000}
-            onChange={toleranceMs => onChange(id, { toleranceMs })}
-          />
-        </div>
+      {!usesLatestTf && (
+        <>
+          <SelectField
+            id={`camera-sync-${id}`}
+            label="Calibration timing"
+            ariaLabel={`Calibration timing for ${label}`}
+            value={values.calibrationSync}
+            onChange={calibrationSync => onChange(id, { calibrationSync: calibrationSync as 'exact' | 'latest' })}
+          >
+            <option value="exact">Match image timestamp</option>
+            <option value="latest">Latest (static calibration)</option>
+          </SelectField>
+          {values.calibrationSync === 'exact' && (
+            <div className="viz-settings-group">
+              <NumberField
+                id={`camera-tolerance-${id}`}
+                label="Tolerance"
+                ariaLabel={`Calibration tolerance in milliseconds for ${label}`}
+                value={values.toleranceMs}
+                unit="ms"
+                min={0}
+                max={1000}
+                onChange={toleranceMs => onChange(id, { toleranceMs })}
+              />
+            </div>
+          )}
+        </>
       )}
     </div>
   );

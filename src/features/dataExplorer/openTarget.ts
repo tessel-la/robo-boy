@@ -1,3 +1,4 @@
+import { DEFAULT_NEW_CAMERA_IMAGE_OPTIONS } from '../../utils/images/cameraImageOptions';
 import type { RoboBoyJsonObject } from '../../panels/types';
 import type { VisualizationPanelState } from '../../utils/visualizationState';
 import { defaultRecordOptions } from '../recordReplay/types';
@@ -62,7 +63,14 @@ export function visualizationStateFor(
         ...current,
         visualizations: [
           ...current.visualizations,
-          { id: createId(), type: request.visualizationType, topic: request.topic },
+          {
+            id: createId(),
+            type: request.visualizationType,
+            topic: request.topic,
+            ...(request.visualizationType === 'cameraimage'
+              ? { options: { ...DEFAULT_NEW_CAMERA_IMAGE_OPTIONS } }
+              : {}),
+          },
         ],
       };
 }

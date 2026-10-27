@@ -1,7 +1,13 @@
+export const DEFAULT_NEW_CAMERA_IMAGE_OPTIONS = { videoTiming: 'latest' as const };
+import type { WebRtcOptions } from './webrtcStreams';
 import type { ImageGeometry } from './cameraCalibration';
 import { isCameraStreamQuality, type CameraStreamQuality } from '../cameraStreamQuality';
-export interface CameraImageOptions {
-  imageSource?: 'ros' | 'stream';
+export interface CameraImageOptions extends WebRtcOptions {
+  videoTiming?: 'capture' | 'latest';
+  /** Zero follows the source rate. Affects video projection only, never Camera playback. */
+  projectionFps?: number;
+  opticalFrame?: string;
+  imageSource?: 'ros' | 'stream' | 'webrtc';
   streamQuality?: Exclude<CameraStreamQuality, 'auto'>;
   cameraInfoTopic?: string;
   distance?: number;
@@ -19,8 +25,17 @@ export function normalizeCameraImageOptions(options: CameraImageOptions = {}, to
   const number = (value: unknown, fallback: number, min: number, max: number) =>
     typeof value === 'number' && Number.isFinite(value) ? Math.min(max, Math.max(min, value)) : fallback;
   return {
-    imageSource: options.imageSource === 'ros' ? ('ros' as const) : ('stream' as const),
+    imageSource:
+      options.imageSource === 'ros'
+        ? ('ros' as const)
+        : options.imageSource === 'webrtc'
+          ? ('webrtc' as const)
+          : ('stream' as const),
+    whepUrl: typeof options.whepUrl === 'string' ? options.whepUrl.trim() : '',
+    videoTiming: options.videoTiming === 'latest' ? ('latest' as const) : ('capture' as const),
+    opticalFrame: typeof options.opticalFrame === 'string' ? options.opticalFrame.trim() : '',
     streamQuality: projectionStreamQuality(options.streamQuality),
+    projectionFps: number(options.projectionFps, 10, 0, 60),
     cameraInfoTopic: typeof options.cameraInfoTopic === 'string' ? options.cameraInfoTopic.trim() : '',
     distance: number(options.distance, 1, 0.01, 100),
     opacity: number(options.opacity, 1, 0, 1),

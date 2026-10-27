@@ -774,6 +774,11 @@ input[type='number'].scale-field-number:disabled {
   overflow-wrap: anywhere;
 }
 
+/* Long labels wrap under their value on a narrow tile rather than squeezing it. */
+.panel-settings .control-heading-row {
+  flex-wrap: wrap;
+}
+
 .layer-settings-content > .visualization-status {
   margin: 0;
 }

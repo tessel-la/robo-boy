@@ -44,7 +44,7 @@ import type { MeshDisplayOptions } from '../utils/meshOpacity';
 import type { NavigationDisplayOptions } from '../utils/navigationOptions';
 import NavigationViz from './visualizers/NavigationViz';
 import CameraImageViz from './visualizers/CameraImageViz';
-import { cameraInfoTopicFor, type CameraImageOptions } from '../utils/images/cameraImageOptions';
+import { DEFAULT_NEW_CAMERA_IMAGE_OPTIONS, cameraInfoTopicFor, type CameraImageOptions } from '../utils/images/cameraImageOptions';
 import type { PanelSettingsBridge } from '../features/assistant/types';
 
 interface VisualizationPanelProps {
@@ -221,7 +221,7 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({
 
   // --- Add/Remove Visualization Logic ---
   const addVisualization = (config: Omit<VisualizationConfig, 'id'>) => {
-    const newViz: VisualizationConfig = { ...config, id: uuidv4() };
+    const newViz: VisualizationConfig = { ...config, id: uuidv4(), options: { ...(config.type === 'cameraimage' ? DEFAULT_NEW_CAMERA_IMAGE_OPTIONS : {}), ...config.options } };
     setVisualizations((prev: VisualizationConfig[]) => [...prev, newViz]);
     setIsAddVizModalOpen(false); // Close modal after adding
     setIsSettingsPopupOpen(true); // Reopen settings popup
@@ -411,7 +411,7 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({
             }
             const newViz: VisualizationConfig = {
               id: uuidv4(), type, topic,
-              options: type === 'urdf' ? ({ robotDescriptionTopic: topic } as UrdfOptions) : {},
+              options: type === 'urdf' ? ({ robotDescriptionTopic: topic } as UrdfOptions) : type === 'cameraimage' ? { ...DEFAULT_NEW_CAMERA_IMAGE_OPTIONS } : {},
             };
             current.setVisualizations(prev => [...prev, newViz]);
             current.visualizations = [...current.visualizations, newViz];

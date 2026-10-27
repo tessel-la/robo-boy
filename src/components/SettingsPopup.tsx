@@ -8,6 +8,7 @@ import LayerSettings, { hasLayerSettings, type LayerOptionsPatch } from './visua
 import type { TfDisplaySettings } from '../utils/visualizationState';
 import type { VisualizationConfig } from './VisualizationPanel';
 import './VisualizationPanel.css';
+import './PanelSettings.css';
 
 interface TopicInfo {
   name: string;
@@ -122,7 +123,7 @@ const SettingsPopup: React.FC<SettingsPopupProps> = ({
   const layer = view.kind === 'layer' ? activeVisualizations.find(viz => viz.id === view.id) : undefined;
   if (layer && onUpdateVisualizationOptions) {
     return (
-      <div className="settings-popup">
+      <div className="settings-popup panel-settings">
         {detailHeader(TYPE_LABELS[layer.type], layer.topic)}
         <div key={layer.id} className="settings-popup-content layer-settings-content">
           {visualizationStatus?.[layer.id] && (
@@ -137,7 +138,7 @@ const SettingsPopup: React.FC<SettingsPopupProps> = ({
 
   if (view.kind === 'frameDisplay') {
     return (
-      <div className="settings-popup">
+      <div className="settings-popup panel-settings">
         {detailHeader('TF frames', 'Frame display')}
 
         <div className="settings-popup-content frame-display-content">
@@ -218,7 +219,7 @@ const SettingsPopup: React.FC<SettingsPopupProps> = ({
   }
 
   return (
-    <div className="settings-popup">
+    <div className="settings-popup panel-settings">
       <header className="settings-popup-header">
         <div className="settings-popup-heading">
           <span className="settings-popup-kicker">Panel controls</span>
