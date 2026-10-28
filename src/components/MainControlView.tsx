@@ -1,7 +1,7 @@
 import TimeSeriesPanel from '../features/timeSeries/TimeSeriesPanel';
 import { flushSync } from 'react-dom';
 import DataExplorerPanel, { type ExplorerOpenRequest } from '../features/dataExplorer/DataExplorerPanel';
-import { recordValuesFor, timeSeriesValuesFor, visualizationStateFor } from '../features/dataExplorer/openTarget';
+import { cameraValuesFor, explorerValuesFor, recordValuesFor, timeSeriesValuesFor, visualizationStateFor } from '../features/dataExplorer/openTarget';
 import RecordReplayPanel from '../features/recordReplay/RecordReplayPanel';
 import { ReplaySession } from '../features/recordReplay/ReplaySession';
 import RecordedCameraView from '../features/recordReplay/RecordedCameraView';
@@ -1857,6 +1857,17 @@ const MainControlView: React.FC<MainControlViewProps> = ({
     options?: { cameraTopic?: string; layoutId?: string; title?: string; explorer?: ExplorerOpenRequest; originId?: string }
   ) => {
     setIsWorkspaceOpen(true);
+    if (options?.explorer && !isDesktopWorkspace) {
+      const target = mobileWorkspacePanels.find(panel => panel.id !== options.originId && panel.type === type)
+        ?? mobileWorkspacePanels.find(panel => panel.id !== options.originId);
+      if (target) {
+        const replacement = explorerReplacement(target, options.explorer);
+        setMobileWorkspacePanels(previous => previous.map(panel => panel.id === target.id ? replacement : panel));
+        setMobileSecondaryEverMounted(true); setIsMobileSplitView(true);
+        setActiveMobileWindowIndex(mobileWorkspacePanels.findIndex(panel => panel.id === target.id));
+        return target.id;
+      }
+    }
     if (workspaceReplacementPanelId && !options) {
       replaceWorkspacePanel(workspaceReplacementPanelId, type);
       setWorkspaceReplacementPanelId(null);
@@ -1866,6 +1877,12 @@ const MainControlView: React.FC<MainControlViewProps> = ({
       return;
     }
     const isWorkspaceFull = isWorkspaceStacked && workspacePanels.length >= 2;
+    const requestedCamera = options?.explorer?.cameraOptions && cameraValuesFor(undefined, options.explorer.cameraOptions);
+    if (type === 'camera' && requestedCamera) {
+      const matching = workspacePanels.find(panel => panel.type === 'camera' && panel.cameraTopic === options?.cameraTopic &&
+        ['imageSource', 'streamQuality', 'whepUrl'].every(key => panel.panelState?.values[key] === requestedCamera[key]));
+      if (matching) { setLastAddedWorkspacePanelId(matching.id); return matching.id; }
+    }
     // The Explorer reuses an open panel of the requested kind, adding to its settings. A camera
     // gets its own new tile while there is room, so the view already on screen is not switched.
     const explorerExisting = options?.explorer && explorerTargetIn(workspacePanels, type, options.originId);
@@ -3413,6 +3430,12 @@ const MainControlView: React.FC<MainControlViewProps> = ({
     const kept = previous?.type === target.type ? previous : undefined;
     // Remount so the panel reads its new settings; an open TF tree has nothing new to read.
     if (!(kept && request.panel === 'tfTree')) target.openedAt = Date.now();
+    if (request.panel === 'camera' && request.cameraOptions) {
+      target.panelState = { schemaVersion: 1, panelId: target.type,
+        values: cameraValuesFor(kept?.panelState?.values, request.cameraOptions) };
+    }
+    if (request.panel === 'dataExplorer') target.panelState = { schemaVersion: 1, panelId: target.type,
+      values: explorerValuesFor(kept?.panelState?.values, request) };
     if (request.panel === 'timeSeries')
       target.panelState = { schemaVersion: 1, panelId: target.type, values: timeSeriesValuesFor(kept?.panelState?.values, request) };
     if (request.panel === 'recordReplay')
@@ -3592,6 +3615,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({
           storageKey={getConnectionStorageKey(`roboboy_3d_visualization_state_${panel.id}`, storageScope)}
           panelId={panel.id}
           onRegisterAssistantBridge={handleRegisterPanelSettingsBridge}
+          onOpen={request => handleAddWorkspacePanel(request.panel, undefined, undefined, { cameraTopic: request.topic, explorer: request, originId: panel.id })}
         />
       );
     }

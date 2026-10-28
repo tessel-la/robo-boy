@@ -13,6 +13,7 @@ interface UseUrdfClientProps {
   dependenciesReady: boolean;
   robotDescriptionTopic?: string; // Topic for URDF string
   opacity?: number;
+  layerId?: string;
   urdfPath?: string; // Base path for mesh resources
   // Consider adding loader options if your UrdfClient supports them
   // loader?: any;
@@ -26,6 +27,7 @@ export function useUrdfClient({
   dependenciesReady,
   robotDescriptionTopic = '/robot_description',
   opacity = 1,
+  layerId,
 }: UseUrdfClientProps) {
   const { meshResourcesBaseUrl } = useRuntimeConfig();
   const opacityRef = useRef(opacity);
@@ -57,6 +59,10 @@ export function useUrdfClient({
       },
     });
     urdfClientRef.current = urdfClient;
+    if (layerId) {
+      urdfClient.userData ??= {};
+      urdfClient.userData.projectionLayer = layerId;
+    }
 
     return () => {
       active = false;
@@ -64,7 +70,7 @@ export function useUrdfClient({
       urdfClient.dispose();
       if (urdfClientRef.current === urdfClient) urdfClientRef.current = null;
     };
-  }, [dependenciesReady, isRosConnected, ros, ros3dViewer, tfClient, robotDescriptionTopic, meshResourcesBaseUrl]);
+  }, [dependenciesReady, isRosConnected, ros, ros3dViewer, tfClient, robotDescriptionTopic, meshResourcesBaseUrl, layerId]);
 
   useEffect(() => { urdfClientRef.current?.setOpacity(opacity); }, [opacity]);
 

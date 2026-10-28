@@ -78,3 +78,15 @@ it('starts explorer-created camera layers with explicit metadata-free timing', (
   );
   expect(state.visualizations[0].options).toEqual({ videoTiming: 'latest' });
 });
+
+it('opens camera diagnostics in the Explorer config while preserving unrelated watches', async () => {
+  const { explorerValuesFor } = await import('./openTarget');
+  expect(explorerValuesFor({ config: { watched: ['/battery'], source: 'live' } }, request({ panel: 'dataExplorer', topic: '/front/camera_info' })))
+    .toMatchObject({ config: { selected: 'topic:/front/camera_info', source: 'follow', watched: ['/battery'], view: 'resources' } });
+});
+
+it('preserves a camera transport/profile without carrying projection/capture settings or a previous endpoint', async () => {
+  const { cameraValuesFor } = await import('./openTarget');
+  expect(cameraValuesFor({ whepUrl: 'http://other/whep', someSetting: true }, { imageSource: 'ros', opacity: 0.2 }))
+    .toEqual({ imageSource: 'ros', streamQuality: 'medium', whepUrl: '', someSetting: true });
+});

@@ -54,15 +54,8 @@ import {
 import type { PanelSettingsBridge } from '../assistant/types';
 import './DataExplorerPanel.css';
 
-export interface ExplorerOpenRequest {
-  panel: 'timeSeries' | 'camera' | '3d' | 'tfTree' | 'recordReplay';
-  topic: string;
-  /** Several topics at once, for recording settings. */
-  topics?: string[];
-  messageType: string;
-  fieldPath?: string;
-  visualizationType?: string;
-}
+export type { WorkspaceOpenRequest as ExplorerOpenRequest } from '../../components/workspaceOpenRequest';
+import type { WorkspaceOpenRequest as ExplorerOpenRequest } from '../../components/workspaceOpenRequest';
 interface Props {
   ros: Ros | null;
   connected: boolean;

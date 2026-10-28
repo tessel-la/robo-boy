@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { FaCog } from 'react-icons/fa';
-import { FiArrowLeft, FiPlus, FiSettings, FiTrash2, FiX } from 'react-icons/fi';
+import { FiArrowLeft, FiPlus, FiSettings, FiTrash2, FiX, FiInfo } from 'react-icons/fi';
 
 import { getTopicsForVisualizationType, isTopicVisualizationType } from '../utils/visualizationTopics';
 import { normalizeMeshOpacity, type MeshDisplayOptions } from '../utils/meshOpacity';
@@ -45,6 +45,7 @@ interface SettingsPopupProps {
   onUpdateVisualizationTopic?: (id: string, newTopic: string) => void;
   allTopics: TopicInfo[];
   visualizationStatus?: Record<string, string | null>;
+  onInspectCamera?: (id: string) => void;
 }
 
 /** Each section collapses on its own; the open ones share the remaining height so the frame
@@ -89,6 +90,7 @@ const SettingsPopup: React.FC<SettingsPopupProps> = ({
   onUpdateVisualizationTopic,
   onUpdateVisualizationOptions,
   allTopics = [],
+  onInspectCamera,
 }) => {
   const [tab, setTab] = useState<SettingsTab>('frames');
   const [view, setView] = useState<PopupView>('main');
@@ -411,6 +413,8 @@ const SettingsPopup: React.FC<SettingsPopupProps> = ({
                       <div className="visualization-item-heading">
                         <span className="viz-type">{TYPE_LABELS[viz.type]}</span>
                         <div className="visualization-item-actions">
+                          {(viz.type === 'cameraimage' || viz.type === 'camerainfo') && onInspectCamera && <button type="button" className="viz-settings-button"
+                            title="Inspect camera" aria-label={`Inspect camera on ${viz.topic}`} onClick={() => onInspectCamera(viz.id)}><FiInfo /></button>}
                           {CONFIGURABLE_TYPES.has(viz.type) && onEditVisualization && (
                             <button
                               type="button"
@@ -489,6 +493,7 @@ const SettingsPopup: React.FC<SettingsPopupProps> = ({
                                   topic={viz.topic}
                                   options={viz.options as CameraImageOptions}
                                   topics={allTopics}
+                                  surfaceLayers={activeVisualizations.filter(layer => layer.type === 'urdf' || layer.type === 'markerarray')}
                                   onChange={onUpdateVisualizationOptions}
                                 />
                               )}

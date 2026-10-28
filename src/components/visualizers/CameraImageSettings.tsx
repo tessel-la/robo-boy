@@ -14,12 +14,14 @@ export default function CameraImageSettings({
   options,
   topics,
   onChange,
+  surfaceLayers = [],
 }: {
   id: string;
   topic: string;
   options?: CameraImageOptions;
   topics: { name: string; type: string }[];
   onChange: (id: string, options: CameraImageOptions) => void;
+  surfaceLayers?: { id: string; topic: string; type: string }[];
 }) {
   const values = normalizeCameraImageOptions(
     { ...options, cameraInfoTopic: options?.cameraInfoTopic ?? cameraInfoTopicFor(topic, topics) },
@@ -29,6 +31,33 @@ export default function CameraImageSettings({
   const label = `Camera image on ${topic}`;
   return (
     <div className="navigation-layer-settings panel-settings">
+      <label className="panel-settings-field">Projection mode
+        <select aria-label={`Projection mode for ${label}`} value={values.renderMode}
+          onChange={event => onChange(id, { renderMode: event.target.value as 'plane' | 'surfaces' })}>
+          <option value="plane">Image plane</option><option value="surfaces">Mesh surfaces</option>
+        </select>
+      </label>
+      {values.renderMode === 'surfaces' && <>
+        <fieldset className="camera-surface-targets"><legend>Receiving layers</legend>
+          {surfaceLayers.length ? surfaceLayers.map(layer => <label key={layer.id}><input type="checkbox"
+            aria-label={`Project onto ${layer.type} ${layer.topic}`} checked={values.surfaceTargets.includes(layer.id)}
+            onChange={event => onChange(id, { surfaceTargets: event.target.checked ? [...values.surfaceTargets, layer.id] : values.surfaceTargets.filter(item => item !== layer.id) })} />{layer.type === 'urdf' ? 'URDF' : 'Mesh markers'} · {layer.topic}</label>)
+            : <p className="panel-settings-status">Add a URDF or mesh-marker layer to receive the image.</p>}
+          {values.surfaceTargets.filter(target => !surfaceLayers.some(layer => layer.id === target)).map(target => <label key={target}><input type="checkbox" checked
+            onChange={() => onChange(id, { surfaceTargets: values.surfaceTargets.filter(item => item !== target) })} />Unavailable layer · {target}</label>)}
+        </fieldset>
+        <label className="panel-settings-field">Receiving links/frames (optional)
+          <input key={values.surfaceLinks.join(',')} defaultValue={values.surfaceLinks.join(', ')} placeholder="All links; or base_link, arm_link"
+            onBlur={event => onChange(id, { surfaceLinks: event.target.value.split(',').map(value => value.trim()).filter(Boolean) })} />
+        </label>
+        <label className="panel-settings-field">Surface geometry timing<select aria-label={`Surface geometry timing for ${label}`} value={values.surfaceTiming}
+          onChange={event => onChange(id, { surfaceTiming: event.target.value as 'image' | 'latest' })}>
+          <option value="latest">Latest scene (not time-synchronized)</option><option value="image">TF at image acquisition time</option>
+        </select></label>
+        <ScaleField id={`surface-range-${id}`} label="Maximum projection range (m)" value={values.surfaceRange} min={0.1} max={1000} precision={1}
+          onChange={surfaceRange => onChange(id, { surfaceRange })} />
+        <p className="panel-settings-status">Occlusion uses visible URDF/mesh geometry. Unmodelled obstacles cannot block the projection.</p>
+      </>}
       <label className="settings-toggle-row">
         <input
           type="checkbox"

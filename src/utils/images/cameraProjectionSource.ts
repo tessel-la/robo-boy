@@ -121,6 +121,7 @@ export function subscribeToProjectionImages(
               ? {
                   frame: {
                     ...event.frame,
+                    acquisitionHeader: event.frame.header,
                     projectionError: undefined,
                     header: { frame_id: options.opticalFrame, stamp: { sec: 0, nanosec: 0 } },
                     sourceSize: event.frame.sourceSize ?? source ?? undefined,

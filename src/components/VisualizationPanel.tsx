@@ -26,7 +26,7 @@ import { useTfVisualizer } from '../hooks/useTfVisualizer';
 
 // Import Wrapper Components
 import PointCloudViz from './visualizers/PointCloudViz';
-import CameraInfoViz from './visualizers/CameraInfoViz';
+const CameraInfoViz = lazy(() => import('./visualizers/CameraInfoViz'));
 import MarkerArrayViz from './visualizers/MarkerArrayViz';
 import UrdfViz from './visualizers/UrdfViz'; // Import UrdfViz
 import LaserScanViz, { LaserScanOptions } from './visualizers/LaserScanViz'; // Import LaserScanViz
@@ -44,10 +44,14 @@ import { getPreferredUrdfTopic } from '../utils/urdfTopics';
 import type { MeshDisplayOptions } from '../utils/meshOpacity';
 import type { NavigationDisplayOptions } from '../utils/navigationOptions';
 import NavigationViz from './visualizers/NavigationViz';
-import CameraImageViz from './visualizers/CameraImageViz';
+const CameraImageViz = lazy(() => import('./visualizers/CameraImageViz'));
 import { DEFAULT_NEW_CAMERA_IMAGE_OPTIONS, cameraInfoTopicFor, type CameraImageOptions } from '../utils/images/cameraImageOptions';
 import { jointDescriptionTopic, type JointStateOptions } from '../utils/jointStates';
 import type { PanelSettingsBridge } from '../features/assistant/types';
+import type { WorkspaceOpenRequest } from './workspaceOpenRequest';
+import type { CameraImageClient } from '../utils/ros3d/visualizers/CameraImage';
+import { bindCameraPicking, type CameraPickObject } from '../utils/images/cameraInteraction';
+const CameraInspector = lazy(() => import('./visualizers/CameraInspector'));
 
 // Load optional telemetry only when selected; keep the workspace chunk within the PWA precache limit.
 const JointStateOverlay = lazy(() => import('./visualizers/JointStateOverlay'));
@@ -58,6 +62,7 @@ interface VisualizationPanelProps {
   /** Workspace panel id, used to register the assistant settings bridge. */
   panelId?: string;
   onRegisterAssistantBridge?: (panelId: string, bridge: PanelSettingsBridge | null) => void;
+  onOpen?: (request: WorkspaceOpenRequest) => void;
 }
 
 // Define the structure for a visualization configuration
@@ -107,6 +112,7 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({
   storageKey = DEFAULT_STORAGE_KEY,
   panelId,
   onRegisterAssistantBridge,
+  onOpen,
 }: VisualizationPanelProps) => {
   // console.log(`--- VisualizationPanel Render Start ---`);
 
@@ -126,6 +132,21 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({
   // Use the custom hook for viewer management
   const isRosConnected = ros?.isConnected ?? false;
   const { ros3dViewer, viewerGeneration } = useRos3dViewer(viewerRef, isRosConnected);
+  const cameraClients = useRef(new Map<string, CameraImageClient>());
+  const cameraPickObjects = useRef(new Map<string, CameraPickObject>());
+  const [cameraSelection, setCameraSelection] = useState<string | null>(null);
+  const [, setCameraClientVersion] = useState(0);
+  const registerCamera = useCallback((id: string, client: CameraImageClient | null) => {
+    if (client) { cameraClients.current.set(id, client); cameraPickObjects.current.set(id, client); }
+    else { cameraClients.current.delete(id); cameraPickObjects.current.delete(id); }
+    setCameraClientVersion(version => version + 1);
+  }, []);
+  const registerCameraInfo = useCallback((id: string, object: THREE.Group | null, frustum?: THREE.LineSegments) => {
+    if (object && frustum) cameraPickObjects.current.set(id, { object, frustum }); else cameraPickObjects.current.delete(id);
+  }, []);
+  useEffect(() => {
+    if (ros3dViewer.current) return bindCameraPicking(ros3dViewer.current, cameraPickObjects.current, setCameraSelection);
+  }, [ros3dViewer, viewerGeneration]);
 
   // Remove old topic states
   // const [availablePointCloudTopics, setAvailablePointCloudTopics] = useState<string[]>([]);
@@ -561,23 +582,27 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({
           );
         } else if (viz.type === 'camerainfo') {
           return (
+            <Suspense key={viz.id} fallback={null}>
             <CameraInfoViz
+              id={viz.id} onObject={registerCameraInfo}
               key={viz.id}
               ros={ros}
-              isRosConnected={isRosConnected}
+              isRosConnected={isRosConnected && isProviderReady}
               ros3dViewer={ros3dViewer}
               customTFProvider={customTFProvider}
               topic={viz.topic}
               options={viz.options as CameraInfoOptions}
             />
+            </Suspense>
           );
         } else if (viz.type === 'markerarray') {
-          return <MarkerArrayViz key={viz.id} ros={ros} topic={viz.topic} viewer={ros3dViewer}
+          return <MarkerArrayViz key={viz.id} layerId={viz.id} ros={ros} topic={viz.topic} viewer={ros3dViewer}
             provider={customTFProvider} ready={isProviderReady} opacity={(viz.options as MeshDisplayOptions)?.opacity} />;
         } else if (viz.type === 'urdf') { // Added URDF rendering
           return (
             <React.Fragment key={viz.id}>
               <UrdfViz
+                layerId={viz.id}
                 ros={ros}
                 isRosConnected={isRosConnected}
                 ros3dViewer={ros3dViewer}
@@ -622,10 +647,11 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({
           );
         } else if (viz.type === 'cameraimage' && ros) {
           const options = viz.options as CameraImageOptions | undefined;
-          return <CameraImageViz key={viz.id} id={viz.id} ros={ros} viewer={ros3dViewer} provider={customTFProvider}
+          return <Suspense key={viz.id} fallback={null}><CameraImageViz id={viz.id} ros={ros} viewer={ros3dViewer} provider={customTFProvider}
+            ready={isProviderReady} onClient={registerCamera}
             topic={viz.topic} messageType={allTopics.find(item => item.name === viz.topic)?.type
               ?? (viz.topic.endsWith('/compressed') ? 'sensor_msgs/CompressedImage' : 'sensor_msgs/Image')}
-            options={{ ...options, cameraInfoTopic: options?.cameraInfoTopic ?? cameraInfoTopicFor(viz.topic, allTopics) }} onStatus={reportVisualizationStatus} />;
+            options={{ ...options, cameraInfoTopic: options?.cameraInfoTopic ?? cameraInfoTopicFor(viz.topic, allTopics) }} onStatus={reportVisualizationStatus} /></Suspense>;
         } else if (viz.type === 'path' || viz.type === 'occupancygrid') {
           return <NavigationViz key={viz.id} id={viz.id} type={viz.type} topic={viz.topic}
             ros={ros} connected={isRosConnected} viewer={ros3dViewer} provider={customTFProvider}
@@ -652,6 +678,16 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({
 
       {/* Main Viewer Div */}
       <div ref={viewerRef} className="viewer-container" id={viewerIdRef.current}></div>
+      <Suspense fallback={null}>
+        {visualizations.filter(viz => viz.id === cameraSelection && (viz.type === 'cameraimage' || viz.type === 'camerainfo')).map(viz =>
+          <CameraInspector key={viz.id} client={cameraClients.current.get(viz.id)} viewer={ros3dViewer.current} ros={ros}
+            calibrationTopic={viz.type === 'camerainfo' ? viz.topic : undefined}
+            imageTopics={allTopics.filter(item => /\/(?:CompressedImage|Image)$/.test(item.type))}
+            topic={viz.type === 'camerainfo' ? '' : viz.topic} options={{ ...viz.options as CameraImageOptions,
+              cameraInfoTopic: (viz.options as CameraImageOptions)?.cameraInfoTopic ?? cameraInfoTopicFor(viz.topic, allTopics) }}
+            status={visualizationStatus[viz.id]} onChange={patch => updateVisualizationSettings(viz.id, patch)}
+            onClose={() => { setCameraSelection(null); panelRef.current?.querySelector<HTMLButtonElement>('.tree-panel-menu-button')?.focus(); }} onOpen={onOpen} />)}
+      </Suspense>
 
       <TreePanelMenu
         open={isSettingsPopupOpen}
@@ -666,6 +702,7 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({
         classNames={{ panel: 'visualization-menu-panel' }}
         menuContent={
           <SettingsPopup
+            onInspectCamera={id => { setCameraSelection(id); setIsSettingsPopupOpen(false); }}
             visualizationStatus={visualizationStatus}
             onClose={closeSettingsPopup}
             fixedFrame={fixedFrame}

@@ -53,3 +53,22 @@ it('switches to plain WebRTC with explicit latest TF timing', () => {
   fireEvent.change(screen.getByLabelText('Image source for Camera image on /image'), { target: { value: 'webrtc' } });
   expect(onChange).toHaveBeenCalledWith('camera', { imageSource: 'webrtc', videoTiming: 'latest' });
 });
+
+it('preserves image-plane defaults and requires explicit mesh target/timing choices', () => {
+  expect(normalizeCameraImageOptions({}).renderMode).toBe('plane');
+  expect(normalizeCameraImageOptions({ renderMode: 'surfaces' }).surfaceTargets).toEqual([]);
+  const onChange = vi.fn();
+  render(<CameraImageSettings id="c" topic="/image" options={{ renderMode: 'surfaces' }} topics={[]}
+    surfaceLayers={[{ id: 'robot', type: 'urdf', topic: '/description' }]} onChange={onChange} />);
+  fireEvent.click(screen.getByLabelText('Project onto urdf /description'));
+  expect(onChange).toHaveBeenCalledWith('c', { surfaceTargets: ['robot'] });
+  fireEvent.change(screen.getByLabelText('Surface geometry timing for Camera image on /image'), { target: { value: 'image' } });
+  expect(onChange).toHaveBeenLastCalledWith('c', { surfaceTiming: 'image' });
+});
+
+it('opens the same streamer camera from compressed-topic layers while preserving explicit ROS selections', async () => {
+  const { cameraPanelTopic } = await import('../../utils/images/cameraImageOptions');
+  expect(cameraPanelTopic('/front/image_raw/compressed', 'stream')).toBe('/front/image_raw');
+  expect(cameraPanelTopic('/front/image_raw/compressed', 'ros')).toBe('/front/image_raw/compressed');
+  expect(cameraPanelTopic('/front/image_raw/compressed', 'webrtc')).toBe('/front/image_raw/compressed');
+});

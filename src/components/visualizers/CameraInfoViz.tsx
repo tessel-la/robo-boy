@@ -12,6 +12,8 @@ interface CameraInfoVizProps {
   customTFProvider: React.RefObject<CustomTFProvider | null>;
   topic: string;
   options?: { lineColor?: THREE.Color | number | string; lineScale?: number };
+  id?: string;
+  onObject?: (id: string, object: THREE.Group | null, frustum?: THREE.LineSegments) => void;
 }
 
 const CameraInfoViz: React.FC<CameraInfoVizProps> = ({
@@ -21,6 +23,8 @@ const CameraInfoViz: React.FC<CameraInfoVizProps> = ({
   customTFProvider,
   topic,
   options,
+  id,
+  onObject,
 }) => {
   useCameraInfoVisualizer({
     ros,
@@ -30,6 +34,7 @@ const CameraInfoViz: React.FC<CameraInfoVizProps> = ({
     selectedCameraInfoTopic: topic, // Pass the specific topic for this instance
     lineColor: options?.lineColor,
     lineScale: options?.lineScale,
+    onObject: (object, frustum) => { if (id) onObject?.(id, object, frustum); },
   });
 
   // This component manages the hook lifecycle but renders nothing itself
@@ -37,4 +42,4 @@ const CameraInfoViz: React.FC<CameraInfoVizProps> = ({
 };
 
 // Memoize to prevent unnecessary hook re-runs if props haven't changed
-export default React.memo(CameraInfoViz); 
+export default React.memo(CameraInfoViz);

@@ -187,7 +187,7 @@ describe('VisualizationPanel state restoration', () => {
     const { rerender } = render(<VisualizationPanel ros={createRos() as any} storageKey="delayed-viewer" />);
     expect(pointCloudVizMock).not.toHaveBeenCalled();
 
-    viewerLifecycleMock.ros3dViewer.current = { scene: {} };
+    viewerLifecycleMock.ros3dViewer.current = { scene: {}, renderer: { domElement: document.createElement('canvas') } };
     viewerLifecycleMock.viewerGeneration = 1;
     tfProviderLifecycleMock.customTFProvider.current = {};
     tfProviderLifecycleMock.isProviderReady = true;
