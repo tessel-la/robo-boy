@@ -1,14 +1,18 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { render } from '@testing-library/react';
 import CameraImageViz from './CameraImageViz';
+import { subscribeToProjectionImages } from '../../utils/images/cameraProjectionSource';
 const instances = vi.hoisted(() => [] as any[]);
 const replay = vi.hoisted(() => ({ active: false }));
 vi.mock('../../runtime/runtimeConfig', () => ({ useRuntimeConfig: () => ({ videoStreamBaseUrl: '/video_stream' }) }));
 vi.mock('../../features/recordReplay/ReplaySession', () => ({ isReplayRos: () => replay.active }));
+vi.mock('../../utils/images/cameraProjectionSource', () => ({ subscribeToProjectionImages: vi.fn() }));
 vi.mock('../../utils/ros3d/visualizers/CameraImage', () => ({
   CameraImageClient: class {
     updateOptions = vi.fn();
     dispose = vi.fn();
+    object = { uuid: 'camera-owner', visible: true };
+    getSnapshot = () => ({ displayed: { frame: { header: { stamp: { sec: 0, nanosec: 0 } } } } });
     constructor(public config: any) {
       instances.push(this);
     }
@@ -17,6 +21,73 @@ vi.mock('../../utils/ros3d/visualizers/CameraImage', () => ({
 afterEach(() => {
   instances.length = 0;
   replay.active = false;
+  vi.clearAllMocks();
+});
+
+it('registers surface projection with the viewer, combines status, shares its selected source and cleans up ownership', () => {
+  const p = props();
+  const removeOverlay = vi.fn(),
+    resetProjection = vi.fn(),
+    onClient = vi.fn();
+  let overlay: { render: () => void; dispose: () => void };
+  Object.assign(p.viewer.current, {
+    resetProjection,
+    addOverlay: vi.fn(value => {
+      overlay = value;
+      return removeOverlay;
+    }),
+  });
+  const view = render(
+    <CameraImageViz
+      {...p}
+      onClient={onClient}
+      options={{ imageSource: 'webrtc', renderMode: 'surfaces', whepUrl: 'https://robot.example/whep' }}
+    />
+  );
+  expect(onClient).toHaveBeenCalledWith('camera', instances[0]);
+  overlay!.render();
+  expect(p.onStatus).toHaveBeenLastCalledWith('camera', expect.stringContaining('Select the URDF'));
+  instances[0].config.onStatus('Waiting for TF');
+  expect(p.onStatus).toHaveBeenLastCalledWith(
+    'camera',
+    expect.stringMatching(/Latest TF.*Waiting for TF.*Select the URDF/)
+  );
+  const stopImages = vi.fn(),
+    listener = vi.fn();
+  vi.mocked(subscribeToProjectionImages).mockReturnValue(stopImages);
+  expect(instances[0].config.subscribeImages(listener)).toBe(stopImages);
+  expect(subscribeToProjectionImages).toHaveBeenCalledWith(
+    expect.objectContaining({
+      source: 'webrtc',
+      whepUrl: 'https://robot.example/whep',
+      topic: '/image',
+      baseUrl: '/video_stream',
+      ros: p.ros,
+    }),
+    listener
+  );
+  view.rerender(
+    <CameraImageViz
+      {...p}
+      onClient={onClient}
+      options={{ imageSource: 'webrtc', renderMode: 'plane', whepUrl: 'https://robot.example/whep' }}
+    />
+  );
+  expect(instances).toHaveLength(1);
+  view.unmount();
+  expect(resetProjection).toHaveBeenCalledWith('camera-owner');
+  expect(removeOverlay).toHaveBeenCalledOnce();
+  expect(onClient).toHaveBeenLastCalledWith('camera', null);
+  expect(instances[0].dispose).toHaveBeenCalledOnce();
+});
+
+it('waits for both viewer and TF readiness before creating camera resources', () => {
+  const p = props();
+  const view = render(<CameraImageViz {...p} ready={false} options={{}} />);
+  expect(instances).toHaveLength(0);
+  view.rerender(<CameraImageViz {...p} ready options={{}} />);
+  expect(instances).toHaveLength(1);
+  view.unmount();
 });
 const props = () => ({
   ros: {} as any,

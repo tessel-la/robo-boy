@@ -3,6 +3,7 @@ import type { Ros } from 'roslib';
 import { requestCameraCapture } from './cameraCapture';
 import { executeRosOperation } from '../rosOperations';
 import type { CameraCaptureOptions } from './cameraImageOptions';
+import * as decoder from './decodeImage';
 const state = vi.hoisted(() => ({ replay: false, receive: (_message: unknown) => {}, unsubscribe: vi.fn() }));
 vi.mock('../../features/recordReplay/ReplaySession', () => ({ isReplayRos: () => state.replay }));
 vi.mock('../rosOperations', () => ({ executeRosOperation: vi.fn() }));
@@ -35,7 +36,117 @@ const image = (sec = 2) => ({
 const ros = { isConnected: true } as Ros;
 afterEach(() => {
   vi.clearAllMocks();
+  vi.restoreAllMocks();
+  vi.useRealTimers();
   state.replay = false;
+});
+
+it('rejects disconnected sources and invalid bindings before issuing robot commands', async () => {
+  await expect(
+    requestCameraCapture({ isConnected: false } as Ros, options, new AbortController().signal)
+  ).rejects.toThrow('disconnected');
+  for (const [patch, error] of [
+    [{ name: 'relative/capture' }, 'valid capture'],
+    [{ messageType: 'not an interface' }, 'valid capture'],
+    [{ kind: 'topic' }, 'valid capture'],
+    [{ imageType: 'std_msgs/String' }, 'supported capture image'],
+    [{ request: ' '.repeat(16385) }, '16 KiB'],
+    [{ request: 'null' }, 'JSON object'],
+    [{ request: '{' }, 'JSON'],
+  ] as const) {
+    await expect(
+      requestCameraCapture(ros, { ...options, ...patch } as CameraCaptureOptions, new AbortController().signal)
+    ).rejects.toThrow(error);
+  }
+  expect(executeRosOperation).not.toHaveBeenCalled();
+});
+
+it('uses only own result fields and rejects missing, dangerous or oversized field paths', async () => {
+  vi.mocked(executeRosOperation).mockResolvedValue({ image: image() });
+  for (const imagePath of ['missing.image', '__proto__.image', 'constructor', 'image..data']) {
+    await expect(requestCameraCapture(ros, { ...options, imagePath }, new AbortController().signal)).rejects.toThrow(
+      'Image message is invalid'
+    );
+  }
+  await expect(
+    requestCameraCapture(ros, { ...options, imagePath: 'x'.repeat(257) }, new AbortController().signal)
+  ).rejects.toThrow('field path is too long');
+  vi.mocked(executeRosOperation).mockResolvedValue(image());
+  const result = await requestCameraCapture(
+    ros,
+    { ...options, imagePath: '', request: '' },
+    new AbortController().signal
+  );
+  expect(result.frame.header?.stamp).toEqual({ sec: 2, nanosec: 0 });
+  result.release();
+});
+
+it('rejects failed or unstamped topic responses and always removes the output subscription', async () => {
+  for (const response of [{ success: false }, {}, { stamp: { sec: 0, nanosec: 0 } }]) {
+    vi.mocked(executeRosOperation).mockResolvedValueOnce(response);
+    await expect(
+      requestCameraCapture(
+        ros,
+        { ...options, outputTopic: '/captured', resultStampPath: 'stamp' },
+        new AbortController().signal
+      )
+    ).rejects.toThrow(/rejected|acquisition timestamp/);
+  }
+  expect(state.unsubscribe).toHaveBeenCalledTimes(3);
+});
+
+it('bounds pending topic images and times out instead of matching an evicted or unstamped image', async () => {
+  vi.useFakeTimers();
+  vi.mocked(executeRosOperation).mockImplementation(async () => {
+    state.receive({ ...image(), header: {} });
+    state.receive(image(0));
+    for (let sec = 1; sec <= 5; sec++) state.receive(image(sec));
+    return { stamp: { sec: 1, nanosec: 0 } };
+  });
+  const pending = requestCameraCapture(
+    ros,
+    { ...options, outputTopic: '/captured', resultStampPath: 'stamp', timeoutSec: 1 },
+    new AbortController().signal
+  );
+  const check = expect(pending).rejects.toThrow('timed out');
+  await vi.advanceTimersByTimeAsync(1000);
+  await check;
+  expect(state.unsubscribe).toHaveBeenCalledOnce();
+  expect(vi.getTimerCount()).toBe(0);
+});
+
+it('matches a later topic image exactly and forwards cancellation when the caller is already aborted', async () => {
+  vi.mocked(executeRosOperation).mockResolvedValue({ stamp: { sec: 3, nanosec: 0 } });
+  const pending = requestCameraCapture(
+    ros,
+    { ...options, outputTopic: '/captured', resultStampPath: 'stamp' },
+    new AbortController().signal
+  );
+  await Promise.resolve();
+  state.receive(image(2));
+  state.receive(image(3));
+  const result = await pending;
+  expect(result.frame.header?.stamp).toEqual({ sec: 3, nanosec: 0 });
+  result.release();
+  const abort = new AbortController();
+  abort.abort();
+  vi.mocked(executeRosOperation).mockImplementation(async (_ros, _operation, signal) => {
+    expect(signal?.aborted).toBe(true);
+    return { image: image() };
+  });
+  await expect(requestCameraCapture(ros, options, abort.signal)).rejects.toThrow('cancelled');
+});
+
+it('closes a bitmap if cancellation arrives while decoding the capture result', async () => {
+  const abort = new AbortController();
+  const close = vi.fn();
+  vi.mocked(executeRosOperation).mockResolvedValue({ image: image() });
+  vi.spyOn(decoder, 'decodeImageFrame').mockImplementationOnce(async () => {
+    abort.abort();
+    return { image: { width: 1, height: 1, close } as unknown as ImageBitmap, encoding: 'jpeg' };
+  });
+  await expect(requestCameraCapture(ros, options, abort.signal)).rejects.toThrow('cancelled');
+  expect(close).toHaveBeenCalledOnce();
 });
 it('executes the explicit service or action and decodes its result image without a stream', async () => {
   vi.mocked(executeRosOperation).mockResolvedValue({ success: true, image: image() });
