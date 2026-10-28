@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import sharp from 'sharp';
 
 test.describe('App Navigation', () => {
     test.beforeEach(async ({ page }) => {
@@ -44,6 +45,23 @@ test.describe('PWA Features', () => {
         const response = await page.request.get('/manifest.webmanifest');
         expect(response.ok()).toBe(true);
         expect(await response.json()).toMatchObject({ name: 'Robo-Boy' });
+    });
+
+    // Desktop systems and browsers show these icons as drawn, so they carry their own rounded
+    // corners; iOS and Android mask theirs and need an opaque square.
+    test('ships every manifest icon, rounded except where the platform masks it', async ({ page }) => {
+        const { icons } = await (await page.request.get('/manifest.webmanifest')).json();
+        for (const icon of icons as { src: string; sizes: string; purpose?: string }[]) {
+            const response = await page.request.get(icon.src);
+            expect(response.headers()['content-type'], icon.src).toBe('image/png');
+            const image = sharp(await response.body());
+            const { width, height } = await image.metadata();
+            expect(`${width}x${height}`, icon.src).toBe(icon.sizes);
+            const { data, info } = await image.ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+            const cornerAlpha = data[info.channels - 1];
+            const masked = icon.purpose === 'maskable' || /apple|ios/.test(icon.src);
+            expect(cornerAlpha, icon.src).toBe(masked ? 255 : 0);
+        }
     });
 
     test('should have viewport meta tag', async ({ page }) => {
