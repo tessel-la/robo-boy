@@ -1,5 +1,6 @@
 import { normalizeJointStateOptions, type JointStateOptions } from '../../utils/jointStates';
 import type { RosTopicInfo } from '../../utils/urdfTopics';
+import { PercentField, SelectField, ToggleRow } from '../SettingsFields';
 
 export default function JointStateSettings({
   id,
@@ -20,77 +21,70 @@ export default function JointStateSettings({
   const descriptions = topics.filter(item => ['std_msgs/String', 'std_msgs/msg/String'].includes(item.type));
   const label = `Joint states on ${topic}`;
   return (
-    <div className="panel-settings joint-state-settings">
-      {(['visible', 'showVelocity', 'showEffort'] as const).map((key, i) => (
-        <label key={key} className="settings-toggle-row">
-          <input
-            type="checkbox"
-            checked={values[key]}
-            aria-label={`${['Show', 'Show velocity for', 'Show effort for'][i]} ${label}`}
-            onChange={event => onChange(id, { [key]: event.target.checked })}
-          />{' '}
-          {['Show overlay', 'Show velocity', 'Show effort'][i]}
+    <div className="layer-settings">
+      <ToggleRow
+        label="Show overlay"
+        ariaLabel={`Show ${label}`}
+        checked={values.visible}
+        onChange={visible => onChange(id, { visible })}
+      />
+      <SelectField
+        id={`joint-description-${id}`}
+        label="Robot description (limits)"
+        value={descriptionTopic}
+        onChange={robotDescriptionTopic => onChange(id, { robotDescriptionTopic })}
+      >
+        <option value="">None</option>
+        {descriptionTopic && !descriptions.some(item => item.name === descriptionTopic) && (
+          <option value={descriptionTopic}>{descriptionTopic} (current)</option>
+        )}
+        {descriptions.map(item => (
+          <option key={item.name} value={item.name}>
+            {item.name}
+          </option>
+        ))}
+      </SelectField>
+      <SelectField
+        id={`joint-unit-${id}`}
+        label="Angle units"
+        value={values.angleUnit}
+        onChange={angleUnit => onChange(id, { angleUnit: angleUnit as 'rad' | 'deg' })}
+      >
+        <option value="rad">Radians</option>
+        <option value="deg">Degrees</option>
+      </SelectField>
+      <div className="settings-field">
+        <label className="viz-topic-label" htmlFor={`joint-filter-${id}`}>
+          Filter joint names
         </label>
-      ))}
-      <div className="panel-settings-field">
-        <label htmlFor={`joint-description-${id}`}>Robot description (limits)</label>
-        <select
-          id={`joint-description-${id}`}
-          className="topic-dropdown"
-          value={descriptionTopic}
-          onChange={event => onChange(id, { robotDescriptionTopic: event.target.value })}
-        >
-          <option value="">None</option>
-          {descriptionTopic && !descriptions.some(item => item.name === descriptionTopic) && (
-            <option value={descriptionTopic}>{descriptionTopic} (current)</option>
-          )}
-          {descriptions.map(item => (
-            <option key={item.name} value={item.name}>
-              {item.name}
-            </option>
-          ))}
-        </select>
-      </div>
-      <div className="panel-settings-field">
-        <label htmlFor={`joint-unit-${id}`}>Angle units</label>
-        <select
-          id={`joint-unit-${id}`}
-          className="topic-dropdown"
-          value={values.angleUnit}
-          onChange={event => onChange(id, { angleUnit: event.target.value as 'rad' | 'deg' })}
-        >
-          <option value="rad">Radians</option>
-          <option value="deg">Degrees</option>
-        </select>
-      </div>
-      <label className="panel-settings-field" htmlFor={`joint-filter-${id}`}>
-        Filter joint names
         <input
           id={`joint-filter-${id}`}
           type="text"
-          className="topic-dropdown"
+          className="settings-text-input"
           maxLength={128}
           placeholder="All joints"
           value={values.filter}
           onChange={event => onChange(id, { filter: event.target.value })}
         />
-      </label>
-      <div className="tf-scale-control">
-        <div className="control-heading-row">
-          <label htmlFor={`joint-opacity-${id}`}>Background opacity</label>
-          <output className="range-value" htmlFor={`joint-opacity-${id}`}>
-            {Math.round(values.backgroundOpacity * 100)}%
-          </output>
-        </div>
-        <input
+      </div>
+      <ToggleRow
+        label="Show velocity"
+        ariaLabel={`Show velocity for ${label}`}
+        checked={values.showVelocity}
+        onChange={showVelocity => onChange(id, { showVelocity })}
+      />
+      <ToggleRow
+        label="Show effort"
+        ariaLabel={`Show effort for ${label}`}
+        checked={values.showEffort}
+        onChange={showEffort => onChange(id, { showEffort })}
+      />
+      <div className="viz-settings-group">
+        <PercentField
           id={`joint-opacity-${id}`}
-          className="range-input"
-          type="range"
-          min="0"
-          max="1"
-          step="0.05"
+          label="Background opacity"
           value={values.backgroundOpacity}
-          onChange={event => onChange(id, { backgroundOpacity: Number(event.target.value) })}
+          onChange={backgroundOpacity => onChange(id, { backgroundOpacity })}
         />
       </div>
       <button type="button" className="panel-settings-action" onClick={() => onChange(id, { frame: undefined })}>

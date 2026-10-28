@@ -2,6 +2,7 @@ import { expect, test, type Locator, type Page } from '@playwright/test';
 import { McapWriter, TempBuffer } from '@mcap/core';
 import sharp from 'sharp';
 import { getRosSubscriptionCount, installRosMock, publishRosMessage, waitForRosSubscription } from './helpers/rosMock';
+import { backToLayers, openLayerSettings } from './helpers/layerSettings';
 
 const header = (frame_id = 'map', sec = 2) => ({ frame_id, stamp: { sec, nanosec: 0 } });
 const plan = (frame = 'map', y = 0) => ({
@@ -26,16 +27,10 @@ async function addNavigationLayers(page: Page) {
   await panel.getByRole('button', { name: 'Settings', exact: true }).click();
   for (const title of ['Add Path (/robot/plan)', 'Add Occupancy grid (/robot/map)']) {
     await panel.getByRole('tab', { name: /^Visualizations/ }).click();
-    while (await panel.locator('.visualization-options:not([open]) > summary').count()) {
-      await panel.locator('.visualization-options:not([open]) > summary').first().click();
-    }
     await panel.getByRole('button', { name: 'Add visualization', exact: true }).click();
     await page.getByTitle(title, { exact: true }).click();
   }
   await panel.getByRole('tab', { name: /^Visualizations/ }).click();
-  while (await panel.locator('.visualization-options:not([open]) > summary').count()) {
-    await panel.locator('.visualization-options:not([open]) > summary').first().click();
-  }
   return panel;
 }
 
@@ -91,25 +86,24 @@ test('renders paths/maps, recovers with timestamped TF and persists independent 
       ],
     });
   await expect(panel.locator('.visualization-status')).toHaveCount(0);
+  await openLayerSettings(panel, 'Path', '/robot/plan');
   await panel.getByLabel('Line width in metres for Path on /robot/plan').fill('0.08');
   await panel.getByRole('button', { name: 'Close settings', exact: true }).click();
   await expect.poll(() => coloredPixels(panel.locator('canvas'))).toBeGreaterThan(30);
   await expect.poll(() => coloredPixels(panel.locator('canvas'), 'unknown')).toBeGreaterThan(30);
   await panel.getByRole('button', { name: 'Settings', exact: true }).click();
   await panel.getByRole('tab', { name: /^Visualizations/ }).click();
-  while (await panel.locator('.visualization-options:not([open]) > summary').count()) {
-    await panel.locator('.visualization-options:not([open]) > summary').first().click();
-  }
+  await openLayerSettings(panel, 'Path', '/robot/plan');
   await panel.getByLabel('Show Path on /robot/plan').uncheck();
   await panel.getByRole('button', { name: 'Close settings', exact: true }).click();
   await expect.poll(() => coloredPixels(panel.locator('canvas'))).toBe(0);
   await panel.getByRole('button', { name: 'Settings', exact: true }).click();
   await panel.getByRole('tab', { name: /^Visualizations/ }).click();
-  while (await panel.locator('.visualization-options:not([open]) > summary').count()) {
-    await panel.locator('.visualization-options:not([open]) > summary').first().click();
-  }
+  await openLayerSettings(panel, 'Path', '/robot/plan');
   await panel.getByLabel('Color for Path on /robot/plan').fill('#ff0000');
   await panel.getByLabel('Opacity for Path on /robot/plan').fill('0.45');
+  await backToLayers(panel);
+  await openLayerSettings(panel, 'Occupancy grid', '/robot/map');
   await panel.getByLabel('Opacity for Occupancy grid on /robot/map').fill('0.2');
   expect(await Promise.all(['/robot/plan', '/robot/map'].map(topic => getRosSubscriptionCount(page, topic)))).toEqual(
     counts
@@ -118,12 +112,12 @@ test('renders paths/maps, recovers with timestamped TF and persists independent 
   await connect();
   await panel.getByRole('button', { name: 'Settings', exact: true }).click();
   await panel.getByRole('tab', { name: /^Visualizations/ }).click();
-  while (await panel.locator('.visualization-options:not([open]) > summary').count()) {
-    await panel.locator('.visualization-options:not([open]) > summary').first().click();
-  }
+  await openLayerSettings(panel, 'Path', '/robot/plan');
   await expect(panel.getByLabel('Show Path on /robot/plan')).not.toBeChecked();
   await expect(panel.getByLabel('Color for Path on /robot/plan')).toHaveValue('#ff0000');
   await expect(panel.getByLabel('Line width in metres for Path on /robot/plan')).toHaveValue('0.080');
+  await backToLayers(panel);
+  await openLayerSettings(panel, 'Occupancy grid', '/robot/map');
   await expect(panel.getByLabel('Opacity for Occupancy grid on /robot/map')).toHaveValue('0.2');
   expect(errors).toEqual([]);
 });
@@ -188,6 +182,7 @@ test('renders recorded paths/maps and restores them after backward seeks without
   await expect(replay.getByRole('button', { name: 'Play recording', exact: true })).toBeEnabled();
   const panel = await addNavigationLayers(page);
   await expect(panel.locator('.visualization-status')).toHaveCount(0);
+  await openLayerSettings(panel, 'Path', '/robot/plan');
   await panel.getByLabel('Line width in metres for Path on /robot/plan').fill('0.08');
   await panel.getByRole('button', { name: 'Close settings', exact: true }).click();
   await expect.poll(() => coloredPixels(panel.locator('canvas'))).toBeGreaterThan(10);
@@ -208,9 +203,6 @@ test('renders recorded paths/maps and restores them after backward seeks without
   await expect.poll(() => coloredPixels(panel.locator('canvas'), 'unknown')).toBeGreaterThan(10);
   await panel.getByRole('button', { name: 'Settings', exact: true }).click();
   await panel.getByRole('tab', { name: /^Visualizations/ }).click();
-  while (await panel.locator('.visualization-options:not([open]) > summary').count()) {
-    await panel.locator('.visualization-options:not([open]) > summary').first().click();
-  }
   await expect(panel.locator('.visualization-status')).toHaveCount(0);
   expect(errors).toEqual([]);
 });

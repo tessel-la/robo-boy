@@ -1,6 +1,7 @@
 import { McapWriter, TempBuffer } from '@mcap/core';
 import { expect, test, type Page } from '@playwright/test';
 import { installRosMock, publishRosMessage, waitForRosSubscription } from './helpers/rosMock';
+import { openLayerSettings } from './helpers/layerSettings';
 const topic = '/robot/joint_states';
 const description = '/robot/robot_description';
 const urdf = `<robot name="robot">
@@ -74,7 +75,7 @@ test('shows live joint limits, moves/resizes within 3D and persists display sett
   const placed = (await overlay.boundingBox())!;
   await panel.getByRole('button', { name: 'Settings', exact: true }).click();
   await panel.getByRole('tab', { name: /^Visualizations/ }).click();
-  await panel.getByLabel(`Display settings for Joint states on ${topic}`, { exact: true }).click();
+  await openLayerSettings(panel, 'Joint states', topic);
   await panel.getByLabel('Angle units', { exact: true }).selectOption('deg');
   await panel.getByLabel('Background opacity', { exact: true }).fill('0.5');
   await panel.getByLabel(`Show velocity for Joint states on ${topic}`, { exact: true }).check();
@@ -103,14 +104,14 @@ test('shows live joint limits, moves/resizes within 3D and persists display sett
     .toBe(true);
   await panel.getByRole('button', { name: 'Settings', exact: true }).click();
   await panel.getByRole('tab', { name: /^Visualizations/ }).click();
-  await panel.getByLabel(`Display settings for Joint states on ${topic}`, { exact: true }).click();
+  await openLayerSettings(panel, 'Joint states', topic);
   await panel.getByLabel('Filter joint names', { exact: true }).fill('gripper');
   await panel.getByRole('button', { name: 'Close settings', exact: true }).click();
   await expect(overlay).not.toContainText('elbow');
   await expect(overlay).toContainText('gripper');
   await panel.getByRole('button', { name: 'Settings', exact: true }).click();
   await panel.getByRole('tab', { name: /^Visualizations/ }).click();
-  await panel.getByLabel(`Display settings for Joint states on ${topic}`, { exact: true }).click();
+  await openLayerSettings(panel, 'Joint states', topic);
   await panel.getByRole('button', { name: 'Reset overlay position and size', exact: true }).click();
   await panel.getByLabel(`Show Joint states on ${topic}`, { exact: true }).uncheck();
   await expect(overlay).toHaveCount(0);

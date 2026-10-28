@@ -62,13 +62,9 @@ describe('SettingsPopup', () => {
       />
     );
     fireEvent.click(screen.getByRole('tab', { name: /Visualizations/ }));
-    expect(screen.getByLabelText('Image source for Camera image on /front/image_rect/compressed')).toHaveValue(
-      'stream'
-    );
-    const details = screen.getByLabelText('Display settings for Camera image on /front/image_rect/compressed')
-      .parentElement as HTMLDetailsElement;
-    expect(details.open).toBe(false);
-    details.open = true;
+    fireEvent.click(screen.getByLabelText('Edit Camera image visualization for topic /front/image_rect/compressed'));
+    expect(screen.getByRole('heading', { name: '/front/image_rect/compressed' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Image source for Camera image on /front/image_rect/compressed')).toHaveValue('stream');
     expect(screen.getByRole('option', { name: 'Camera streamer' })).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('Image source for Camera image on /front/image_rect/compressed'), {
       target: { value: 'ros' },
@@ -109,13 +105,18 @@ describe('SettingsPopup', () => {
       />
     );
     fireEvent.click(screen.getByRole('tab', { name: /Visualizations/ }));
+    fireEvent.click(screen.getByLabelText('Edit Path visualization for topic /robot/plan'));
     expect(screen.getByLabelText('Color for Path on /robot/plan')).toHaveValue('#123456');
     expect(screen.getByLabelText('Line width in metres for Path on /robot/plan')).toHaveValue(0.05);
     expect(screen.getByLabelText('Opacity for Path on /robot/plan')).toHaveValue('0.4');
-    expect(screen.getByLabelText('Show Occupancy grid on /robot/map')).not.toBeChecked();
-    expect(screen.getByLabelText('Opacity for Occupancy grid on /robot/map')).toHaveValue('0.7');
     fireEvent.click(screen.getByLabelText('Show Path on /robot/plan'));
     expect(onUpdate).toHaveBeenLastCalledWith('plan', { visible: false });
+
+    fireEvent.click(screen.getByLabelText('Back to 3D view settings'));
+    fireEvent.click(screen.getByLabelText('Edit Occupancy grid visualization for topic /robot/map'));
+    expect(screen.getByLabelText('Show Occupancy grid on /robot/map')).not.toBeChecked();
+    expect(screen.getByLabelText('Opacity for Occupancy grid on /robot/map')).toHaveValue('0.7');
+    expect(screen.queryByLabelText('Color for Occupancy grid on /robot/map')).not.toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('Opacity for Occupancy grid on /robot/map'), { target: { value: '0' } });
     expect(onUpdate).toHaveBeenLastCalledWith('map', { opacity: 0 });
   });
@@ -325,13 +326,59 @@ describe('SettingsPopup', () => {
         />
       );
       fireEvent.click(screen.getByRole('tab', { name: /Visualizations/ }));
+      fireEvent.click(screen.getByLabelText('Edit URDF visualization for topic /robot_description'));
       expect(screen.getByLabelText('Mesh opacity for URDF on /robot_description')).toHaveValue('0.4');
-      expect(screen.getByLabelText('Mesh opacity for Mesh markers on /objects')).toHaveValue('1');
-      expect(screen.getAllByRole('slider')).toHaveLength(2);
-      fireEvent.change(screen.getByLabelText('Mesh opacity for URDF on /robot_description'), {
-        target: { value: '0' },
-      });
+      expect(screen.getAllByRole('slider')).toHaveLength(1);
+      fireEvent.change(screen.getByLabelText('Mesh opacity for URDF on /robot_description'), { target: { value: '0' } });
       expect(update).toHaveBeenCalledWith('robot', { opacity: 0 });
+
+      fireEvent.click(screen.getByLabelText('Back to 3D view settings'));
+      fireEvent.click(screen.getByLabelText('Edit Mesh markers visualization for topic /objects'));
+      expect(screen.getByLabelText('Mesh opacity for Mesh markers on /objects')).toHaveValue('1');
+    });
+
+    it('opens each layer\'s settings as a view of the menu and keeps the list compact', () => {
+      const update = vi.fn();
+      render(<SettingsPopup {...defaultProps} onUpdateVisualizationOptions={update}
+        visualizationStatus={{ cloud: 'Waiting for point cloud messages.' }}
+        activeVisualizations={[
+          { id: 'cloud', type: 'pointcloud', topic: '/points' },
+          { id: 'scan', type: 'laserscan', topic: '/scan' },
+          { id: 'goal', type: 'posestamped', topic: '/goal_pose' },
+          { id: 'info', type: 'camerainfo', topic: '/camera/camera_info' },
+        ]} />);
+      fireEvent.click(screen.getByRole('tab', { name: /Visualizations/ }));
+
+      expect(screen.queryAllByRole('slider')).toHaveLength(0);
+      expect(screen.queryByLabelText(/Edit Camera Info/)).not.toBeInTheDocument();
+      expect(screen.getByRole('status')).toHaveTextContent('Waiting for point cloud messages.');
+
+      fireEvent.click(screen.getByLabelText('Edit Point Cloud visualization for topic /points'));
+      expect(screen.getByText('Point Cloud', { selector: '.settings-popup-kicker' })).toBeInTheDocument();
+      expect(screen.getByRole('status')).toHaveTextContent('Waiting for point cloud messages.');
+      fireEvent.change(screen.getByLabelText('Color for Point cloud on /points'), { target: { value: '#112233' } });
+      expect(update).toHaveBeenLastCalledWith('cloud', { color: '#112233', colorEnabled: true });
+      expect(mockOnClose).not.toHaveBeenCalled();
+
+      fireEvent.click(screen.getByLabelText('Back to 3D view settings'));
+      expect(screen.getByRole('tab', { name: /Visualizations/ })).toHaveAttribute('aria-selected', 'true');
+      fireEvent.click(screen.getByLabelText('Edit Laser Scan visualization for topic /scan'));
+      expect(screen.getByLabelText('Point size in pixels for Laser scan on /scan')).toBeInTheDocument();
+
+      fireEvent.click(screen.getByLabelText('Back to 3D view settings'));
+      fireEvent.click(screen.getByLabelText('Edit Pose Stamped visualization for topic /goal_pose'));
+      expect(screen.getByLabelText('Shape for Pose on /goal_pose')).toHaveValue('arrow');
+    });
+
+    it('returns to the list when the layer being edited is removed', () => {
+      const props = { ...defaultProps, onUpdateVisualizationOptions: vi.fn() };
+      const { rerender } = render(<SettingsPopup {...props}
+        activeVisualizations={[{ id: 'cloud', type: 'pointcloud', topic: '/points' }]} />);
+      fireEvent.click(screen.getByRole('tab', { name: /Visualizations/ }));
+      fireEvent.click(screen.getByLabelText('Edit Point Cloud visualization for topic /points'));
+
+      rerender(<SettingsPopup {...props} activeVisualizations={[]} />);
+      expect(screen.getByText('No active visualizations.')).toBeInTheDocument();
     });
 
     it('does not offer unrelated String topics for an active URDF visualization', () => {

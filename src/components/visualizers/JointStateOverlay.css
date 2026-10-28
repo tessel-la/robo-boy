@@ -150,11 +150,6 @@
   outline-offset: -2px;
 }
 
-.joint-state-settings {
-  display: grid;
-  gap: 12px;
-}
-
 @media (pointer: coarse) {
   .joint-state-move {
     min-height: 36px;

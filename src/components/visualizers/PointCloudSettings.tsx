@@ -1,8 +1,6 @@
-import React, { useState, ChangeEvent } from 'react';
-import { FiChevronDown, FiChevronRight } from 'react-icons/fi';
-import './TopicSettings.css';
+import ScaleField from '../ScaleField';
+import { ColorField } from '../SettingsFields';
 
-// Define the settings structure
 export interface PointCloudSettingsOptions {
   pointSize: number;
   color: string;
@@ -13,215 +11,59 @@ export interface PointCloudSettingsOptions {
   maxAxisValue?: number;
   minColor?: string;
   maxColor?: string;
-  // New toggle properties for enabling/disabling settings
+  // Saved by earlier versions, whose settings could switch each value off. The viewer still reads
+  // them, so every edit here switches its value back on.
   pointSizeEnabled: boolean;
   colorEnabled: boolean;
   maxPointsEnabled: boolean;
 }
 
-interface PointCloudSettingsProps {
-  vizId: string;
+const DEFAULTS = { pointSize: 0.05, color: '#00ff00', maxPoints: 200000 };
+
+export default function PointCloudSettings({
+  id,
+  topic,
+  options,
+  onChange,
+}: {
+  id: string;
   topic: string;
-  initialOptions?: Partial<PointCloudSettingsOptions>;
-  onClose: () => void;
-  onSaveSettings: (vizId: string, newOptions: PointCloudSettingsOptions) => void;
-}
-
-const defaultSettings: PointCloudSettingsOptions = {
-  pointSize: 0.05,
-  color: '#00ff00',
-  maxPoints: 200000,
-  // Default all toggles to enabled
-  pointSizeEnabled: true,
-  colorEnabled: true,
-  maxPointsEnabled: true,
-};
-
-interface SettingGroupProps {
-  title: string;
-  enabled: boolean;
-  onToggle: (enabled: boolean) => void;
-  children: React.ReactNode;
-}
-
-/**
- * SettingGroup - A component that renders a collapsible settings group with a toggle switch
- */
-const SettingGroup = ({
-  title,
-  enabled,
-  onToggle,
-  children
-}: SettingGroupProps): JSX.Element => {
-  const [expanded, setExpanded] = useState(true);
-
+  options?: Partial<PointCloudSettingsOptions>;
+  onChange: (id: string, patch: Partial<PointCloudSettingsOptions>) => void;
+}) {
+  const label = `Point cloud on ${topic}`;
   return (
-    <div className="setting-group">
-      <div className="setting-header">
-        <button
-          type="button"
-          className="expand-toggle"
-          onClick={() => setExpanded(!expanded)}
-          aria-label={expanded ? "Collapse section" : "Expand section"}
-        >
-          {expanded ? <FiChevronDown /> : <FiChevronRight />}
-        </button>
-        <label>{title}</label>
-        <div className="toggle-switch-container">
-          <label className="toggle-switch">
-            <input
-              type="checkbox"
-              checked={enabled}
-              onChange={(e: ChangeEvent<HTMLInputElement>) => onToggle(e.target.checked)}
-            />
-            <span className="toggle-slider"></span>
-          </label>
-        </div>
-      </div>
-      {expanded && enabled && (
-        <div className="setting-content">
-          {children}
-        </div>
-      )}
-    </div>
-  );
-};
-
-/**
- * PointCloudSettings - A component for configuring point cloud visualization settings
- */
-const PointCloudSettings = ({
-  vizId,
-  topic: _topic,
-  initialOptions,
-  onClose,
-  onSaveSettings,
-}: PointCloudSettingsProps): JSX.Element => {
-  // Merge initial options with defaults
-  const [settings, setSettings] = useState<PointCloudSettingsOptions>({
-    ...defaultSettings,
-    ...initialOptions
-  });
-
-  // Update specific setting
-  const updateSetting = <K extends keyof PointCloudSettingsOptions>(
-    key: K,
-    value: PointCloudSettingsOptions[K]
-  ) => {
-    setSettings((prev: PointCloudSettingsOptions) => ({
-      ...prev,
-      [key]: value
-    }));
-  };
-
-  // Handle number input changes
-  const handleNumberChange = (
-    e: ChangeEvent<HTMLInputElement>,
-    key: keyof PointCloudSettingsOptions
-  ) => {
-    const value = parseFloat(e.target.value);
-    if (!isNaN(value)) {
-      updateSetting(key, value);
-    }
-  };
-
-  // Handle save button
-  const handleSave = () => {
-    onSaveSettings(vizId, settings);
-    onClose();
-  };
-
-  return (
-    <div className="topic-settings-popup">
-      <div className="settings-popup-header">
-        <h3>Point Cloud Settings</h3>
-        <button className="close-button" onClick={onClose}>×</button>
-      </div>
-      <div className="settings-popup-content">
-        <div className="settings-grid">
-          {/* Point Size Setting Group */}
-          <SettingGroup
-            title="Point Size"
-            enabled={settings.pointSizeEnabled}
-            onToggle={(enabled) => updateSetting('pointSizeEnabled', enabled)}
-          >
-            <div className="setting-control">
-              <input
-                id="point-size"
-                type="range"
-                min="0.01"
-                max="0.5"
-                step="0.01"
-                value={settings.pointSize}
-                onChange={(e: ChangeEvent<HTMLInputElement>) => handleNumberChange(e, 'pointSize')}
-              />
-              <input
-                type="number"
-                min="0.01"
-                max="0.5"
-                step="0.01"
-                value={settings.pointSize}
-                onChange={(e: ChangeEvent<HTMLInputElement>) => handleNumberChange(e, 'pointSize')}
-                className="number-input"
-              />
-            </div>
-          </SettingGroup>
-
-          {/* Max Points Setting Group */}
-          <SettingGroup
-            title="Max Points"
-            enabled={settings.maxPointsEnabled}
-            onToggle={(enabled) => updateSetting('maxPointsEnabled', enabled)}
-          >
-            <div className="setting-control">
-              <input
-                id="max-points"
-                type="range"
-                min="1000"
-                max="1000000"
-                step="1000"
-                value={settings.maxPoints}
-                onChange={(e: ChangeEvent<HTMLInputElement>) => handleNumberChange(e, 'maxPoints')}
-              />
-              <input
-                type="number"
-                min="1000"
-                max="1000000"
-                step="1000"
-                value={settings.maxPoints}
-                onChange={(e: ChangeEvent<HTMLInputElement>) => handleNumberChange(e, 'maxPoints')}
-                className="number-input"
-              />
-            </div>
-          </SettingGroup>
-
-          {/* Color Setting Group */}
-          <SettingGroup
-            title="Color Settings"
-            enabled={settings.colorEnabled}
-            onToggle={(enabled) => updateSetting('colorEnabled', enabled)}
-          >
-            <div className="color-container-wrapper">
-              <label htmlFor="fixed-color">Color</label>
-              <div className="color-container">
-                <input
-                  id="fixed-color"
-                  type="color"
-                  value={settings.color}
-                  onChange={(e: ChangeEvent<HTMLInputElement>) => updateSetting('color', e.target.value)}
-                />
-              </div>
-            </div>
-          </SettingGroup>
-        </div>
-
-        <div className="settings-actions">
-          <button className="cancel-button" onClick={onClose}>Cancel</button>
-          <button className="save-button" onClick={handleSave}>Apply</button>
-        </div>
+    <div className="layer-settings">
+      <div className="viz-settings-group">
+        <ScaleField
+          id={`pointcloud-size-${id}`}
+          label="Point size"
+          ariaLabel={`Point size in metres for ${label}`}
+          min={0.001}
+          max={0.5}
+          precision={3}
+          value={options?.pointSize ?? DEFAULTS.pointSize}
+          onChange={pointSize => onChange(id, { pointSize, pointSizeEnabled: true })}
+        />
+        <ScaleField
+          id={`pointcloud-max-${id}`}
+          label="Max points"
+          ariaLabel={`Maximum points for ${label}`}
+          unit=""
+          min={1000}
+          max={1000000}
+          precision={0}
+          value={options?.maxPoints ?? DEFAULTS.maxPoints}
+          onChange={maxPoints => onChange(id, { maxPoints: Math.round(maxPoints), maxPointsEnabled: true })}
+        />
+        <ColorField
+          id={`pointcloud-color-${id}`}
+          label="Color"
+          ariaLabel={`Color for ${label}`}
+          value={options?.color ?? DEFAULTS.color}
+          onChange={color => onChange(id, { color, colorEnabled: true })}
+        />
       </div>
     </div>
   );
-};
-
-export default PointCloudSettings; 
+}

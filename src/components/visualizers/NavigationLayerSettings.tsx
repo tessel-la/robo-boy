@@ -1,6 +1,7 @@
 import { normalizeNavigationOptions, type NavigationDisplayOptions } from '../../utils/navigationOptions';
 import { GRID_UPDATE_TYPES } from '../../utils/occupancyGridData';
 import ScaleField from '../ScaleField';
+import { ColorField, PercentField, SelectField, ToggleRow } from '../SettingsFields';
 
 export default function NavigationLayerSettings({
   id,
@@ -20,74 +21,45 @@ export default function NavigationLayerSettings({
   const values = normalizeNavigationOptions(options, type === 'occupancygrid');
   const label = `${type === 'path' ? 'Path' : 'Occupancy grid'} on ${topic}`;
   return (
-    <div className="navigation-layer-settings panel-settings">
-      <label className="settings-toggle-row">
-        <input
-          type="checkbox"
-          checked={values.visible}
-          aria-label={`Show ${label}`}
-          onChange={event => onChange(id, { visible: event.target.checked })}
-        />{' '}
-        Show layer
-      </label>
-      {type === 'path' && (
-        <>
-          <div className="control-heading-row">
-            <label htmlFor={`path-color-${id}`}>Color</label>
-            <input
-              type="color"
-              id={`path-color-${id}`}
-              aria-label={`Color for ${label}`}
-              value={values.color}
-              onChange={event => onChange(id, { color: event.target.value })}
-            />
-          </div>
-          <ScaleField
-            id={`path-width-${id}`}
-            label="Line width"
-            ariaLabel={`Line width in metres for ${label}`}
-            min={0.001}
-            max={1}
-            precision={3}
-            value={values.lineWidth}
-            onChange={lineWidth => onChange(id, { lineWidth })}
-          />
-        </>
-      )}
+    <div className="layer-settings">
+      <ToggleRow
+        label="Show layer"
+        ariaLabel={`Show ${label}`}
+        checked={values.visible}
+        onChange={visible => onChange(id, { visible })}
+      />
       {type === 'occupancygrid' && (
         <>
-          <label className="panel-settings-field">
-            <span>Color scheme</span>
-            <select
-              aria-label={`Color scheme for ${label}`}
-              value={values.palette}
-              onChange={event => onChange(id, { palette: event.target.value as 'occupancy' | 'costmap' })}
-            >
-              <option value="occupancy">Occupancy</option>
-              <option value="costmap">Costmap (RViz)</option>
-            </select>
-          </label>
-          <label className="panel-settings-field">
-            <span>Updates topic</span>
-            <select
-              aria-label={`Updates topic for ${label}`}
-              value={values.updatesTopic}
-              onChange={event => onChange(id, { updatesTopic: event.target.value })}
-            >
-              <option value="">Full maps only</option>
-              {values.updatesTopic &&
-                !topics.some(item => item.name === values.updatesTopic && GRID_UPDATE_TYPES.includes(item.type)) && (
-                  <option value={values.updatesTopic}>{values.updatesTopic} (current)</option>
-                )}
-              {topics
-                .filter(item => item.name !== topic && GRID_UPDATE_TYPES.includes(item.type))
-                .map(item => (
-                  <option key={item.name} value={item.name}>
-                    {item.name}
-                  </option>
-                ))}
-            </select>
-          </label>
+          <SelectField
+            id={`map-palette-${id}`}
+            label="Color scheme"
+            ariaLabel={`Color scheme for ${label}`}
+            value={values.palette}
+            onChange={palette => onChange(id, { palette: palette as 'occupancy' | 'costmap' })}
+          >
+            <option value="occupancy">Occupancy</option>
+            <option value="costmap">Costmap (RViz)</option>
+          </SelectField>
+          <SelectField
+            id={`map-updates-${id}`}
+            label="Updates topic"
+            ariaLabel={`Updates topic for ${label}`}
+            value={values.updatesTopic}
+            onChange={updatesTopic => onChange(id, { updatesTopic })}
+          >
+            <option value="">Full maps only</option>
+            {values.updatesTopic &&
+              !topics.some(item => item.name === values.updatesTopic && GRID_UPDATE_TYPES.includes(item.type)) && (
+                <option value={values.updatesTopic}>{values.updatesTopic} (current)</option>
+              )}
+            {topics
+              .filter(item => item.name !== topic && GRID_UPDATE_TYPES.includes(item.type))
+              .map(item => (
+                <option key={item.name} value={item.name}>
+                  {item.name}
+                </option>
+              ))}
+          </SelectField>
           <p className="panel-settings-status">
             {values.palette === 'costmap'
               ? 'Free 0 (transparent), inflated 1–98, inscribed 99 (cyan), lethal 100 (magenta), unknown −1 (gray). '
@@ -98,23 +70,34 @@ export default function NavigationLayerSettings({
           </p>
         </>
       )}
-      <div className="tf-scale-control">
-        <div className="control-heading-row">
-          <label htmlFor={`navigation-opacity-${id}`}>Opacity</label>
-          <output htmlFor={`navigation-opacity-${id}`} className="range-value">
-            {Math.round(values.opacity * 100)}%
-          </output>
-        </div>
-        <input
-          type="range"
+      <div className="viz-settings-group">
+        {type === 'path' && (
+          <>
+            <ColorField
+              id={`path-color-${id}`}
+              label="Color"
+              ariaLabel={`Color for ${label}`}
+              value={values.color}
+              onChange={color => onChange(id, { color })}
+            />
+            <ScaleField
+              id={`path-width-${id}`}
+              label="Line width"
+              ariaLabel={`Line width in metres for ${label}`}
+              min={0.001}
+              max={1}
+              precision={3}
+              value={values.lineWidth}
+              onChange={lineWidth => onChange(id, { lineWidth })}
+            />
+          </>
+        )}
+        <PercentField
           id={`navigation-opacity-${id}`}
-          min="0"
-          max="1"
-          step="0.05"
-          className="range-input"
-          aria-label={`Opacity for ${label}`}
+          label="Opacity"
+          ariaLabel={`Opacity for ${label}`}
           value={values.opacity}
-          onChange={event => onChange(id, { opacity: Number(event.target.value) })}
+          onChange={opacity => onChange(id, { opacity })}
         />
       </div>
     </div>

@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import sharp from 'sharp';
+import { openLayerSettings, backToLayers } from './helpers/layerSettings';
 import {
   installRosMock,
   publishRosMessage,
@@ -43,7 +44,7 @@ async function setup(page: Page) {
     await page.getByTitle(title, { exact: true }).click();
   }
   await panel.getByRole('tab', { name: /^Visualizations/ }).click();
-  await panel.getByLabel(`Display settings for Camera image on ${topic}`, { exact: true }).click();
+  await openLayerSettings(panel, 'Camera image', topic);
   await panel.getByLabel(`Image source for Camera image on ${topic}`, { exact: true }).selectOption('ros');
   await waitForRosSubscription(page, topic);
   await waitForRosSubscription(page, infoTopic);
@@ -139,8 +140,7 @@ test('projects onto URDF surfaces in WebGL, switches timing explicitly and retai
   await panel.getByRole('button', { name: 'Settings', exact: true }).click();
   await panel.getByRole('tab', { name: /^Visualizations/ }).click();
   const mode = panel.getByLabel(`Projection mode for Camera image on ${topic}`);
-  if (!(await mode.isVisible()))
-    await panel.getByLabel(`Display settings for Camera image on ${topic}`, { exact: true }).click();
+  if (!(await mode.isVisible())) await openLayerSettings(panel, 'Camera image', topic);
   await expect(mode).toHaveValue('surfaces');
   await expect(panel.getByLabel(`Project onto urdf ${description}`)).toBeChecked();
   await panel.getByLabel(`Surface geometry timing for Camera image on ${topic}`).selectOption('latest');
@@ -297,6 +297,7 @@ test('CameraInfo-only frustums remain inspectable without an image and open cali
   page,
 }) => {
   const panel = await setup(page);
+  await backToLayers(panel);
   await panel.getByRole('button', { name: 'Add visualization', exact: true }).click();
   await page.getByTitle(`Add Camerainfo (${infoTopic})`, { exact: true }).click();
   await panel.getByRole('tab', { name: /^Visualizations/ }).click();

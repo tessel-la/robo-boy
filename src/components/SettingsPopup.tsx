@@ -1,16 +1,10 @@
 import React, { useState } from 'react';
-import { FaCog } from 'react-icons/fa';
 import { FiArrowLeft, FiPlus, FiSettings, FiTrash2, FiX, FiInfo } from 'react-icons/fi';
 
 import { getTopicsForVisualizationType, isTopicVisualizationType } from '../utils/visualizationTopics';
-import { normalizeMeshOpacity, type MeshDisplayOptions } from '../utils/meshOpacity';
-import type { NavigationDisplayOptions } from '../utils/navigationOptions';
-import NavigationLayerSettings from './visualizers/NavigationLayerSettings';
 import ScaleField from './ScaleField';
-import JointStateSettings from './visualizers/JointStateSettings';
-import { jointDescriptionTopic, type JointStateOptions } from '../utils/jointStates';
-import CameraImageSettings from './visualizers/CameraImageSettings';
-import type { CameraImageOptions } from '../utils/images/cameraImageOptions';
+import { PercentField, SelectField, ToggleRow } from './SettingsFields';
+import LayerSettings, { hasLayerSettings, type LayerOptionsPatch } from './visualizers/LayerSettings';
 import type { TfDisplaySettings } from '../utils/visualizationState';
 import type { VisualizationConfig } from './VisualizationPanel';
 import './VisualizationPanel.css';
@@ -37,23 +31,19 @@ interface SettingsPopupProps {
   activeVisualizations: VisualizationConfig[];
   onRemoveVisualization: (id: string) => void;
   onAddVisualizationClick: () => void;
-  onEditVisualization?: (id: string) => void;
-  onUpdateVisualizationOptions?: (
-    id: string,
-    options: JointStateOptions | MeshDisplayOptions | NavigationDisplayOptions | CameraImageOptions
-  ) => void;
+  onUpdateVisualizationOptions?: (id: string, options: LayerOptionsPatch) => void;
   onUpdateVisualizationTopic?: (id: string, newTopic: string) => void;
   allTopics: TopicInfo[];
   visualizationStatus?: Record<string, string | null>;
   onInspectCamera?: (id: string) => void;
 }
 
-/** Each section collapses on its own; the open ones share the remaining height so the frame
- * list gets room instead of forcing a long scroll past everything else. */
 /** One tab at a time owns the menu's height, so a frame list and a visualization list never
  * have to share it. */
 type SettingsTab = 'frames' | 'visualizations';
-type PopupView = 'main' | 'frameDisplay';
+/** Detail settings open as their own view inside the menu, with a way back: the frame display,
+ * or one layer's settings by its id. */
+type PopupView = { kind: 'main' } | { kind: 'frameDisplay' } | { kind: 'layer'; id: string };
 
 const TYPE_LABELS: Record<VisualizationConfig['type'], string> = {
   pointcloud: 'Point Cloud',
@@ -68,8 +58,6 @@ const TYPE_LABELS: Record<VisualizationConfig['type'], string> = {
   cameraimage: 'Camera image',
   jointstate: 'Joint states',
 };
-
-const CONFIGURABLE_TYPES = new Set<VisualizationConfig['type']>(['pointcloud', 'laserscan', 'posestamped']);
 
 const SettingsPopup: React.FC<SettingsPopupProps> = ({
   onClose,
@@ -86,14 +74,13 @@ const SettingsPopup: React.FC<SettingsPopupProps> = ({
   visualizationStatus,
   onRemoveVisualization,
   onAddVisualizationClick,
-  onEditVisualization,
   onUpdateVisualizationTopic,
   onUpdateVisualizationOptions,
   allTopics = [],
   onInspectCamera,
 }) => {
   const [tab, setTab] = useState<SettingsTab>('frames');
-  const [view, setView] = useState<PopupView>('main');
+  const [view, setView] = useState<PopupView>({ kind: 'main' });
   const [frameFilter, setFrameFilter] = useState('');
 
   const handleTfCheckboxChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -109,49 +96,79 @@ const SettingsPopup: React.FC<SettingsPopupProps> = ({
     ? availableFrames.filter(frame => frame.toLowerCase().includes(normalizedFilter))
     : availableFrames;
 
-  const handleEditClick = (id: string) => {
-    onEditVisualization?.(id);
-    onClose();
-  };
-
-  const handleTopicChange = (vizId: string, event: React.ChangeEvent<HTMLSelectElement>) => {
-    if (event.target.value) onUpdateVisualizationTopic?.(vizId, event.target.value);
+  const handleTopicChange = (vizId: string, topic: string) => {
+    if (topic) onUpdateVisualizationTopic?.(vizId, topic);
   };
 
   const compatibleTopicsFor = (vizType: VisualizationConfig['type']): TopicInfo[] =>
     isTopicVisualizationType(vizType) ? getTopicsForVisualizationType(vizType, allTopics) : [];
 
-  if (view === 'frameDisplay') {
+  const detailHeader = (kicker: string, title: string) => (
+    <header className="settings-popup-header">
+      <button
+        type="button"
+        onClick={() => setView({ kind: 'main' })}
+        className="close-button"
+        aria-label="Back to 3D view settings"
+      >
+        <FiArrowLeft aria-hidden="true" />
+      </button>
+      <div className="settings-popup-heading">
+        <span className="settings-popup-kicker">{kicker}</span>
+        <h3 title={title}>{title}</h3>
+      </div>
+      <button type="button" onClick={onClose} className="close-button" aria-label="Close settings">
+        <FiX aria-hidden="true" />
+      </button>
+    </header>
+  );
+
+  const layer = view.kind === 'layer' ? activeVisualizations.find(viz => viz.id === view.id) : undefined;
+  if (layer && onUpdateVisualizationOptions) {
     return (
       <div className="settings-popup panel-settings">
-        <header className="settings-popup-header">
-          <button
-            type="button"
-            onClick={() => setView('main')}
-            className="close-button"
-            aria-label="Back to 3D view settings"
-          >
-            <FiArrowLeft aria-hidden="true" />
-          </button>
-          <div className="settings-popup-heading">
-            <span className="settings-popup-kicker">TF frames</span>
-            <h3>Frame display</h3>
-          </div>
-          <button type="button" onClick={onClose} className="close-button" aria-label="Close settings">
-            <FiX aria-hidden="true" />
-          </button>
-        </header>
+        {detailHeader(TYPE_LABELS[layer.type], layer.topic)}
+        <div key={layer.id} className="settings-popup-content layer-settings-content">
+          {visualizationStatus?.[layer.id] && (
+            <p role="status" className="visualization-status">
+              {visualizationStatus[layer.id]}
+            </p>
+          )}
+          {layer.type === 'cameraimage' && onInspectCamera && (
+            <button
+              type="button"
+              className="settings-nav-row"
+              aria-label={`Inspect camera on ${layer.topic}`}
+              onClick={() => onInspectCamera(layer.id)}
+            >
+              <FiInfo aria-hidden="true" />
+              <span>Inspect camera</span>
+            </button>
+          )}
+          <LayerSettings
+            surfaceLayers={activeVisualizations.filter(item => item.type === 'urdf' || item.type === 'markerarray')}
+            viz={layer}
+            typeLabel={TYPE_LABELS[layer.type]}
+            topics={allTopics}
+            onChange={onUpdateVisualizationOptions}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  if (view.kind === 'frameDisplay') {
+    return (
+      <div className="settings-popup panel-settings">
+        {detailHeader('TF frames', 'Frame display')}
 
         <div className="settings-popup-content frame-display-content">
-          <label className="settings-toggle-row">
-            <span>Show axes</span>
-            <input
-              type="checkbox"
-              checked={tfDisplay.showTfAxes}
-              onChange={event => onTfDisplayChange({ showTfAxes: event.target.checked })}
-            />
-          </label>
-          <div className="tf-scale-control">
+          <ToggleRow
+            label="Show axes"
+            checked={tfDisplay.showTfAxes}
+            onChange={showTfAxes => onTfDisplayChange({ showTfAxes })}
+          />
+          <div className="viz-settings-group">
             <ScaleField
               id="tf-axes-scale"
               label="Axes length"
@@ -171,43 +188,28 @@ const SettingsPopup: React.FC<SettingsPopupProps> = ({
               disabled={!tfDisplay.showTfAxes}
               onChange={tfAxesWidth => onTfDisplayChange({ tfAxesWidth })}
             />
-            <div className="control-heading-row">
-              <label htmlFor="tf-axes-opacity">Axes opacity</label>
-              <output htmlFor="tf-axes-opacity" className="range-value">
-                {Math.round(tfDisplay.tfAxesOpacity * 100)}%
-              </output>
-            </div>
-            <input
-              type="range"
+            <PercentField
               id="tf-axes-opacity"
-              min="0.1"
-              max="1"
-              step="0.05"
+              label="Axes opacity"
+              min={0.1}
               value={tfDisplay.tfAxesOpacity}
               disabled={!tfDisplay.showTfAxes}
-              onChange={event => onTfDisplayChange({ tfAxesOpacity: parseFloat(event.target.value) })}
-              className="range-input"
+              onChange={tfAxesOpacity => onTfDisplayChange({ tfAxesOpacity })}
             />
           </div>
 
-          <label className="settings-toggle-row">
-            <span>Show labels</span>
-            <input
-              type="checkbox"
-              checked={tfDisplay.showTfFrameLabels}
-              onChange={event => onTfDisplayChange({ showTfFrameLabels: event.target.checked })}
-            />
-          </label>
-          <label className="settings-toggle-row">
-            <span>Label background</span>
-            <input
-              type="checkbox"
-              checked={tfDisplay.showTfLabelBackground}
-              disabled={!tfDisplay.showTfFrameLabels}
-              onChange={event => onTfDisplayChange({ showTfLabelBackground: event.target.checked })}
-            />
-          </label>
-          <div className="tf-scale-control">
+          <ToggleRow
+            label="Show labels"
+            checked={tfDisplay.showTfFrameLabels}
+            onChange={showTfFrameLabels => onTfDisplayChange({ showTfFrameLabels })}
+          />
+          <ToggleRow
+            label="Label background"
+            checked={tfDisplay.showTfLabelBackground}
+            disabled={!tfDisplay.showTfFrameLabels}
+            onChange={showTfLabelBackground => onTfDisplayChange({ showTfLabelBackground })}
+          />
+          <div className="viz-settings-group">
             <ScaleField
               id="tf-label-scale"
               label="Label size"
@@ -217,33 +219,21 @@ const SettingsPopup: React.FC<SettingsPopupProps> = ({
               disabled={!tfDisplay.showTfFrameLabels}
               onChange={tfLabelScale => onTfDisplayChange({ tfLabelScale })}
             />
-            <div className="control-heading-row">
-              <label htmlFor="tf-label-opacity">Label opacity</label>
-              <output htmlFor="tf-label-opacity" className="range-value">
-                {Math.round(tfDisplay.tfLabelOpacity * 100)}%
-              </output>
-            </div>
-            <input
-              type="range"
+            <PercentField
               id="tf-label-opacity"
-              min="0.1"
-              max="1"
-              step="0.05"
+              label="Label opacity"
+              min={0.1}
               value={tfDisplay.tfLabelOpacity}
               disabled={!tfDisplay.showTfFrameLabels}
-              onChange={event => onTfDisplayChange({ tfLabelOpacity: parseFloat(event.target.value) })}
-              className="range-input"
+              onChange={tfLabelOpacity => onTfDisplayChange({ tfLabelOpacity })}
             />
           </div>
 
-          <label className="settings-toggle-row">
-            <span>Show parent links</span>
-            <input
-              type="checkbox"
-              checked={tfDisplay.showTfConnections}
-              onChange={event => onTfDisplayChange({ showTfConnections: event.target.checked })}
-            />
-          </label>
+          <ToggleRow
+            label="Show parent links"
+            checked={tfDisplay.showTfConnections}
+            onChange={showTfConnections => onTfDisplayChange({ showTfConnections })}
+          />
         </div>
       </div>
     );
@@ -337,7 +327,7 @@ const SettingsPopup: React.FC<SettingsPopupProps> = ({
               <button
                 type="button"
                 className="settings-icon-button"
-                onClick={() => setView('frameDisplay')}
+                onClick={() => setView({ kind: 'frameDisplay' })}
                 title="Frame display settings"
                 aria-label="Frame display settings"
               >
@@ -345,14 +335,7 @@ const SettingsPopup: React.FC<SettingsPopupProps> = ({
               </button>
             </div>
 
-            <label className="settings-toggle-row">
-              <span>Show all frames</span>
-              <input
-                type="checkbox"
-                checked={showAllTfFrames}
-                onChange={event => onShowAllTfFramesChange(event.target.checked)}
-              />
-            </label>
+            <ToggleRow label="Show all frames" checked={showAllTfFrames} onChange={onShowAllTfFramesChange} />
 
             {availableFrames.length > 0 ? (
               filteredFrames.length > 0 ? (
@@ -405,25 +388,29 @@ const SettingsPopup: React.FC<SettingsPopupProps> = ({
 
                   return (
                     <li key={viz.id} className="visualization-item">
-                      {visualizationStatus?.[viz.id] && (
-                        <p role="status" className="visualization-status">
-                          {visualizationStatus[viz.id]}
-                        </p>
-                      )}
                       <div className="visualization-item-heading">
                         <span className="viz-type">{TYPE_LABELS[viz.type]}</span>
                         <div className="visualization-item-actions">
-                          {(viz.type === 'cameraimage' || viz.type === 'camerainfo') && onInspectCamera && <button type="button" className="viz-settings-button"
-                            title="Inspect camera" aria-label={`Inspect camera on ${viz.topic}`} onClick={() => onInspectCamera(viz.id)}><FiInfo /></button>}
-                          {CONFIGURABLE_TYPES.has(viz.type) && onEditVisualization && (
+                          {(viz.type === 'cameraimage' || viz.type === 'camerainfo') && onInspectCamera && (
                             <button
                               type="button"
                               className="viz-settings-button"
-                              onClick={() => handleEditClick(viz.id)}
+                              title="Inspect camera"
+                              aria-label={`Inspect camera on ${viz.topic}`}
+                              onClick={() => onInspectCamera(viz.id)}
+                            >
+                              <FiInfo aria-hidden="true" />
+                            </button>
+                          )}
+                          {hasLayerSettings(viz.type) && onUpdateVisualizationOptions && (
+                            <button
+                              type="button"
+                              className="viz-settings-button"
+                              onClick={() => setView({ kind: 'layer', id: viz.id })}
                               title={`Configure ${TYPE_LABELS[viz.type]}`}
                               aria-label={`Edit ${TYPE_LABELS[viz.type]} visualization for topic ${viz.topic}`}
                             >
-                              <FaCog aria-hidden="true" />
+                              <FiSettings aria-hidden="true" />
                             </button>
                           )}
                           <button
@@ -438,94 +425,31 @@ const SettingsPopup: React.FC<SettingsPopupProps> = ({
                         </div>
                       </div>
 
-                      <label className="viz-topic-label" htmlFor={selectId}>
-                        Topic
-                      </label>
-                      <div className="topic-dropdown-container">
-                        <select
-                          id={selectId}
-                          value={viz.topic}
-                          onChange={event => handleTopicChange(viz.id, event)}
-                          className="topic-dropdown"
-                          title={viz.topic}
-                        >
-                          {!currentTopicIsDiscovered && <option value={viz.topic}>{viz.topic} (current)</option>}
-                          {compatibleTopics.length > 0 ? (
-                            compatibleTopics.map(topic => (
-                              <option key={topic.name} value={topic.name}>
-                                {topic.name}
-                              </option>
-                            ))
-                          ) : (
-                            <option value="" disabled>
-                              No compatible topics available
+                      <SelectField
+                        id={selectId}
+                        label="Topic"
+                        value={viz.topic}
+                        title={viz.topic}
+                        onChange={topic => handleTopicChange(viz.id, topic)}
+                      >
+                        {!currentTopicIsDiscovered && <option value={viz.topic}>{viz.topic} (current)</option>}
+                        {compatibleTopics.length > 0 ? (
+                          compatibleTopics.map(topic => (
+                            <option key={topic.name} value={topic.name}>
+                              {topic.name}
                             </option>
-                          )}
-                        </select>
-                      </div>
-                      {onUpdateVisualizationOptions &&
-                        ['path', 'occupancygrid', 'cameraimage', 'urdf', 'markerarray', 'jointstate'].includes(viz.type) && (
-                          <details className="visualization-options">
-                            <summary aria-label={`Display settings for ${TYPE_LABELS[viz.type]} on ${viz.topic}`}>
-                              <FiSettings aria-hidden="true" />
-                              <span>Display settings</span>
-                            </summary>
-                            <div className="visualization-options-content">
-                              {(viz.type === 'path' || viz.type === 'occupancygrid') &&
-                                onUpdateVisualizationOptions && (
-                                  <NavigationLayerSettings
-                                    id={viz.id}
-                                    type={viz.type}
-                                    topics={allTopics}
-                                    topic={viz.topic}
-                                    options={viz.options as NavigationDisplayOptions}
-                                    onChange={onUpdateVisualizationOptions}
-                                  />
-                                )}
-                              {viz.type === 'jointstate' && onUpdateVisualizationOptions && (
-                                <JointStateSettings id={viz.id} topic={viz.topic} options={viz.options as JointStateOptions}
-                                  topics={allTopics} descriptionTopic={(viz.options as JointStateOptions)?.robotDescriptionTopic ?? jointDescriptionTopic(viz.topic, allTopics)}
-                                  onChange={onUpdateVisualizationOptions} />
-                              )}
-                              {viz.type === 'cameraimage' && onUpdateVisualizationOptions && (
-                                <CameraImageSettings
-                                  id={viz.id}
-                                  topic={viz.topic}
-                                  options={viz.options as CameraImageOptions}
-                                  topics={allTopics}
-                                  surfaceLayers={activeVisualizations.filter(layer => layer.type === 'urdf' || layer.type === 'markerarray')}
-                                  onChange={onUpdateVisualizationOptions}
-                                />
-                              )}
-                              {(viz.type === 'urdf' || viz.type === 'markerarray') && onUpdateVisualizationOptions && (
-                                <div className="tf-scale-control">
-                                  <div className="control-heading-row">
-                                    <label htmlFor={`mesh-opacity-${viz.id}`}>Mesh opacity</label>
-                                    <output htmlFor={`mesh-opacity-${viz.id}`} className="range-value">
-                                      {Math.round(
-                                        normalizeMeshOpacity((viz.options as MeshDisplayOptions)?.opacity) * 100
-                                      )}
-                                      %
-                                    </output>
-                                  </div>
-                                  <input
-                                    type="range"
-                                    id={`mesh-opacity-${viz.id}`}
-                                    min="0"
-                                    max="1"
-                                    step="0.05"
-                                    aria-label={`Mesh opacity for ${TYPE_LABELS[viz.type]} on ${viz.topic}`}
-                                    value={normalizeMeshOpacity((viz.options as MeshDisplayOptions)?.opacity)}
-                                    onChange={event =>
-                                      onUpdateVisualizationOptions(viz.id, { opacity: Number(event.target.value) })
-                                    }
-                                    className="range-input"
-                                  />
-                                </div>
-                              )}
-                            </div>
-                          </details>
+                          ))
+                        ) : (
+                          <option value="" disabled>
+                            No compatible topics available
+                          </option>
                         )}
+                      </SelectField>
+                      {visualizationStatus?.[viz.id] && (
+                        <p role="status" className="visualization-status">
+                          {visualizationStatus[viz.id]}
+                        </p>
+                      )}
                     </li>
                   );
                 })}

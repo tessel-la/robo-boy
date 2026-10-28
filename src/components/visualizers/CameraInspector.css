@@ -97,15 +97,3 @@
   color: var(--error-color);
   overflow-wrap: anywhere;
 }
-.camera-surface-targets {
-  display: grid;
-  gap: 8px;
-  max-height: 160px;
-  overflow: auto;
-}
-.camera-surface-targets label {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  overflow-wrap: anywhere;
-}

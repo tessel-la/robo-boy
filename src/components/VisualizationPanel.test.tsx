@@ -62,8 +62,11 @@ describe('VisualizationPanel state restoration', () => {
     render(<VisualizationPanel ros={ros as any} />);
     fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
     fireEvent.click(screen.getByRole('tab', { name: /Visualizations/ }));
+    fireEvent.click(screen.getByLabelText('Edit Path visualization for topic /robot/plan'));
     expect(screen.getByLabelText('Show Path on /robot/plan')).not.toBeChecked();
     expect(screen.getByLabelText('Color for Path on /robot/plan')).toHaveValue('#ff0000');
+    fireEvent.click(screen.getByLabelText('Back to 3D view settings'));
+    fireEvent.click(screen.getByLabelText('Edit Occupancy grid visualization for topic /robot/map'));
     expect(screen.getByLabelText('Opacity for Occupancy grid on /robot/map')).toHaveValue('0.2');
     expect(JSON.parse(localStorage.getItem('roboboy_3d_visualization_state')!).visualizations).toEqual(visualizations);
   });

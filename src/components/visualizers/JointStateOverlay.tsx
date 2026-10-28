@@ -95,7 +95,7 @@ export default function JointStateOverlay({
           </p>
         )}
         {!descriptionTopic && (
-          <p className="joint-state-note">Select a robot description in Display settings to show limits.</p>
+          <p className="joint-state-note">Select a robot description in the layer's settings to show limits.</p>
         )}
         {!!descriptionTopic && !data.descriptionLoaded && !data.descriptionError && (
           <p className="joint-state-note">Waiting for robot description; limits unavailable.</p>
