@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { FiArrowLeft, FiPlus, FiSettings, FiTrash2, FiX } from 'react-icons/fi';
+import { FiArrowLeft, FiPlus, FiSettings, FiTrash2, FiX, FiInfo } from 'react-icons/fi';
 
 import { getTopicsForVisualizationType, isTopicVisualizationType } from '../utils/visualizationTopics';
 import ScaleField from './ScaleField';
@@ -35,6 +35,7 @@ interface SettingsPopupProps {
   onUpdateVisualizationTopic?: (id: string, newTopic: string) => void;
   allTopics: TopicInfo[];
   visualizationStatus?: Record<string, string | null>;
+  onInspectCamera?: (id: string) => void;
 }
 
 /** One tab at a time owns the menu's height, so a frame list and a visualization list never
@@ -76,6 +77,7 @@ const SettingsPopup: React.FC<SettingsPopupProps> = ({
   onUpdateVisualizationTopic,
   onUpdateVisualizationOptions,
   allTopics = [],
+  onInspectCamera,
 }) => {
   const [tab, setTab] = useState<SettingsTab>('frames');
   const [view, setView] = useState<PopupView>({ kind: 'main' });
@@ -128,10 +130,28 @@ const SettingsPopup: React.FC<SettingsPopupProps> = ({
         {detailHeader(TYPE_LABELS[layer.type], layer.topic)}
         <div key={layer.id} className="settings-popup-content layer-settings-content">
           {visualizationStatus?.[layer.id] && (
-            <p role="status" className="visualization-status">{visualizationStatus[layer.id]}</p>
+            <p role="status" className="visualization-status">
+              {visualizationStatus[layer.id]}
+            </p>
           )}
-          <LayerSettings viz={layer} typeLabel={TYPE_LABELS[layer.type]} topics={allTopics}
-            onChange={onUpdateVisualizationOptions} />
+          {layer.type === 'cameraimage' && onInspectCamera && (
+            <button
+              type="button"
+              className="settings-nav-row"
+              aria-label={`Inspect camera on ${layer.topic}`}
+              onClick={() => onInspectCamera(layer.id)}
+            >
+              <FiInfo aria-hidden="true" />
+              <span>Inspect camera</span>
+            </button>
+          )}
+          <LayerSettings
+            surfaceLayers={activeVisualizations.filter(item => item.type === 'urdf' || item.type === 'markerarray')}
+            viz={layer}
+            typeLabel={TYPE_LABELS[layer.type]}
+            topics={allTopics}
+            onChange={onUpdateVisualizationOptions}
+          />
         </div>
       </div>
     );
@@ -350,73 +370,93 @@ const SettingsPopup: React.FC<SettingsPopupProps> = ({
             id="settings-tabpanel-visualizations"
             aria-labelledby="settings-tab-visualizations"
           >
-            <button type="button" className="settings-nav-row is-primary" onClick={onAddVisualizationClick} aria-label="Add visualization">
+            <button
+              type="button"
+              className="settings-nav-row is-primary"
+              onClick={onAddVisualizationClick}
+              aria-label="Add visualization"
+            >
               <FiPlus aria-hidden="true" />
               <span>Add visualization</span>
             </button>
-          {activeVisualizations.length > 0 ? (
-            <ul>
-              {activeVisualizations.map(viz => {
-                const compatibleTopics = compatibleTopicsFor(viz.type);
-                const currentTopicIsDiscovered = compatibleTopics.some(topic => topic.name === viz.topic);
-                const selectId = `visualization-topic-${viz.id}`;
+            {activeVisualizations.length > 0 ? (
+              <ul>
+                {activeVisualizations.map(viz => {
+                  const compatibleTopics = compatibleTopicsFor(viz.type);
+                  const currentTopicIsDiscovered = compatibleTopics.some(topic => topic.name === viz.topic);
+                  const selectId = `visualization-topic-${viz.id}`;
 
-                return (
-                  <li key={viz.id} className="visualization-item">
-                    <div className="visualization-item-heading">
-                      <span className="viz-type">{TYPE_LABELS[viz.type]}</span>
-                      <div className="visualization-item-actions">
-                        {hasLayerSettings(viz.type) && onUpdateVisualizationOptions && (
+                  return (
+                    <li key={viz.id} className="visualization-item">
+                      <div className="visualization-item-heading">
+                        <span className="viz-type">{TYPE_LABELS[viz.type]}</span>
+                        <div className="visualization-item-actions">
+                          {(viz.type === 'cameraimage' || viz.type === 'camerainfo') && onInspectCamera && (
+                            <button
+                              type="button"
+                              className="viz-settings-button"
+                              title="Inspect camera"
+                              aria-label={`Inspect camera on ${viz.topic}`}
+                              onClick={() => onInspectCamera(viz.id)}
+                            >
+                              <FiInfo aria-hidden="true" />
+                            </button>
+                          )}
+                          {hasLayerSettings(viz.type) && onUpdateVisualizationOptions && (
+                            <button
+                              type="button"
+                              className="viz-settings-button"
+                              onClick={() => setView({ kind: 'layer', id: viz.id })}
+                              title={`Configure ${TYPE_LABELS[viz.type]}`}
+                              aria-label={`Edit ${TYPE_LABELS[viz.type]} visualization for topic ${viz.topic}`}
+                            >
+                              <FiSettings aria-hidden="true" />
+                            </button>
+                          )}
                           <button
                             type="button"
-                            className="viz-settings-button"
-                            onClick={() => setView({ kind: 'layer', id: viz.id })}
-                            title={`Configure ${TYPE_LABELS[viz.type]}`}
-                            aria-label={`Edit ${TYPE_LABELS[viz.type]} visualization for topic ${viz.topic}`}
+                            className="remove-viz-button"
+                            onClick={() => onRemoveVisualization(viz.id)}
+                            title="Remove visualization"
+                            aria-label={`Remove ${TYPE_LABELS[viz.type]} visualization for topic ${viz.topic}`}
                           >
-                            <FiSettings aria-hidden="true" />
+                            <FiTrash2 aria-hidden="true" />
                           </button>
-                        )}
-                        <button
-                          type="button"
-                          className="remove-viz-button"
-                          onClick={() => onRemoveVisualization(viz.id)}
-                          title="Remove visualization"
-                          aria-label={`Remove ${TYPE_LABELS[viz.type]} visualization for topic ${viz.topic}`}
-                        >
-                          <FiTrash2 aria-hidden="true" />
-                        </button>
+                        </div>
                       </div>
-                    </div>
 
-                    <SelectField
-                      id={selectId}
-                      label="Topic"
-                      value={viz.topic}
-                      title={viz.topic}
-                      onChange={topic => handleTopicChange(viz.id, topic)}
-                    >
-                      {!currentTopicIsDiscovered && <option value={viz.topic}>{viz.topic} (current)</option>}
-                      {compatibleTopics.length > 0 ? (
-                        compatibleTopics.map(topic => (
-                          <option key={topic.name} value={topic.name}>
-                            {topic.name}
+                      <SelectField
+                        id={selectId}
+                        label="Topic"
+                        value={viz.topic}
+                        title={viz.topic}
+                        onChange={topic => handleTopicChange(viz.id, topic)}
+                      >
+                        {!currentTopicIsDiscovered && <option value={viz.topic}>{viz.topic} (current)</option>}
+                        {compatibleTopics.length > 0 ? (
+                          compatibleTopics.map(topic => (
+                            <option key={topic.name} value={topic.name}>
+                              {topic.name}
+                            </option>
+                          ))
+                        ) : (
+                          <option value="" disabled>
+                            No compatible topics available
                           </option>
-                        ))
-                      ) : (
-                        <option value="" disabled>
-                          No compatible topics available
-                        </option>
+                        )}
+                      </SelectField>
+                      {visualizationStatus?.[viz.id] && (
+                        <p role="status" className="visualization-status">
+                          {visualizationStatus[viz.id]}
+                        </p>
                       )}
-                    </SelectField>
-                    {visualizationStatus?.[viz.id] && <p role="status" className="visualization-status">{visualizationStatus[viz.id]}</p>}
-                  </li>
-                );
-              })}
-            </ul>
-          ) : (
-            <p className="no-visualizations-message">No active visualizations.</p>
-          )}
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : (
+              <p className="no-visualizations-message">No active visualizations.</p>
+            )}
           </section>
         )}
       </div>

@@ -1,9 +1,20 @@
-import { DEFAULT_NEW_CAMERA_IMAGE_OPTIONS } from '../../utils/images/cameraImageOptions';
+import { DEFAULT_NEW_CAMERA_IMAGE_OPTIONS, normalizeCameraImageOptions, type CameraImageOptions } from '../../utils/images/cameraImageOptions';
 import type { RoboBoyJsonObject } from '../../panels/types';
 import type { VisualizationPanelState } from '../../utils/visualizationState';
 import { defaultRecordOptions } from '../recordReplay/types';
 import { sanitizeConfig as sanitizeTimeSeriesConfig } from '../timeSeries/config';
 import type { ExplorerOpenRequest } from './DataExplorerPanel';
+import { sanitizeExplorerConfig } from './model';
+
+export function cameraValuesFor(previous: RoboBoyJsonObject | undefined, options: CameraImageOptions): RoboBoyJsonObject {
+  const { imageSource, streamQuality, whepUrl } = normalizeCameraImageOptions(options);
+  return { ...previous, imageSource, streamQuality, whepUrl };
+}
+
+export function explorerValuesFor(previous: RoboBoyJsonObject | undefined, request: ExplorerOpenRequest): RoboBoyJsonObject {
+  return { config: { ...sanitizeExplorerConfig(previous?.config), view: 'resources', kind: 'topic',
+    selected: `topic:${request.topic}`, source: 'follow', query: '' } as unknown as RoboBoyJsonObject };
+}
 
 /*
  * What a panel opened from the Data Explorer should hold. `previous` is the settings of the same kind

@@ -14,7 +14,15 @@ import PoseStampedSettings, { type PoseStampedSettingsOptions } from './PoseStam
 export type LayerOptionsPatch = NonNullable<VisualizationConfig['options']>;
 
 const CONFIGURABLE = new Set<VisualizationConfig['type']>([
-  'pointcloud', 'laserscan', 'posestamped', 'path', 'occupancygrid', 'cameraimage', 'urdf', 'markerarray', 'jointstate',
+  'pointcloud',
+  'laserscan',
+  'posestamped',
+  'path',
+  'occupancygrid',
+  'cameraimage',
+  'urdf',
+  'markerarray',
+  'jointstate',
 ]);
 
 /** Whether a layer type has settings of its own, behind its configure button. */
@@ -26,7 +34,9 @@ export default function LayerSettings({
   typeLabel,
   topics,
   onChange,
+  surfaceLayers = [],
 }: {
+  surfaceLayers?: { id: string; topic: string; type: string }[];
   viz: VisualizationConfig;
   typeLabel: string;
   topics: { name: string; type: string }[];
@@ -34,25 +44,67 @@ export default function LayerSettings({
 }) {
   switch (viz.type) {
     case 'pointcloud':
-      return <PointCloudSettings id={viz.id} topic={viz.topic}
-        options={viz.options as Partial<PointCloudSettingsOptions>} onChange={onChange} />;
+      return (
+        <PointCloudSettings
+          id={viz.id}
+          topic={viz.topic}
+          options={viz.options as Partial<PointCloudSettingsOptions>}
+          onChange={onChange}
+        />
+      );
     case 'laserscan':
-      return <LaserScanSettings id={viz.id} topic={viz.topic}
-        options={viz.options as LaserScanSettingsOptions} onChange={onChange} />;
+      return (
+        <LaserScanSettings
+          id={viz.id}
+          topic={viz.topic}
+          options={viz.options as LaserScanSettingsOptions}
+          onChange={onChange}
+        />
+      );
     case 'posestamped':
-      return <PoseStampedSettings id={viz.id} topic={viz.topic}
-        options={viz.options as PoseStampedSettingsOptions} onChange={onChange} />;
+      return (
+        <PoseStampedSettings
+          id={viz.id}
+          topic={viz.topic}
+          options={viz.options as PoseStampedSettingsOptions}
+          onChange={onChange}
+        />
+      );
     case 'path':
     case 'occupancygrid':
-      return <NavigationLayerSettings id={viz.id} type={viz.type} topic={viz.topic}
-        options={viz.options as NavigationDisplayOptions} topics={topics} onChange={onChange} />;
+      return (
+        <NavigationLayerSettings
+          id={viz.id}
+          type={viz.type}
+          topic={viz.topic}
+          options={viz.options as NavigationDisplayOptions}
+          topics={topics}
+          onChange={onChange}
+        />
+      );
     case 'cameraimage':
-      return <CameraImageSettings id={viz.id} topic={viz.topic}
-        options={viz.options as CameraImageOptions} topics={topics} onChange={onChange} />;
+      return (
+        <CameraImageSettings
+          id={viz.id}
+          topic={viz.topic}
+          options={viz.options as CameraImageOptions}
+          topics={topics}
+          surfaceLayers={surfaceLayers}
+          onChange={onChange}
+        />
+      );
     case 'jointstate': {
       const options = viz.options as JointStateOptions | undefined;
-      return <JointStateSettings id={viz.id} topic={viz.topic} options={options} topics={topics}
-        descriptionTopic={options?.robotDescriptionTopic ?? jointDescriptionTopic(viz.topic, topics)} onChange={onChange} />;
+      return (
+        <JointStateSettings
+          id={viz.id}
+          topic={viz.topic}
+          options={options}
+          topics={topics}
+          descriptionTopic={options?.robotDescriptionTopic ?? jointDescriptionTopic(viz.topic, topics)}
+          onChange={onChange}
+        />
+      );
     }
     case 'urdf':
     case 'markerarray':

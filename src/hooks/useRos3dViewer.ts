@@ -138,6 +138,7 @@ export function useRos3dViewer(viewerRef: React.RefObject<HTMLDivElement>, isRos
             element: currentViewerRef,
             onChange: viewer.requestRender,
           });
+          viewer.controls = orbitControlsRef.current;
           console.log('[useRos3dViewer Setup] OrbitControls initialized.');
         } else {
           console.warn('[useRos3dViewer Setup] ROS3D.OrbitControls not found.');

@@ -14,6 +14,7 @@ interface UseCameraInfoVisualizerProps {
   selectedCameraInfoTopic: string | null; // The selected CameraInfo topic name
   lineColor?: THREE.Color | number | string; // Optional color for the frustum lines
   lineScale?: number; // Optional scaling factor for frustum size (e.g., length of pyramid)
+  onObject?: (object: THREE.Group | null, frustum?: THREE.LineSegments) => void;
 }
 
 const DEFAULT_LINE_COLOR = 0x00ff00; // Green
@@ -32,7 +33,10 @@ export function useCameraInfoVisualizer({
   selectedCameraInfoTopic,
   lineColor = DEFAULT_LINE_COLOR,
   lineScale = DEFAULT_LINE_SCALE,
+  onObject,
 }: UseCameraInfoVisualizerProps) {
+  const onObjectRef = useRef(onObject);
+  onObjectRef.current = onObject;
   const cameraInfoSub = useRef<ROSLIB.Topic | null>(null);
   const frustumLinesRef = useRef<THREE.LineSegments | null>(null);
   const frustumContainerRef = useRef<THREE.Group | null>(null); // Container for lines + pose
@@ -63,6 +67,7 @@ export function useCameraInfoVisualizer({
           frustumLinesRef.current = new THREE.LineSegments(initialGeometry, material);
           frustumLinesRef.current.visible = false; // Lines also initially hidden
           frustumContainerRef.current.add(frustumLinesRef.current); // Add lines to container
+          onObjectRef.current?.(frustumContainerRef.current, frustumLinesRef.current);
           // linesCreated = true;
         }
       }
@@ -89,6 +94,7 @@ export function useCameraInfoVisualizer({
       // If container was created in this run, or if prerequisites changed
       // Simplified cleanup: always attempt removal if viewer exists
       if (frustumContainerRef.current && viewer) {
+        onObjectRef.current?.(null);
         // console.log('[CameraInfoViz E1 Cleanup] Attempting container removal');
         try {
           viewer.scene.remove(frustumContainerRef.current);

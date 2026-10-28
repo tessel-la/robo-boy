@@ -15,7 +15,9 @@ export default function CameraImageSettings({
   options,
   topics,
   onChange,
+  surfaceLayers = [],
 }: {
+  surfaceLayers?: { id: string; topic: string; type: string }[];
   id: string;
   topic: string;
   options?: CameraImageOptions;
@@ -29,7 +31,8 @@ export default function CameraImageSettings({
   const infoTopics = topics.filter(item => CAMERA_INFO_TYPES.includes(item.type));
   const label = `Camera image on ${topic}`;
   const isVideo = values.imageSource !== 'ros';
-  const usesLatestTf = values.imageSource === 'webrtc' || (values.imageSource === 'stream' && values.videoTiming === 'latest');
+  const usesLatestTf =
+    values.imageSource === 'webrtc' || (values.imageSource === 'stream' && values.videoTiming === 'latest');
   return (
     <div className="layer-settings">
       <ToggleRow
@@ -136,6 +139,90 @@ export default function CameraImageSettings({
         <option value="raw">Raw (zero distortion)</option>
         <option value="rectified">Rectified</option>
       </SelectField>
+      <SelectField
+        id={`camera-render-mode-${id}`}
+        label="Projection mode"
+        ariaLabel={`Projection mode for ${label}`}
+        value={values.renderMode}
+        onChange={renderMode => onChange(id, { renderMode: renderMode as 'plane' | 'surfaces' })}
+      >
+        <option value="plane">Image plane</option>
+        <option value="surfaces">Mesh surfaces</option>
+      </SelectField>
+      {values.renderMode === 'surfaces' && (
+        <>
+          <fieldset className="camera-surface-targets">
+            <legend>Receiving layers</legend>
+            {surfaceLayers.length ? (
+              surfaceLayers.map(layer => (
+                <ToggleRow
+                  key={layer.id}
+                  label={`${layer.type === 'urdf' ? 'URDF' : 'Mesh markers'} · ${layer.topic}`}
+                  ariaLabel={`Project onto ${layer.type} ${layer.topic}`}
+                  checked={values.surfaceTargets.includes(layer.id)}
+                  onChange={checked =>
+                    onChange(id, {
+                      surfaceTargets: checked
+                        ? [...values.surfaceTargets, layer.id]
+                        : values.surfaceTargets.filter(item => item !== layer.id),
+                    })
+                  }
+                />
+              ))
+            ) : (
+              <p className="panel-settings-status">Add a URDF or mesh-marker layer to receive the image.</p>
+            )}
+            {values.surfaceTargets
+              .filter(target => !surfaceLayers.some(layer => layer.id === target))
+              .map(target => (
+                <ToggleRow
+                  key={target}
+                  label={`Unavailable layer · ${target}`}
+                  checked
+                  onChange={() =>
+                    onChange(id, { surfaceTargets: values.surfaceTargets.filter(item => item !== target) })
+                  }
+                />
+              ))}
+          </fieldset>
+          <TextField
+            id={`camera-surface-links-${id}`}
+            label="Receiving links/frames (optional)"
+            value={values.surfaceLinks.join(', ')}
+            placeholder="All links; or base_link, arm_link"
+            onChange={text =>
+              onChange(id, {
+                surfaceLinks: text
+                  .split(',')
+                  .map(value => value.trim())
+                  .filter(Boolean),
+              })
+            }
+          />
+          <SelectField
+            id={`camera-surface-timing-${id}`}
+            label="Surface geometry timing"
+            ariaLabel={`Surface geometry timing for ${label}`}
+            value={values.surfaceTiming}
+            onChange={surfaceTiming => onChange(id, { surfaceTiming: surfaceTiming as 'image' | 'latest' })}
+          >
+            <option value="latest">Latest scene (not time-synchronized)</option>
+            <option value="image">TF at image acquisition time</option>
+          </SelectField>
+          <ScaleField
+            id={`surface-range-${id}`}
+            label="Maximum projection range (m)"
+            value={values.surfaceRange}
+            min={0.1}
+            max={1000}
+            precision={1}
+            onChange={surfaceRange => onChange(id, { surfaceRange })}
+          />
+          <p className="panel-settings-status">
+            Occlusion uses visible URDF/mesh geometry. Unmodelled obstacles cannot block the projection.
+          </p>
+        </>
+      )}
       <div className="viz-settings-group">
         <ScaleField
           id={`camera-distance-${id}`}

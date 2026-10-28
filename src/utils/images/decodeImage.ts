@@ -11,6 +11,8 @@ export interface DecodedImageFrame {
   /** Owned by the decoder caller; shared-stream consumers use SharedImageFrame.retain(). */
   image: ImageBitmap | RgbaFrame;
   header?: { frame_id?: string; stamp?: unknown };
+  /** Original acquisition header when projection explicitly uses a synthetic latest-TF header. */
+  acquisitionHeader?: { frame_id?: string; stamp?: unknown };
   encoding: string;
   /** Full-frame source size before streamer resizing; cropping/rotation is unsupported. */
   sourceSize?: { width: number; height: number };

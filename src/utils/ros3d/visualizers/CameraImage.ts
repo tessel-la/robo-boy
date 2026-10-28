@@ -21,7 +21,7 @@ type Candidate = {
   frame: SharedImageFrame;
   release: () => void;
   stopTf?: () => void;
-  projection?: { key: string; corners: number[][] };
+  projection?: { key: string; corners: number[][]; calibration: CameraCalibration };
   result?: TransformResult;
   fixedFrame?: string;
   error: string | null;
@@ -32,7 +32,26 @@ type Candidate = {
 const FRAME_WAIT_MS = 2000;
 const STATUS_GRACE_MS = 500;
 
+export interface CameraInspection {
+  calibration?: CameraCalibration;
+  frozen: boolean;
+  status: string | null;
+  displayed?: {
+    frame: SharedImageFrame;
+    calibration: CameraCalibration;
+    corners: number[][];
+    position: THREE.Vector3;
+    rotation: THREE.Quaternion;
+    fixedFrame: string;
+  };
+}
+
 export class CameraImageClient {
+  private inspection: CameraInspection = { frozen: false, status: null };
+  private listeners = new Set<() => void>();
+  getSnapshot = () => this.inspection;
+  subscribe = (listener: () => void) => { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; };
+  readonly icon = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.04, 0.04), new THREE.MeshBasicMaterial());
   readonly object = new THREE.Group();
   readonly plane = new THREE.Mesh(
     new THREE.BufferGeometry(),
@@ -83,7 +102,8 @@ export class CameraImageClient {
   ) {
     this.object.name = `Camera image: ${config.topic}`;
     this.object.visible = false;
-    this.object.add(this.plane, this.frustum);
+    this.icon.material.color.copy(this.frustum.material.color);
+    this.object.add(this.plane, this.frustum, this.icon);
     config.rootObject.add(this.object);
     this.updateOptions(config.options);
     const subscribe =
@@ -110,6 +130,7 @@ export class CameraImageClient {
     )
       this.resetSnapshots();
     this.plane.material.opacity = this.options.opacity;
+    this.plane.visible = this.options.renderMode === 'plane';
     this.frustum.visible = this.options.showFrustum;
     if (previous.cameraInfoTopic !== this.options.cameraInfoTopic) {
       this.stopInfo?.();
@@ -126,6 +147,36 @@ export class CameraImageClient {
     }
     this.refresh();
     this.config.requestRender();
+  }
+
+  setFrozen(frozen: boolean) {
+    if (this.disposed || (frozen && !this.displayed)) return;
+    this.inspection = { ...this.inspection, frozen };
+    // Pending subscriptions must not replace a manually frozen snapshot.
+    this.candidates.forEach(candidate => this.releaseCandidate(candidate));
+    this.candidates = [];
+    this.clearWait();
+    if (!frozen) this.refresh();
+    this.notify();
+  }
+
+  private notify() {
+    const candidate = this.displayed;
+    const valid = candidate?.projection && candidate.result?.transform && candidate.fixedFrame === this.config.tfClient.fixedFrame;
+    this.inspection = {
+      frozen: this.inspection.frozen,
+      status: this.lastStatus ?? null,
+      calibration: candidate?.projection?.calibration ?? this.samples[this.samples.length - 1],
+      displayed: valid ? {
+        frame: candidate.frame,
+        calibration: candidate.projection!.calibration,
+        corners: candidate.projection!.corners,
+        position: candidate.result!.transform!.translation.clone(),
+        rotation: candidate.result!.transform!.rotation.clone(),
+        fixedFrame: candidate.fixedFrame!,
+      } : undefined,
+    };
+    this.listeners.forEach(listener => listener());
   }
 
   private releaseCandidate(candidate: Candidate) {
@@ -148,6 +199,8 @@ export class CameraImageClient {
     this.clearTexture();
     this.clearWait();
     this.displayedFixedFrame = undefined;
+    this.inspection = { frozen: false, status: this.lastStatus ?? null };
+    this.notify();
     if (this.object.visible) this.config.requestRender();
     this.object.visible = false;
   }
@@ -171,6 +224,7 @@ export class CameraImageClient {
     if (error !== this.lastStatus) {
       this.lastStatus = error;
       this.config.onStatus?.(error);
+      this.notify();
     }
   }
 
@@ -191,6 +245,10 @@ export class CameraImageClient {
 
   private refresh() {
     if (this.disposed) return;
+    if (this.inspection.frozen && this.displayed?.fixedFrame === this.config.tfClient.fixedFrame) {
+      this.showState(null);
+      return;
+    }
     const error =
       this.imageError ||
       this.infoError ||
@@ -264,7 +322,7 @@ export class CameraImageClient {
           );
           if (!corners.flat().every(v => Number.isFinite(Math.fround(v))))
             throw new Error('Camera projection exceeds rendering limits.');
-          candidate.projection = { key, corners };
+          candidate.projection = { key, corners, calibration };
         }
         candidate.error = null;
         candidate.waiting = false;
@@ -327,6 +385,7 @@ export class CameraImageClient {
       this.updateGeometry(ready.projection!);
       if (this.textureFrame !== ready.frame) this.updateTexture(ready.frame);
       this.clearWait();
+      this.notify();
       this.config.requestRender();
     }
     const displayed = this.displayed;
@@ -337,6 +396,7 @@ export class CameraImageClient {
       this.object.position.copy(translation);
       this.object.quaternion.copy(rotation);
       if (moved) this.config.requestRender();
+      if (moved) this.notify();
     }
     // A missing historical TF sample does not invalidate an already resolved pose in
     // the same fixed frame. A fixed-frame change does invalidate those coordinates.
@@ -406,6 +466,10 @@ export class CameraImageClient {
     this.plane.material.dispose();
     this.frustum.geometry.dispose();
     this.frustum.material.dispose();
+    this.icon.geometry.dispose();
+    this.icon.material.dispose();
+    this.notify();
+    this.listeners.clear();
     this.config.requestRender();
   }
 }

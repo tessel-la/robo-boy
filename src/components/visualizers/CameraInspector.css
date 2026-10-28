@@ -1,0 +1,99 @@
+.camera-inspector {
+  position: absolute;
+  z-index: 18;
+  top: 56px;
+  right: 10px;
+  display: flex;
+  flex-direction: column;
+  width: min(350px, calc(100% - 20px));
+  max-height: calc(100% - 68px);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  background: var(--card-bg);
+  overflow: hidden;
+}
+.camera-inspector > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border-color);
+}
+.camera-inspector > header strong {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.camera-inspector-body {
+  display: grid;
+  gap: 12px;
+  min-height: 0;
+  padding: 12px;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.camera-inspector-topic {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.camera-inspector dl {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr);
+  gap: 8px;
+  margin: 0;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.camera-inspector dt {
+  color: var(--text-secondary);
+}
+.camera-inspector dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.camera-inspector-actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(135px, 100%), 1fr));
+  gap: 8px;
+}
+.camera-inspector summary {
+  padding: 8px 0;
+  cursor: pointer;
+}
+.camera-inspector pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: inherit;
+  font-size: 11px;
+}
+.camera-capture-fields {
+  display: grid;
+  gap: 12px;
+  padding-top: 8px;
+}
+.camera-inspector textarea {
+  min-width: 0;
+  min-height: 76px;
+  padding: 8px;
+  font: inherit;
+  color: var(--text-color);
+  background: var(--background-color);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  resize: vertical;
+}
+.camera-inspector input[type='number'] {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 8px;
+  font: inherit;
+  color: var(--text-color);
+  background: var(--background-color);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+}
+.camera-inspector-error {
+  margin: 0;
+  color: var(--error-color);
+  overflow-wrap: anywhere;
+}

@@ -69,9 +69,17 @@ class Viewer {
   camera: THREE.PerspectiveCamera;
   renderer: THREE.WebGLRenderer;
   fixedFrame: string = '';
+  controls?: OrbitControls;
+  private calibratedProjection?: { matrix: THREE.Matrix4; aspect: number; owner?: string };
   private animationId: number | null = null;
+  private stopped = false;
   private renderWidth = 0;
   private renderHeight = 0;
+  private overlays = new Set<{ render: () => void; dispose: () => void }>();
+  addOverlay(overlay: { render: () => void; dispose: () => void }) {
+    this.overlays.add(overlay);
+    return () => { this.overlays.delete(overlay); };
+  }
 
   constructor(options: {
     divID: string;
@@ -167,14 +175,32 @@ class Viewer {
     this.renderWidth = width;
     this.renderHeight = height;
     this.camera.aspect = width / height;
-    this.camera.updateProjectionMatrix();
+    this.applyProjection();
     this.renderer.setSize(width, height);
     this.requestRender();
+  }
+
+  setProjection(matrix?: THREE.Matrix4, aspect = 1, owner?: string) {
+    this.calibratedProjection = matrix ? { matrix: matrix.clone(), aspect, owner } : undefined;
+    this.applyProjection();
+    this.requestRender();
+  }
+  resetProjection(owner: string) {
+    if (this.calibratedProjection?.owner === owner) this.setProjection();
+  }
+  private applyProjection() {
+    const projection = this.calibratedProjection;
+    if (!projection) { this.camera.updateProjectionMatrix(); return; }
+    const aspect = this.camera.aspect;
+    const scale = new THREE.Matrix4().makeScale(Math.min(1, projection.aspect / aspect), Math.min(1, aspect / projection.aspect), 1);
+    this.camera.projectionMatrix.copy(scale.multiply(projection.matrix));
+    this.camera.projectionMatrixInverse.copy(this.camera.projectionMatrix).invert();
   }
 
   // Coalesce all invalidations in the same display frame. Keeping this loop alive continuously
   // made even an unchanged grid consume a substantial share of a renderer process and the GPU.
   public requestRender = (): void => {
+    if (this.stopped) return;
     if (this.animationId !== null) return;
     this.animationId = requestAnimationFrame(this.render);
   };
@@ -182,10 +208,14 @@ class Viewer {
   public render = (): void => {
     this.animationId = null;
     this.renderer.render(this.scene, this.camera);
+    this.overlays.forEach(overlay => overlay.render());
   };
 
   // Stop rendering
   stop(): void {
+    this.stopped = true;
+    this.overlays.forEach(overlay => overlay.dispose());
+    this.overlays.clear();
     if (this.animationId !== null) {
       cancelAnimationFrame(this.animationId);
       this.animationId = null;
@@ -376,6 +406,14 @@ class TfClient {
 
 // OrbitControls implementation
 class OrbitControls {
+  setView(position: THREE.Vector3, target: THREE.Vector3, up = new THREE.Vector3(0, 0, 1)) {
+    this.camera.position.copy(position);
+    this.target.copy(target);
+    this.camera.up.copy(up);
+    this.camera.lookAt(this.target);
+    this.updateSpherical();
+    this.onChange();
+  }
   private camera: THREE.PerspectiveCamera;
   private element: HTMLElement;
   private target = new THREE.Vector3(0, 0, 0);
@@ -1317,6 +1355,7 @@ class UrdfClient extends THREE.Object3D {
 
                     if (!activeSubscriptionFrame) {
                         activeSubscriptionFrame = tfFrameName;
+                        linkObject.userData.projectionFrame = tfFrameName;
                         console.log(`[UrdfClient] Successful TF data for URDF link "${urdfLinkName}" from TF frame "${tfFrameName}"`);
                         candidateSubscriptions.forEach(subscription => {
                             if (subscription.frameId === tfFrameName) return;

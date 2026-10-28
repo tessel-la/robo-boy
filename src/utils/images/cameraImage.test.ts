@@ -494,3 +494,23 @@ it('isolates identical topics on different ROS/replay sources', async () => {
   expect(received[0]).toHaveBeenCalledOnce();
   expect(received[1]).not.toHaveBeenCalled();
 });
+
+it('freezes a complete camera snapshot while shared acquisition continues, then resumes the newest frame', async () => {
+  const c = make();
+  history.ingest(tf(0, 10), true);
+  receive('/cam/camera_info', info(0));
+  receive('/cam/image_raw', image(2));
+  await flush();
+  const shown = c.getSnapshot().displayed!;
+  expect(shown.calibration.frame).toBe('optical');
+  c.setFrozen(true);
+  receive('/cam/image_raw', image(3));
+  await flush();
+  expect(c.getSnapshot().frozen).toBe(true);
+  expect(c.getSnapshot().displayed?.frame).toBe(shown.frame);
+  expect(subscriptions.find(item => item.name === '/cam/image_raw')!.unsubscribe).not.toHaveBeenCalled();
+  c.setFrozen(false);
+  expect(c.getSnapshot().displayed?.frame.header?.stamp).toEqual({ sec: 3, nanosec: 0 });
+  c.dispose();
+  expect(c.getSnapshot().displayed).toBeUndefined();
+});

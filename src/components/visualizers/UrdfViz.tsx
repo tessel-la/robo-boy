@@ -5,6 +5,7 @@ import { useUrdfClient } from '../../hooks/useUrdfClient';
 import { CustomTFProvider } from '../../utils/tfUtils'; // Assuming TF Provider is needed like in PointCloudViz
 
 interface UrdfVizProps {
+  layerId?: string;
   ros: Ros | null;
   isRosConnected: boolean;
   ros3dViewer: React.RefObject<ROS3D.Viewer | null>;
@@ -25,6 +26,7 @@ const UrdfViz: React.FC<UrdfVizProps> = ({
   robotDescriptionTopic = '/robot_description',
   urdfPath = '/',
   opacity = 1,
+  layerId,
 }) => {
   // Use the useUrdfClient hook
   const { urdfClient, isUrdfLoaded } = useUrdfClient({
@@ -36,6 +38,7 @@ const UrdfViz: React.FC<UrdfVizProps> = ({
     robotDescriptionTopic,
     urdfPath,
     opacity,
+    layerId,
   });
 
   useEffect(() => {
