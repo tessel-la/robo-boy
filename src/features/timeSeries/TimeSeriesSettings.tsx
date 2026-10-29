@@ -1,3 +1,5 @@
+import NumberSetting from './NumberSetting';
+import SourcePicker from './SourcePicker';
 import { FiCheck, FiTrash2, FiX } from 'react-icons/fi';
 import { useEffect, useId, useState } from 'react';
 import type { Ros } from 'roslib';
@@ -15,44 +17,6 @@ import {
 import type { TimeSeriesEngine } from './engine';
 import { EXPRESSION_HELP, INPUT_ID_KEYS, INPUT_VARIABLES, sanitizeMath } from './math';
 
-function NumberSetting({
-  label,
-  value,
-  onChange,
-  min,
-  max,
-  disabled,
-}: {
-  label: string;
-  value: number;
-  onChange: (value: number) => void;
-  min?: number;
-  max?: number;
-  disabled?: boolean;
-}) {
-  return (
-    <label>
-      {label}
-      <input
-        key={value}
-        type="number"
-        defaultValue={value}
-        min={min}
-        max={max}
-        step="any"
-        disabled={disabled}
-        onBlur={event => {
-          const n = event.currentTarget.valueAsNumber;
-          if (Number.isFinite(n)) onChange(Math.min(max ?? Infinity, Math.max(min ?? -Infinity, n)));
-          else event.currentTarget.value = String(value);
-        }}
-        onKeyDown={event => {
-          if (event.key === 'Enter') event.currentTarget.blur();
-        }}
-      />
-    </label>
-  );
-}
 interface Props {
   config: TimeseriesConfig;
   engine: TimeSeriesEngine;
@@ -139,7 +103,7 @@ export default function TimeSeriesSettings({ config, engine, ros, connected, onC
   return (
     <section
       className="timeseries-settings"
-      aria-label="Time series settings"
+      aria-label="Plotting settings"
       onKeyDown={e => {
         if (e.key === 'Escape') {
           e.stopPropagation();
@@ -148,8 +112,8 @@ export default function TimeSeriesSettings({ config, engine, ros, connected, onC
       }}
     >
       <header>
-        <strong>Time Series settings</strong>
-        <button onClick={onClose} autoFocus aria-label="Close Time Series settings">
+        <strong>Plotting settings</strong>
+        <button onClick={onClose} autoFocus aria-label="Close Plotting settings">
           <FiX aria-hidden="true" />
         </button>
       </header>
@@ -291,8 +255,8 @@ export default function TimeSeriesSettings({ config, engine, ros, connected, onC
             <details>
               <summary>Math and derived signal</summary>
               <p className="timeseries-muted">
-                Expression → scale + offset → operation → smoothing. x is this raw field; y, z and w are other
-                signals' raw fields. Duplicate to retain the original curve.
+                Expression → scale + offset → operation → smoothing. x is this raw field; y, z and w are other signals'
+                raw fields. Duplicate to retain the original curve.
               </p>
               <label>
                 Expression
@@ -306,23 +270,25 @@ export default function TimeSeriesSettings({ config, engine, ros, connected, onC
               <p className="timeseries-muted">
                 {EXPRESSION_HELP} Examples: sqrt(x^2 + y^2 + z^2), deg(atan2(2*(w*z + x*y), 1 - 2*(y^2 + z^2))).
               </p>
-              {INPUT_VARIABLES.filter(name => name === 'y' || mathInputs(s.math).includes(name) || s.math[INPUT_ID_KEYS[name]]).map(name => (
-                <label key={name}>
-                  {name === 'y' ? 'Secondary signal (y)' : `Input signal (${name})`}
-                  <select
-                    value={s.math[INPUT_ID_KEYS[name]]}
-                    onChange={e => changeSeries(s.id, { math: { ...s.math, [INPUT_ID_KEYS[name]]: e.target.value } })}
-                  >
-                    <option value="">Choose a signal…</option>
-                    {config.series
+              {INPUT_VARIABLES.filter(
+                name => name === 'y' || mathInputs(s.math).includes(name) || s.math[INPUT_ID_KEYS[name]]
+              ).map(name => (
+                <SourcePicker
+                  key={name}
+                  label={name === 'y' ? 'Secondary signal (y)' : `Input signal (${name})`}
+                  value={s.math[INPUT_ID_KEYS[name]]}
+                  options={[
+                    { value: '', label: 'No input signal' },
+                    ...config.series
                       .filter(item => item.id !== s.id && item.fieldPath)
-                      .map(item => (
-                        <option key={item.id} value={item.id}>
-                          {displayName(item)}
-                        </option>
-                      ))}
-                  </select>
-                </label>
+                      .map(item => ({
+                        value: item.id,
+                        label: displayName(item),
+                        detail: item.label ? `${item.topic} · ${item.fieldPath}` : undefined,
+                      })),
+                  ]}
+                  onChange={value => changeSeries(s.id, { math: { ...s.math, [INPUT_ID_KEYS[name]]: value } })}
+                />
               ))}
               <p className="timeseries-muted">
                 Samples follow x arrivals, using the latest y within the time window. Hidden inputs remain subscribed
@@ -381,19 +347,16 @@ export default function TimeSeriesSettings({ config, engine, ros, connected, onC
         {sources.length > 0 && (
           <section className="timeseries-section">
             <strong>Add another field</strong>
-            <label>
-              Configured topic
-              <select
-                value={source ? sourceKey(source.topic, source.messageType) : ''}
-                onChange={e => setCustomSource(e.target.value)}
-              >
-                {sources.map(s => (
-                  <option key={sourceKey(s.topic, s.messageType)} value={sourceKey(s.topic, s.messageType)}>
-                    {s.topic}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <SourcePicker
+              label="Configured topic"
+              value={source ? sourceKey(source.topic, source.messageType) : ''}
+              options={sources.map(s => ({
+                value: sourceKey(s.topic, s.messageType),
+                label: s.topic,
+                detail: s.messageType,
+              }))}
+              onChange={setCustomSource}
+            />
             <label>
               Numeric field
               <input
@@ -419,6 +382,49 @@ export default function TimeSeriesSettings({ config, engine, ros, connected, onC
             >
               Add field
             </button>
+          </section>
+        )}
+        {config.mode === 'xy' && (
+          <section className="timeseries-section" aria-label="XY settings">
+            <strong>XY settings</strong>
+            <label>
+              XY pairing
+              <select
+                value={config.xyPairing}
+                onChange={event => onChange({ ...config, xyPairing: event.target.value as 'message' | 'latest' })}
+              >
+                <option value="message">Same message only</option>
+                <option value="latest">Latest X within tolerance</option>
+              </select>
+            </label>
+            {config.xyPairing === 'latest' && (
+              <NumberSetting
+                label="Maximum X age (ms)"
+                value={config.xyToleranceMs}
+                min={0}
+                max={2000}
+                onChange={xyToleranceMs => onChange(sanitizeConfig({ ...config, xyToleranceMs }))}
+              />
+            )}
+            <label>
+              XY display
+              <select
+                value={config.xyStyle}
+                onChange={event => onChange({ ...config, xyStyle: event.target.value as 'trajectory' | 'scatter' })}
+              >
+                <option value="trajectory">Trajectory</option>
+                <option value="scatter">Scatter</option>
+              </select>
+            </label>
+            <details>
+              <summary>Pairing and timing</summary>
+              <p className="timeseries-muted">
+                Each visible signal except X supplies a Y curve. A hidden X signal stays subscribed. Same-message
+                pairing requires values from one message. Latest-X pairing uses the panel clock (live reception or
+                replay playback time), never future values or interpolation. This is not header-timestamp
+                synchronization.
+              </p>
+            </details>
           </section>
         )}
         <details className="timeseries-section">

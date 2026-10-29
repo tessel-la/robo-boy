@@ -4,13 +4,14 @@ import type { TimeSeriesEngine } from './engine';
 import { EXPRESSION_HELP, INPUT_ID_KEYS, INPUT_VARIABLES, SignalMath, sanitizeMath, type MathConfig } from './math';
 
 /**
- * The Time Series side of the assistant's panel-settings bridge. `describe` tells the model what
+ * The Plotting side of the assistant's panel-settings bridge. `describe` tells the model what
  * the plot shows and how well each signal is doing; `apply` turns its patch into a new, sanitized
  * configuration and reports every change in the user's terms. Both are pure so the rules are
  * tested without a canvas or a robot.
  */
 export const TIME_SERIES_SETTINGS_HELP = [
   'Signals are referred to by "id" from "signals", by label, or as {"topic","fieldPath"}.',
+  '"mode":"time"|"xy", "xSignal":<signal>, "xyPairing":"message"|"latest", "xyToleranceMs":0–2000, "xyStyle":"trajectory"|"scatter". Same-message pairing is the default; latest-X uses panel-clock age, not header stamps.',
   '"addSignals": array of {"topic", "fieldPath" (dot/index path such as "twist.twist.linear.x" or "position[0]"; omit to auto-pick up to 8 numeric fields), "messageType" (optional, read from the ROS graph), "label", "unit", "color" (#rrggbb or a colour name), "visible", "filter", "math"}.',
   'A derived curve: {"from": <signal>, "label", "math": {...}} copies that signal\'s source and keeps the original curve.',
   '"updateSignals": array of {"signal": <signal>, and any of "label", "unit", "color", "visible", "fieldPath", "filter", "math"} (math fields merge into the current ones).',
@@ -105,6 +106,7 @@ export const describeTimeSeries = (engine: TimeSeriesEngine): Record<string, unk
     };
   });
   return {
+    mode: config.mode, xSeriesId: config.xSeriesId, xyPairing: config.xyPairing, xyToleranceMs: config.xyToleranceMs, xyStyle: config.xyStyle,
     timeWindowSec: config.timeWindowSec,
     sampleLimit: config.sampleLimit,
     yAxis: config.autoScale ? 'auto' : { min: config.minY, max: config.maxY },
@@ -406,6 +408,21 @@ export const applyTimeSeriesSettings = (
     if (value === undefined) fail(`${key} must be a number.`);
     else plot[key] = value;
   }
+  for (const [key, allowed] of Object.entries({ mode: ['time', 'xy'], xyPairing: ['message', 'latest'], xyStyle: ['trajectory', 'scatter'] })) {
+    if (settings[key] === undefined) continue;
+    if (!allowed.includes(settings[key] as string)) fail(`Invalid ${key}. Choose ${allowed.join(' or ')}.`);
+    else { Object.assign(plot, { [key]: settings[key] }); ok(`${key} set to ${settings[key]}.`); }
+  }
+  if (settings.xSignal !== undefined) {
+    const x = find(settings.xSignal as SignalRef);
+    if (!x) fail('X signal must name a configured signal.');
+    else { plot.xSeriesId = x.id; ok(`X axis uses ${name(x)}.`); }
+  }
+  if (settings.xyToleranceMs !== undefined) {
+    const value = finite(settings.xyToleranceMs);
+    if (value === undefined) fail('xyToleranceMs must be a number.');
+    else { plot.xyToleranceMs = value; ok(`Maximum X age set to ${Math.min(2000, Math.max(0, value))} ms.`); }
+  }
   if (typeof settings.showPoints === 'boolean') plot.showPoints = settings.showPoints;
   const range = isRecord(settings.yRange) ? settings.yRange : settings.minY !== undefined || settings.maxY !== undefined ? { min: settings.minY, max: settings.maxY } : undefined;
   if (range) {
@@ -444,6 +461,6 @@ export const applyTimeSeriesSettings = (
     result.clear = true;
     ok('Cleared the captured history.');
   }
-  if (!outcomes.length) fail(`Nothing in those settings applies to the Time Series panel. ${TIME_SERIES_SETTINGS_HELP}`);
+  if (!outcomes.length) fail(`Nothing in those settings applies to the Plotting panel. ${TIME_SERIES_SETTINGS_HELP}`);
   return result;
 };

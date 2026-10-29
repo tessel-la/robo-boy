@@ -1,17 +1,18 @@
 import { FiMenu } from 'react-icons/fi';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import ROSLIB, { type Ros } from 'roslib';
 import type { RoboBoyJsonObject } from '../../panels/types';
 import { getDesiredSources, sanitizeConfig, type TimeseriesConfig } from './config';
 import { TimeSeriesEngine } from './engine';
 import { SubscriptionController } from './subscriptions';
 import TimeSeriesPlot from './TimeSeriesPlot';
-import TimeSeriesSettings from './TimeSeriesSettings';
 import '../treePanel/components/TreePanelChrome.css';
 import './TimeSeriesPanel.css';
 import type { PanelSettingsBridge } from '../assistant/types';
 import { applyTimeSeriesSettings, describeTimeSeries, TIME_SERIES_SETTINGS_HELP } from './assistantSettings';
 import { runSerializedRosapi } from '../../utils/rosapiQueue';
+
+const TimeSeriesSettings = lazy(() => import('./TimeSeriesSettings'));
 
 interface Props {
   ros: Ros | null;
@@ -98,17 +99,26 @@ export default function TimeSeriesPanel({
   const refreshTopicTypes = useCallback(() => {
     if (!ros || !connected || typeof ros.getTopics !== 'function') return;
     if (topicTypesRequestRef.current || Date.now() - topicTypesAtRef.current < 10_000) return;
-    const pending = runSerializedRosapi(ros, () => new Promise<{ topics: string[]; types: string[] }>((resolve, reject) => ros.getTopics(resolve, reject))).then(result => {
-      const current = connectionRef.current;
-      if (current.ros !== ros || !current.connected || current.connectionGeneration !== connectionGeneration) return;
-      topicTypesRef.current = new Map(result.topics.map((topic, index) => [topic, result.types[index]]));
-      topicTypesAtRef.current = Date.now();
-    }).catch(() => {}).finally(() => { if (topicTypesRequestRef.current === pending) topicTypesRequestRef.current = undefined; });
+    const pending = runSerializedRosapi(
+      ros,
+      () => new Promise<{ topics: string[]; types: string[] }>((resolve, reject) => ros.getTopics(resolve, reject))
+    )
+      .then(result => {
+        const current = connectionRef.current;
+        if (current.ros !== ros || !current.connected || current.connectionGeneration !== connectionGeneration) return;
+        topicTypesRef.current = new Map(result.topics.map((topic, index) => [topic, result.types[index]]));
+        topicTypesAtRef.current = Date.now();
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (topicTypesRequestRef.current === pending) topicTypesRequestRef.current = undefined;
+      });
     topicTypesRequestRef.current = pending;
   }, [ros, connected, connectionGeneration]);
   useEffect(() => {
     topicTypesRef.current = new Map();
-    topicTypesAtRef.current = 0; topicTypesRequestRef.current = undefined;
+    topicTypesAtRef.current = 0;
+    topicTypesRequestRef.current = undefined;
     refreshTopicTypes();
   }, [refreshTopicTypes]);
   useEffect(() => {
@@ -121,7 +131,10 @@ export default function TimeSeriesPanel({
         return { ...describeTimeSeries(engine), connected, active };
       },
       apply: settings => {
-        const result = applyTimeSeriesSettings(engine.config, settings, { topicTypes: topicTypesRef.current, discovered: engine.discovered });
+        const result = applyTimeSeriesSettings(engine.config, settings, {
+          topicTypes: topicTypesRef.current,
+          discovered: engine.discovered,
+        });
         if (JSON.stringify(result.config) !== JSON.stringify(engine.config)) save(result.config);
         if (result.paused !== undefined) engine.paused = result.paused;
         if (result.clear) engine.clear();
@@ -137,7 +150,8 @@ export default function TimeSeriesPanel({
     // Visibility/assistant layout changes suspend rendering/subscriptions, not the source
     // epoch. Preserve observed samples when resuming the same robot or replay source.
     if (subscribedEpochRef.current?.ros !== ros || subscribedEpochRef.current?.generation !== connectionGeneration) {
-      engine.reconnect(); subscribedEpochRef.current = { ros, generation: connectionGeneration };
+      engine.reconnect();
+      subscribedEpochRef.current = { ros, generation: connectionGeneration };
     }
     setError('');
     const controller = new SubscriptionController(
@@ -183,7 +197,7 @@ export default function TimeSeriesPanel({
     };
   }, [ros, connected, connectionGeneration, active, engine]);
   return (
-    <section ref={rootRef} className="timeseries-panel" aria-label="Time Series">
+    <section ref={rootRef} className="timeseries-panel" aria-label="Plotting">
       <div ref={contentRef} className="timeseries-content" aria-hidden={settings || undefined}>
         <header className="timeseries-header">
           <button
@@ -195,7 +209,9 @@ export default function TimeSeriesPanel({
             title={`Signals and settings · ${connected ? (active ? 'Connected' : 'Inactive') : 'Disconnected'}`}
           >
             <FiMenu className="tree-panel-menu-icon" aria-hidden="true" />
-            <span>Signals · {config.series.length}</span>
+            <span>
+              Signals<span className="timeseries-signal-count"> · {config.series.length}</span>
+            </span>
             <span
               className="timeseries-connection"
               data-connected={connected && active}
@@ -203,6 +219,24 @@ export default function TimeSeriesPanel({
               aria-label={connected ? (active ? 'Connected' : 'Inactive') : 'Disconnected'}
             />
           </button>
+          <div className="timeseries-mode-bar" role="group" aria-label="Plot mode">
+            <button
+              aria-label="Time series"
+              title="Plot signals over time"
+              aria-pressed={config.mode === 'time'}
+              onClick={() => save({ ...config, mode: 'time' })}
+            >
+              Time
+            </button>
+            <button
+              aria-label="XY plot"
+              title="Plot signals against another signal"
+              aria-pressed={config.mode === 'xy'}
+              onClick={() => save({ ...config, mode: 'xy' })}
+            >
+              XY
+            </button>
+          </div>
         </header>
         {error && (
           <p className="timeseries-error" role="alert">
@@ -213,6 +247,7 @@ export default function TimeSeriesPanel({
           engine={engine}
           config={config}
           active={active}
+          onChange={save}
           onOpenSettings={() => setSettings(true)}
           onToggle={id =>
             save({
@@ -223,14 +258,28 @@ export default function TimeSeriesPanel({
         />
       </div>
       {settings && (
-        <TimeSeriesSettings
-          engine={engine}
-          config={config}
-          ros={ros}
-          connected={connected}
-          onChange={save}
-          onClose={closeSettings}
-        />
+        <Suspense
+          fallback={
+            <section className="timeseries-settings" aria-label="Plotting settings">
+              <header>
+                <strong>Plotting settings</strong>
+                <button autoFocus onClick={closeSettings} aria-label="Close Plotting settings">
+                  Close
+                </button>
+              </header>
+              <p role="status">Loading plotting settings…</p>
+            </section>
+          }
+        >
+          <TimeSeriesSettings
+            engine={engine}
+            config={config}
+            ros={ros}
+            connected={connected}
+            onChange={save}
+            onClose={closeSettings}
+          />
+        </Suspense>
       )}
     </section>
   );

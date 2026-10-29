@@ -21,6 +21,6 @@ describe('plot context selection', () => {
   });
   it('does not sample sources for unrelated turns or empty panel creation', () => {
     expect(timeSeriesContextTopics('what publishes /speed?', topics)).toEqual([]);
-    expect(timeSeriesContextTopics('add a Time Series panel', topics)).toEqual([]);
+    expect(timeSeriesContextTopics('add a Plotting panel', topics)).toEqual([]);
   });
 });

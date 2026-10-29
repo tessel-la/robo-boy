@@ -245,7 +245,7 @@ export const composeNativeSystemPrompt = (input: ComposeSystemPromptInput): stri
       WORKSPACE_PROMPT_FRAGMENT.indexOf('- {"op":"addPanel"'),
       WORKSPACE_PROMPT_FRAGMENT.indexOf('To plot something')
     ),
-    "For Time Series, add the panel and configurePanel in order. Resolve numeric fields from read_topic or read_schema; use addSignals, timeWindowSec, autoScale and the panel's settingsHelp. JointState uses indexed fields such as position[0]; label each from name at the same index in the observed sample, never an assumed joint order. Read workspace afterward to verify configuration and samples. For Data Explorer and Record & Replay, read their settingsHelp and use configurePanel, then read their results. Never use a synthetic followUp user message.",
+    "For Plotting, add the panel and configurePanel in order. Resolve numeric fields from read_topic or read_schema; use addSignals, timeWindowSec, autoScale and the panel's settingsHelp. JointState uses indexed fields such as position[0]; label each from name at the same index in the observed sample, never an assumed joint order. Read workspace afterward to verify configuration and samples. For Data Explorer and Record & Replay, read their settingsHelp and use configurePanel, then read their results. Never use a synthetic followUp user message.",
     '## Authoring formats (tool arguments, not a response protocol)\n' +
       PAD_PROMPT_FRAGMENT.slice(PAD_PROMPT_FRAGMENT.indexOf('Layout shape:')),
     '## Behavior Tree document format\n' +

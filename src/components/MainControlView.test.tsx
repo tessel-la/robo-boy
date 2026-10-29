@@ -773,7 +773,7 @@ describe('MainControlView desktop workspace', () => {
     });
   });
 
-  it('migrates external Time Series tiles to native panels without losing IDs or saved settings', async () => {
+  it('migrates external Plotting tiles to native panels without losing IDs or saved settings', async () => {
     const values = { config: { schemaVersion: 3, series: [{ topic: '/joint_states', messageType: 'JointState', fieldPath: 'position[0]', enabled: false }] } };
     const legacy = 'la.tessel.roboboy.timeseries';
     localStorage.setItem(workspacePanelsKey, JSON.stringify([{ ...makePanel('existing-series', legacy, 'Telemetry'), panelState: { schemaVersion: 1, panelId: legacy, values } }]));
@@ -2091,7 +2091,7 @@ describe('MainControlView opening panels from the Data Explorer', () => {
     expect(screen.getAllByTestId('visualization-panel')).toHaveLength(1);
   });
 
-  it('opens new Time Series, recording, camera and TF panels, then reuses them', async () => {
+  it('opens new Plotting, recording, camera and TF panels, then reuses them', async () => {
     seed([makePanel('explorer', 'dataExplorer', 'Data Explorer')]);
     renderMainControlView();
     fireEvent.click(await screen.findByRole('button', { name: 'Explorer: plot /speed' }));
