@@ -122,7 +122,7 @@ Trees are stored in the current browser and can be imported or exported as JSON.
 
 ### Plotting
 
-Plotting (previously Time Series) supports **Time series** and **XY plot** modes. Choose the mode above the chart and the X signal directly below it; configure same-message or explicit latest-X pairing in Settings. **More → Interval statistics** analyzes a frozen captured time interval. See [Plotting](native-time-series.md) for pairing, statistics and saved-layout compatibility.
+Plotting (previously Time Series) supports **Time series** and **XY plot** modes. Choose **Time / XY** beside **Signals** in the panel header, with the X signal beneath the header; configure same-message or explicit latest-X pairing in Settings. **More → Interval statistics** analyzes a frozen captured time interval. See [Plotting](native-time-series.md) for pairing, statistics and saved-layout compatibility.
 
 ## Custom Control Pads
 

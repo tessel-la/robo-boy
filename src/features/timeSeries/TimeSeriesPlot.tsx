@@ -457,14 +457,6 @@ export default function TimeSeriesPlot({ engine, config, active, onToggle, onOpe
           )}
         </div>
       </div>
-      <div className="timeseries-mode-bar" role="group" aria-label="Plot mode">
-        <button aria-pressed={config.mode === 'time'} onClick={() => onChange({ ...config, mode: 'time' })}>
-          Time series
-        </button>
-        <button aria-pressed={config.mode === 'xy'} onClick={() => onChange({ ...config, mode: 'xy' })}>
-          XY plot
-        </button>
-      </div>
       {config.mode === 'xy' && (
         <div className="timeseries-axis-source">
           <SourcePicker

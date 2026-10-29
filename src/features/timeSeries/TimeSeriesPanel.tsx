@@ -209,7 +209,9 @@ export default function TimeSeriesPanel({
             title={`Signals and settings · ${connected ? (active ? 'Connected' : 'Inactive') : 'Disconnected'}`}
           >
             <FiMenu className="tree-panel-menu-icon" aria-hidden="true" />
-            <span>Signals · {config.series.length}</span>
+            <span>
+              Signals<span className="timeseries-signal-count"> · {config.series.length}</span>
+            </span>
             <span
               className="timeseries-connection"
               data-connected={connected && active}
@@ -217,6 +219,24 @@ export default function TimeSeriesPanel({
               aria-label={connected ? (active ? 'Connected' : 'Inactive') : 'Disconnected'}
             />
           </button>
+          <div className="timeseries-mode-bar" role="group" aria-label="Plot mode">
+            <button
+              aria-label="Time series"
+              title="Plot signals over time"
+              aria-pressed={config.mode === 'time'}
+              onClick={() => save({ ...config, mode: 'time' })}
+            >
+              Time
+            </button>
+            <button
+              aria-label="XY plot"
+              title="Plot signals against another signal"
+              aria-pressed={config.mode === 'xy'}
+              onClick={() => save({ ...config, mode: 'xy' })}
+            >
+              XY
+            </button>
+          </div>
         </header>
         {error && (
           <p className="timeseries-error" role="alert">

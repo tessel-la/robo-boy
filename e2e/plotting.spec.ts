@@ -141,6 +141,7 @@ for (const theme of ['dark', 'light', 'solarized', 'custom-cobalt'])
       .getByRole('button', { name: /^Position X/ })
       .click();
     expect(await panel.evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+    await panel.screenshot({ path: testInfo.outputPath(`compact-plot-${theme}.png`) });
     await panel.getByRole('button', { name: 'Settings', exact: true }).click();
     await expect(panel.getByRole('region', { name: 'XY settings' })).toBeVisible();
     await panel.getByRole('region', { name: 'XY settings' }).scrollIntoViewIfNeeded();

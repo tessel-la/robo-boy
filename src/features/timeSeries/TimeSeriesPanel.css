@@ -58,21 +58,21 @@
   overflow: hidden;
 }
 .timeseries-mode-bar {
-  display: flex;
+  display: inline-flex;
   flex-shrink: 0;
-  gap: 4px;
-  margin: 54px 10px 8px;
-  padding: 3px;
+  gap: 0;
   border: 1px solid var(--border-color);
-  border-radius: 22px;
+  border-radius: 18px;
   background: var(--card-bg);
 }
 .timeseries-mode-bar > button {
-  flex: 1;
-  border-radius: 18px;
+  width: auto;
+  min-width: 44px;
+  padding: 0 8px;
+  border-radius: 16px;
   background: transparent;
   border-color: transparent;
-  min-height: 40px;
+  min-height: 34px;
 }
 .timeseries-axis-source {
   margin: 0 10px 8px;
@@ -436,6 +436,7 @@
   flex: 1;
   min-height: 0;
   overflow: auto;
+  padding-top: 52px;
 }
 
 /* Keep common touch actions in one predictable row; secondary actions use a disclosure. */
@@ -513,6 +514,9 @@
   left: 10px;
   z-index: 3;
   max-width: calc(100% - 152px);
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 .timeseries-header .tree-panel-menu-button {
   min-height: 36px;
@@ -738,6 +742,33 @@
   }
 }
 @container (max-width: 520px) {
+  .timeseries-header {
+    top: 6px;
+    left: 4px;
+    gap: 4px;
+    max-width: calc(100% - 136px);
+  }
+  .timeseries-header .tree-panel-menu-button {
+    padding: 0 4px;
+    gap: 4px;
+    font-size: 11px;
+    height: 42px;
+    min-height: 42px;
+    flex-shrink: 0;
+  }
+  .timeseries-header .tree-panel-menu-icon,
+  .timeseries-signal-count {
+    display: none;
+  }
+  .timeseries-mode-bar > button {
+    min-height: 40px;
+    padding: 0 6px;
+  }
+  .timeseries-toolbar {
+    top: 7px;
+    right: 4px;
+    gap: 4px;
+  }
   .timeseries-legend > button {
     min-height: 36px;
   }

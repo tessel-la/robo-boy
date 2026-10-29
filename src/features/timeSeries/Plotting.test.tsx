@@ -77,10 +77,8 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-it('switches the existing plot to XY, requires an X choice and exports paired coordinates with panel-clock times', async () => {
-  const { changed, view } = setup();
-  expect(screen.getByRole('button', { name: 'Time series' })).toHaveAttribute('aria-pressed', 'true');
-  click('XY plot');
+it('requires an X choice and exports paired coordinates with panel-clock times', async () => {
+  const { changed, view } = setup({ mode: 'xy' });
   tick();
   expect(screen.getByText('Choose an X signal above, then add or show a Y signal.')).toBeInTheDocument();
   click('X signal');

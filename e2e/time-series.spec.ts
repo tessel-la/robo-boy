@@ -214,8 +214,9 @@ test('rectangle zoom, wheel, pan, keyboard reset and clear work on the native ca
   await expect(panel.locator('.timeseries-footer')).toContainText('0 samples');
 });
 
-test('mobile settings contain long names and preserve a usable plot', async ({ page }) => {
+test('mobile settings contain long names and preserve a usable plot', async ({ page }, testInfo) => {
   await seed(page, true);
+  await expect(page.locator('.workspace-opening')).toHaveCount(0);
   const panel = page.locator('.timeseries-panel');
   for (const viewport of [
     { width: 320, height: 568 },
@@ -227,14 +228,22 @@ test('mobile settings contain long names and preserve a usable plot', async ({ p
         panel.evaluate(el => {
           const panel = el.getBoundingClientRect();
           const plot = el.querySelector('canvas')!.getBoundingClientRect();
-          // Persistent controls sit above the chart. Keep most of the remaining
-          // space for drawing rather than letting the legend grow with signals.
-          return plot.height / (panel.bottom - plot.top);
+          return plot.height / panel.height;
         })
       )
       .toBeGreaterThan(0.75);
     expect(await panel.locator('canvas').evaluate(el => el.getBoundingClientRect().height)).toBeGreaterThan(200);
-    await expect(panel.getByRole('group', { name: 'Plot mode', exact: true })).toBeVisible();
+    const mode = panel.locator('.timeseries-header').getByRole('group', { name: 'Plot mode', exact: true });
+    await expect(mode).toBeVisible();
+    expect(await mode.evaluate(el => el.getBoundingClientRect().width)).toBeLessThanOrEqual(100);
+    await expect(panel.getByRole('button', { name: 'Settings', exact: true })).toContainText('Signals');
+    expect(
+      await mode.evaluate(el => {
+        const mode = el.getBoundingClientRect();
+        const signals = el.previousElementSibling!.getBoundingClientRect();
+        return mode.left >= signals.right && Math.abs(mode.top - signals.top) <= 4;
+      })
+    ).toBe(true);
     await expect
       .poll(() => panel.locator('.timeseries-legend').evaluate(el => el.getBoundingClientRect().height))
       .toBeLessThanOrEqual(52);
@@ -247,6 +256,7 @@ test('mobile settings contain long names and preserve a usable plot', async ({ p
         )
       )
       .toBeGreaterThanOrEqual(0);
+    await panel.screenshot({ path: testInfo.outputPath(`compact-header-${viewport.width}.png`) });
   }
   const primary = panel.locator('.timeseries-toolbar > button, .timeseries-more > button');
   expect(

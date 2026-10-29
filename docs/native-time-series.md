@@ -30,7 +30,7 @@ never execute JavaScript. Normalization maps a fixed input range to 0–1 withou
 derivatives use backward differences and integrals use the trapezoidal rule in seconds.
 
 The plot uses the same floating pill-menu and round-icon design as BT, TF and 3D panels.
-On mobile, signals occupy one horizontally scrollable legend row. The **Time series / XY plot** switch stays visible above the chart. In XY mode, the full-width **X signal** picker appears beneath it. Source pickers support search and wrap long topic/field names; extra actions remain under **More**. Settings adapt to tile width. Plot/performance settings control
+On mobile, signals occupy one horizontally scrollable legend row. The compact **Time / XY** switch stays beside **Signals** in the panel header. Narrow panels hide the signal count and menu icon to keep the mode switch and capture controls on one row. In XY mode, the full-width **X signal** picker appears beneath it. Source pickers support search and wrap long topic/field names; extra actions remain under **More**. Settings adapt to tile width. Plot/performance settings control
 retention (1–600 seconds), per-signal capacity (100–10,000 samples), bridge throttle (0–2,000 ms),
 rendering (5–60 Hz), point markers and automatic/manual Y. Edits save with the workspace and
 travel with exported layouts. Filter/math/source edits clear affected history; label/color/
@@ -38,7 +38,7 @@ visibility edits retain it. Native panels use the same trusted ROS connection as
 
 ## XY plots
 
-Choose **XY plot** above the chart, then explicitly choose an **X signal** directly below the mode switch. Each visible
+Choose **XY** beside **Signals**, then explicitly choose an **X signal** beneath the header. Each visible
 signal other than X becomes a Y curve. Settings under **XY settings** choose **Trajectory**
 (ordered lines) or **Scatter** (points). The X axis uses the selected signal's processed values
 and unit; the ordinary math/filter pipeline applies to both axes. Existing capture limits,
