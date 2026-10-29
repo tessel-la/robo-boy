@@ -14,6 +14,7 @@ import { useEffect, useId, useRef, useState } from 'react';
 import type { TimeSeriesEngine } from './engine';
 import { displayName, type TimeseriesConfig } from './config';
 import TimeSeriesLegend from './TimeSeriesLegend';
+import SourcePicker from './SourcePicker';
 import IntervalStatistics, { type AnalysisInterval } from './IntervalStatistics';
 import { xyData, xyCsv } from './analysis';
 import { createCsv, type TimeseriesSample } from './data';
@@ -384,31 +385,6 @@ export default function TimeSeriesPlot({ engine, config, active, onToggle, onOpe
           </button>
           {moreOpen && (
             <div id={moreId} className="timeseries-more-actions" role="group" aria-label="More plot controls">
-              <div className="timeseries-mode-bar">
-                <select
-                  aria-label="Plot mode"
-                  value={config.mode}
-                  onChange={event => onChange({ ...config, mode: event.target.value as 'time' | 'xy' })}
-                >
-                  <option value="time">Time series</option>
-                  <option value="xy">XY plot</option>
-                </select>
-                {config.mode === 'xy' && (
-                  <select
-                    aria-label="X signal"
-                    value={config.xSeriesId}
-                    onChange={event => onChange({ ...config, xSeriesId: event.target.value })}
-                  >
-                    <option value="">Choose X signal</option>
-                    {config.series.map(series => (
-                      <option key={series.id} value={series.id}>
-                        {displayName(series)}
-                        {series.unit ? ` (${series.unit})` : ''}
-                      </option>
-                    ))}
-                  </select>
-                )}
-              </div>
               <div className="timeseries-interaction-hint" role="status">
                 {paused
                   ? 'Paused · tap Resume to capture'
@@ -481,6 +457,32 @@ export default function TimeSeriesPlot({ engine, config, active, onToggle, onOpe
           )}
         </div>
       </div>
+      <div className="timeseries-mode-bar" role="group" aria-label="Plot mode">
+        <button aria-pressed={config.mode === 'time'} onClick={() => onChange({ ...config, mode: 'time' })}>
+          Time series
+        </button>
+        <button aria-pressed={config.mode === 'xy'} onClick={() => onChange({ ...config, mode: 'xy' })}>
+          XY plot
+        </button>
+      </div>
+      {config.mode === 'xy' && (
+        <div className="timeseries-axis-source">
+          <SourcePicker
+            label="X signal"
+            value={config.xSeriesId}
+            placeholder="Choose X signal"
+            options={[
+              { value: '', label: 'Choose X signal' },
+              ...config.series.map(series => ({
+                value: series.id,
+                label: displayName(series) + (series.unit ? ` (${series.unit})` : ''),
+                detail: series.label ? `${series.topic} · ${series.fieldPath}` : undefined,
+              })),
+            ]}
+            onChange={xSeriesId => onChange({ ...config, xSeriesId })}
+          />
+        </div>
+      )}
       <div className="timeseries-plot">
         <canvas
           ref={canvasRef}

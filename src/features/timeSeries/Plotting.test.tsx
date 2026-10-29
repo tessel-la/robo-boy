@@ -6,6 +6,7 @@ import { TimeSeriesEngine } from './engine';
 import TimeSeriesPlot from './TimeSeriesPlot';
 import TimeSeriesSettings from './TimeSeriesSettings';
 import NumberSetting from './NumberSetting';
+import SourcePicker from './SourcePicker';
 
 let frames: Map<number, FrameRequestCallback>,
   next: number,
@@ -78,17 +79,19 @@ afterEach(() => {
 
 it('switches the existing plot to XY, requires an X choice and exports paired coordinates with panel-clock times', async () => {
   const { changed, view } = setup();
-  click('More');
-  fireEvent.change(screen.getByLabelText('Plot mode'), { target: { value: 'xy' } });
+  expect(screen.getByRole('button', { name: 'Time series' })).toHaveAttribute('aria-pressed', 'true');
+  click('XY plot');
   tick();
   expect(screen.getByText('Choose an X signal above, then add or show a Y signal.')).toBeInTheDocument();
-  fireEvent.change(screen.getByLabelText('X signal'), { target: { value: 'x' } });
+  click('X signal');
+  fireEvent.click(
+    within(screen.getByRole('group', { name: 'X signal choices' })).getByRole('button', { name: /^X \(m\)/ })
+  );
   tick();
   expect(changed).toHaveBeenLastCalledWith(expect.objectContaining({ mode: 'xy', xSeriesId: 'x' }));
   expect(screen.getByLabelText('Visible plot range')).toHaveTextContent(/^X/);
   expect(screen.getByText('3 samples')).toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Y' })).toBeInTheDocument();
-  click('More');
   const createObjectURL = vi.fn((_blob: Blob) => 'blob:plot');
   vi.stubGlobal('URL', { createObjectURL, revokeObjectURL: vi.fn() });
   vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
@@ -155,8 +158,7 @@ it('configures explicit XY pairing and trajectory/scatter using the existing set
   expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ xyToleranceMs: 50 }));
   fireEvent.change(screen.getByLabelText('XY display'), { target: { value: 'scatter' } });
   expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ xyStyle: 'scatter' }));
-  fireEvent.change(screen.getByLabelText('X signal'), { target: { value: 'y' } });
-  expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ xSeriesId: 'y' }));
+  expect(screen.queryByRole('button', { name: 'X signal' })).not.toBeInTheDocument();
 });
 
 it('renders scatter points, inspects the nearest XY pair and zooms in numeric coordinates', () => {
@@ -188,4 +190,36 @@ it('commits fractional interval values on Enter and restores an invalid number o
   fireEvent.blur(input);
   expect(input).toHaveValue(0.02);
   expect(onChange).toHaveBeenCalledOnce();
+});
+
+it('searches wrapped source choices, commits a selection and returns keyboard focus without closing settings', () => {
+  const onChange = vi.fn();
+  render(
+    <SourcePicker
+      label="Configured topic"
+      value="a"
+      options={[
+        { value: 'a', label: '/robot/front/odometry', detail: 'nav_msgs/msg/Odometry' },
+        { value: 'b', label: '/robot/rear/odometry', detail: 'nav_msgs/msg/Odometry' },
+      ]}
+      onChange={onChange}
+    />
+  );
+  click('Configured topic');
+  const search = screen.getByRole('searchbox', { name: 'Search configured topic' });
+  expect(search).toHaveFocus();
+  fireEvent.change(search, { target: { value: 'rear' } });
+  expect(screen.queryByRole('button', { name: /front/ })).not.toBeInTheDocument();
+  click('/robot/rear/odometry nav_msgs/msg/Odometry');
+  expect(onChange).toHaveBeenCalledWith('b');
+  expect(screen.getByRole('button', { name: 'Configured topic' })).toHaveFocus();
+  click('Configured topic');
+  fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'missing' } });
+  expect(screen.getByRole('status')).toHaveTextContent('No matching sources');
+  fireEvent.keyDown(screen.getByRole('searchbox'), { key: 'Escape' });
+  expect(screen.queryByRole('group', { name: 'Configured topic choices' })).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Configured topic' })).toHaveFocus();
+  click('Configured topic');
+  fireEvent.pointerDown(document.body);
+  expect(screen.getByRole('button', { name: 'Configured topic' })).toHaveAttribute('aria-expanded', 'false');
 });

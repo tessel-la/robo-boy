@@ -106,7 +106,11 @@ test('migrates saved external tiles, plots multiple topics, derives signals and 
   const derived = panel.getByRole('region', { name: 'Position derived', exact: true });
   await derived.getByText('Math and derived signal', { exact: true }).click();
   await derived.getByLabel('Expression', { exact: true }).fill('x - y');
-  await derived.getByLabel('Secondary signal (y)').selectOption('b');
+  await derived.getByRole('button', { name: 'Secondary signal (y)', exact: true }).click();
+  await derived
+    .getByRole('group', { name: 'Secondary signal (y) choices' })
+    .getByRole('button', { name: /^Reference/ })
+    .click();
   await derived.getByLabel('Smoothing').selectOption('raw');
   await panel.getByRole('button', { name: 'Done', exact: true }).click();
   await publish(page, longTopic, { value: 10 });
@@ -223,10 +227,14 @@ test('mobile settings contain long names and preserve a usable plot', async ({ p
         panel.evaluate(el => {
           const panel = el.getBoundingClientRect();
           const plot = el.querySelector('canvas')!.getBoundingClientRect();
-          return plot.height / panel.height;
+          // Persistent controls sit above the chart. Keep most of the remaining
+          // space for drawing rather than letting the legend grow with signals.
+          return plot.height / (panel.bottom - plot.top);
         })
       )
       .toBeGreaterThan(0.75);
+    expect(await panel.locator('canvas').evaluate(el => el.getBoundingClientRect().height)).toBeGreaterThan(200);
+    await expect(panel.getByRole('group', { name: 'Plot mode', exact: true })).toBeVisible();
     await expect
       .poll(() => panel.locator('.timeseries-legend').evaluate(el => el.getBoundingClientRect().height))
       .toBeLessThanOrEqual(52);

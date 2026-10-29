@@ -1,4 +1,5 @@
 import NumberSetting from './NumberSetting';
+import SourcePicker from './SourcePicker';
 import { FiCheck, FiTrash2, FiX } from 'react-icons/fi';
 import { useEffect, useId, useState } from 'react';
 import type { Ros } from 'roslib';
@@ -272,22 +273,22 @@ export default function TimeSeriesSettings({ config, engine, ros, connected, onC
               {INPUT_VARIABLES.filter(
                 name => name === 'y' || mathInputs(s.math).includes(name) || s.math[INPUT_ID_KEYS[name]]
               ).map(name => (
-                <label key={name}>
-                  {name === 'y' ? 'Secondary signal (y)' : `Input signal (${name})`}
-                  <select
-                    value={s.math[INPUT_ID_KEYS[name]]}
-                    onChange={e => changeSeries(s.id, { math: { ...s.math, [INPUT_ID_KEYS[name]]: e.target.value } })}
-                  >
-                    <option value="">Choose a signal…</option>
-                    {config.series
+                <SourcePicker
+                  key={name}
+                  label={name === 'y' ? 'Secondary signal (y)' : `Input signal (${name})`}
+                  value={s.math[INPUT_ID_KEYS[name]]}
+                  options={[
+                    { value: '', label: 'No input signal' },
+                    ...config.series
                       .filter(item => item.id !== s.id && item.fieldPath)
-                      .map(item => (
-                        <option key={item.id} value={item.id}>
-                          {displayName(item)}
-                        </option>
-                      ))}
-                  </select>
-                </label>
+                      .map(item => ({
+                        value: item.id,
+                        label: displayName(item),
+                        detail: item.label ? `${item.topic} · ${item.fieldPath}` : undefined,
+                      })),
+                  ]}
+                  onChange={value => changeSeries(s.id, { math: { ...s.math, [INPUT_ID_KEYS[name]]: value } })}
+                />
               ))}
               <p className="timeseries-muted">
                 Samples follow x arrivals, using the latest y within the time window. Hidden inputs remain subscribed
@@ -346,19 +347,16 @@ export default function TimeSeriesSettings({ config, engine, ros, connected, onC
         {sources.length > 0 && (
           <section className="timeseries-section">
             <strong>Add another field</strong>
-            <label>
-              Configured topic
-              <select
-                value={source ? sourceKey(source.topic, source.messageType) : ''}
-                onChange={e => setCustomSource(e.target.value)}
-              >
-                {sources.map(s => (
-                  <option key={sourceKey(s.topic, s.messageType)} value={sourceKey(s.topic, s.messageType)}>
-                    {s.topic}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <SourcePicker
+              label="Configured topic"
+              value={source ? sourceKey(source.topic, source.messageType) : ''}
+              options={sources.map(s => ({
+                value: sourceKey(s.topic, s.messageType),
+                label: s.topic,
+                detail: s.messageType,
+              }))}
+              onChange={setCustomSource}
+            />
             <label>
               Numeric field
               <input
@@ -389,20 +387,6 @@ export default function TimeSeriesSettings({ config, engine, ros, connected, onC
         {config.mode === 'xy' && (
           <section className="timeseries-section" aria-label="XY settings">
             <strong>XY settings</strong>
-            <label>
-              X signal
-              <select
-                value={config.xSeriesId}
-                onChange={event => onChange({ ...config, xSeriesId: event.target.value })}
-              >
-                <option value="">Choose X signal</option>
-                {config.series.map(series => (
-                  <option key={series.id} value={series.id}>
-                    {displayName(series)}
-                  </option>
-                ))}
-              </select>
-            </label>
             <label>
               XY pairing
               <select
