@@ -1,3 +1,5 @@
+import { readContentFile, importError } from '../library/json';
+import { readPads, copyPads, serializePads } from './portablePad';
 import { CustomGamepadLayout, GamepadLibraryItem } from './types';
 import { defaultGamepadLibrary } from './defaultLayouts';
 
@@ -186,13 +188,7 @@ export function exportGamepadLayouts(layoutIds?: string[]): string {
     ? library.filter(item => layoutIds.includes(item.id))
     : library.filter(item => !item.isDefault);
 
-  const exportData = {
-    version: STORAGE_VERSION,
-    exportDate: new Date().toISOString(),
-    layouts: layoutsToExport.map(item => item.layout)
-  };
-
-  return JSON.stringify(exportData, null, 2);
+  return serializePads(layoutsToExport.map(item => item.layout));
 }
 
 export function getGamepadExportFilename(name: string): string {
@@ -219,81 +215,73 @@ export function downloadGamepadLayout(layoutId: string): boolean {
   }
 }
 
-/**
- * Import gamepad layouts from JSON
- */
-export function importGamepadLayouts(jsonData: string): GamepadImportResult {
-  const result: GamepadImportResult = {
-    success: false,
-    imported: 0,
-    errors: [],
-    idMap: {},
+/** Prepare one storage write after validating and allocating every copy. No side effects. */
+export function prepareImportedPadStorage(pads: CustomGamepadLayout[]): {
+  key: string;
+  before: string | null;
+  after: string;
+} {
+  assertWritableStorage();
+  const before = localStorage.getItem(STORAGE_KEY);
+  const customLayouts: GamepadLibraryItem[] = before ? [...(JSON.parse(before) as StorageData).customLayouts] : [];
+  const ids = new Set([...defaultGamepadLibrary, ...customLayouts].flatMap(item => [item.id, item.layout.id]));
+  for (const layout of pads) {
+    if (ids.has(layout.id)) throw new Error('An imported Pad id already exists. Please import again.');
+    ids.add(layout.id);
+    customLayouts.push({
+      id: layout.id,
+      name: layout.name,
+      description: layout.description || '',
+      layout,
+      isDefault: false,
+    });
+  }
+  return {
+    key: STORAGE_KEY,
+    before,
+    after: JSON.stringify({ version: STORAGE_VERSION, customLayouts, lastModified: new Date().toISOString() }),
   };
-  
+}
+function storeImportedPads(pads: CustomGamepadLayout[]): void {
+  const write = prepareImportedPadStorage(pads);
+  localStorage.setItem(write.key, write.after);
+  window.dispatchEvent(new CustomEvent(GAMEPAD_STORAGE_EVENT));
+}
+/** Programmatic legacy reader. Validates the whole file before making one storage write. */
+export function importGamepadLayouts(jsonData: string): GamepadImportResult {
   try {
-    const importData = JSON.parse(jsonData);
-    
-    if (!importData.layouts || !Array.isArray(importData.layouts)) {
-      result.errors.push('Invalid import format: missing layouts array');
-      return result;
-    }
-
-    for (const importedLayout of importData.layouts) {
-      try {
-        const layout = JSON.parse(JSON.stringify(importedLayout)) as CustomGamepadLayout;
-        // Validate layout structure
-        if (!layout.id || !layout.name || !layout.components) {
-          result.errors.push(`Invalid layout structure: ${layout.name || 'unnamed'}`);
-          continue;
-        }
-
-        // Generate new ID if it conflicts with existing
-        const sourceId = layout.id;
-        const existingLayout = getGamepadLayout(sourceId);
-        if (existingLayout) {
-          layout.id = generateGamepadId(layout.name);
-        }
-        result.idMap[sourceId] = layout.id;
-
-        // Update metadata
-        layout.metadata = {
-          ...layout.metadata,
-          created: new Date().toISOString(),
-          modified: new Date().toISOString(),
-          version: STORAGE_VERSION
-        };
-
-        if (saveCustomGamepad(layout)) {
-          result.imported++;
-        } else {
-          result.errors.push(`Failed to save layout: ${layout.name}`);
-        }
-      } catch (error) {
-        result.errors.push(`Error processing layout: ${error}`);
-      }
-    }
-
-    result.success = result.imported > 0;
-    return result;
+    const plan = copyPads(readPads(jsonData));
+    storeImportedPads(plan.pads);
+    return { success: true, imported: plan.pads.length, errors: [], idMap: plan.idMap };
   } catch (error) {
-    result.errors.push(`Failed to parse JSON: ${error}`);
-    return result;
+    return { success: false, imported: 0, errors: [importError(error)], idMap: {} };
   }
 }
-
-export function importGamepadFile(file: File): Promise<GamepadImportResult> {
-  return new Promise(resolve => {
-    const reader = new FileReader();
-
-    reader.onload = event => {
-      resolve(importGamepadLayouts(String(event.target?.result || '')));
-    };
-    reader.onerror = () => {
-      resolve({ success: false, imported: 0, errors: ['Failed to read gamepad file'], idMap: {} });
-    };
-
-    reader.readAsText(file);
-  });
+export async function importGamepadFile(file: File, signal?: AbortSignal): Promise<GamepadImportResult> {
+  const cancelled: GamepadImportResult = { success: false, imported: 0, errors: [], idMap: {} };
+  try {
+    const pads = readPads(await readContentFile(file, signal));
+    const { reviewImport } = await import('../library/ImportReview');
+    const accepted = await reviewImport(
+      {
+        title: 'Import Pads',
+        items: pads.map(pad => `${pad.name} · ${pad.components.length} components`),
+        details: [
+          'Create independent editable copies in your Pad library.',
+          'Review ROS names in the editor before use. Robot compatibility has not been checked. Import does not select or arm a Pad.',
+        ],
+        action: 'Import copies',
+      },
+      signal
+    );
+    if (!accepted || signal?.aborted) return cancelled;
+    const plan = copyPads(pads);
+    storeImportedPads(plan.pads);
+    return { success: true, imported: plan.pads.length, errors: [], idMap: plan.idMap };
+  } catch (error) {
+    if (signal?.aborted) return cancelled;
+    return { ...cancelled, errors: [importError(error)] };
+  }
 }
 
 /**

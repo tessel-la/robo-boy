@@ -1,3 +1,4 @@
+import { useImportSession } from '../../library/useImportSession';
 import React, { useState, useRef, useEffect } from 'react';
 import { MdSelectAll } from 'react-icons/md';
 import TreePanelMenu from '../../treePanel/components/TreePanelMenu';
@@ -81,6 +82,7 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
   blackboardTypes,
   onBlackboardDefaultsChange,
 }) => {
+  const startImport = useImportSession(currentTree?.id, !isEditingLocked);
   const [menuOpen, setMenuOpen] = useState(false);
   const [savedTrees, setSavedTrees] = useState(listBehaviorTrees());
   const [nameValue, setNameValue] = useState(currentTree?.name ?? '');
@@ -179,7 +181,10 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const tree = await importBehaviorTree(file);
+      e.target.value = '';
+      const signal = startImport();
+      const tree = await importBehaviorTree(file, signal);
+      if (signal.aborted) return;
       if (tree) {
         onLoad(tree);
         closeMenu();

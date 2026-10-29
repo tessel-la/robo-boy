@@ -1,3 +1,5 @@
+import { readContentFile, importError } from '../../library/json';
+import { readTree, copyTree, serializeTree } from '../portableTree';
 import { BehaviorTree, SavedBehaviorTree } from '../types';
 import { syncReferencedSubtrees } from '../subtreeUtils';
 
@@ -144,12 +146,7 @@ export const deleteBehaviorTree = (id: string): boolean => {
  */
 export const exportBehaviorTree = (tree: BehaviorTree): void => {
   try {
-    const savedTree: SavedBehaviorTree = {
-      tree,
-      version: STORAGE_VERSION,
-    };
-    
-    const dataStr = JSON.stringify(savedTree, null, 2);
+    const dataStr = serializeTree(tree);
     const dataBlob = new Blob([dataStr], { type: 'application/json' });
     const url = URL.createObjectURL(dataBlob);
     
@@ -167,34 +164,31 @@ export const exportBehaviorTree = (tree: BehaviorTree): void => {
 /**
  * Import a behavior tree from JSON file
  */
-export const importBehaviorTree = (file: File): Promise<BehaviorTree | null> => {
-  return new Promise((resolve) => {
-    const reader = new FileReader();
-    
-    reader.onload = (e) => {
-      try {
-        const content = e.target?.result as string;
-        const savedTree: SavedBehaviorTree = JSON.parse(content);
-        
-        // Validate structure
-        if (!savedTree.tree || !savedTree.tree.id || !savedTree.tree.nodes) {
-          throw new Error('Invalid behavior tree file format');
-        }
-
-        resolve(savedTree.tree);
-      } catch (error) {
-        console.error('Failed to import behavior tree:', error);
-        resolve(null);
-      }
-    };
-    
-    reader.onerror = () => {
-      console.error('Failed to read file');
-      resolve(null);
-    };
-    
-    reader.readAsText(file);
-  });
+export const importBehaviorTree = async (file: File, signal?: AbortSignal): Promise<BehaviorTree | null> => {
+  try {
+    const tree = readTree(await readContentFile(file, signal));
+    const { reviewImport } = await import('../../library/ImportReview');
+    const accepted = await reviewImport(
+      {
+        title: 'Import Behavior Tree',
+        items: [`${tree.name} · ${tree.nodes.length} nodes`],
+        details: [
+          'Open an independent copy in the editor. Unsaved editor changes will be replaced. Save the imported copy to keep it in your library.',
+          'Embedded subtrees are copied as snapshots. Execution results and links to saved source trees are removed.',
+          'Review ROS names and payloads before running. Robot compatibility has not been checked.',
+        ],
+        action: 'Open copy',
+      },
+      signal
+    );
+    return accepted && !signal?.aborted ? copyTree(tree) : null;
+  } catch (error) {
+    if (!signal?.aborted) {
+      const { showImportError } = await import('../../library/ImportReview');
+      await showImportError(importError(error), signal);
+    }
+    return null;
+  }
 };
 
 /**

@@ -76,7 +76,7 @@ const inMemoryState = new Map<string, VisualizationPanelState>();
 const finiteOr = (value: unknown, fallback: number): number =>
   typeof value === 'number' && Number.isFinite(value) ? value : fallback;
 
-const normalizeVisualizationState = (
+export const normalizeVisualizationState = (
   state: Partial<VisualizationPanelState> | null | undefined,
   migrateLegacyAxesScale = false
 ): VisualizationPanelState => ({

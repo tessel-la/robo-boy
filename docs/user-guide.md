@@ -146,3 +146,10 @@ Open the theme selector to choose a built-in theme or create a custom palette. C
 ## Local Data
 
 Robo-Boy has no user account or application database. Custom themes, gamepads, behavior trees, panel sizing, and visualization settings are stored in `localStorage`. Data is isolated by browser, profile, and site origin. Persistent behavior-tree executions are transient ROS runtime sessions; they are not stored as user data and end if the ROS stack restarts.
+
+### Importing reusable content
+
+Use the existing Pad, Behavior Tree or Workspace layouts import menu to review a JSON file before
+creating editable copies. Pad imports populate the library without switching active controls; BT
+imports open an independent editor copy; workspace imports add saved layouts without applying them.
+See [Portable content files](portable-content.md) for supported formats and sharing limits.
