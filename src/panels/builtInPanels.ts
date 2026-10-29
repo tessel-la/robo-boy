@@ -55,9 +55,9 @@ export const BUILT_IN_PANELS: readonly BuiltInPanelCatalogEntry[] = [
   },
   {
     id: 'timeSeries',
-    name: 'Time Series',
-    menuLabel: 'Time Series',
-    description: 'Plot and analyze live ROS signals.',
+    name: 'Plotting',
+    menuLabel: 'Plotting',
+    description: 'Plot ROS signals over time or against each other, and analyze captured intervals.',
     version: 'built-in',
     capabilities: ['ros', 'storage'],
     icon: 'timeSeries',

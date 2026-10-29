@@ -1,3 +1,4 @@
+import { decimateXY } from './analysis';
 import { decimateSamples, getPlotRange, type TimeseriesSample } from './data';
 import type { TimeseriesConfig } from './config';
 export interface PlotView {
@@ -22,7 +23,14 @@ export const pointToValue = (point: Point, view: PlotView, width: number, height
   const y = Math.max(0, Math.min(1, (point.y - b.top) / b.height));
   return { time: view.start + x * (view.end - view.start), value: view.max - y * (view.max - view.min) };
 };
-export const selectionView = (a: Point, b: Point, view: PlotView, width: number, height: number): PlotView | null => {
+export const selectionView = (
+  a: Point,
+  b: Point,
+  view: PlotView,
+  width: number,
+  height: number,
+  mode: 'time' | 'xy' = 'time'
+): PlotView | null => {
   if (Math.abs(a.x - b.x) < 6 || Math.abs(a.y - b.y) < 6) return null;
   const p = pointToValue(a, view, width, height),
     q = pointToValue(b, view, width, height);
@@ -32,10 +40,13 @@ export const selectionView = (a: Point, b: Point, view: PlotView, width: number,
     min: Math.min(p.value, q.value),
     max: Math.max(p.value, q.value),
   };
-  return next.end - next.start >= 1 && next.max > next.min ? next : null;
+  return next.end - next.start >= (mode === 'xy' ? 1e-12 : 1) && next.max > next.min ? next : null;
 };
-export const zoomView = (view: PlotView, factor: number, x = 0.5, y = 0.5): PlotView => {
-  const span = Math.min(600_000, Math.max(1, (view.end - view.start) * factor));
+export const zoomView = (view: PlotView, factor: number, x = 0.5, y = 0.5, mode: 'time' | 'xy' = 'time'): PlotView => {
+  const span = Math.min(
+    mode === 'xy' ? 1e15 : 600_000,
+    Math.max(mode === 'xy' ? 1e-12 : 1, (view.end - view.start) * factor)
+  );
   const range = Math.min(1e15, Math.max(1e-12, (view.max - view.min) * factor));
   const anchorX = view.start + x * (view.end - view.start),
     anchorY = view.min + y * (view.max - view.min);
@@ -47,6 +58,22 @@ export const zoomView = (view: PlotView, factor: number, x = 0.5, y = 0.5): Plot
   };
 };
 export const liveView = (data: Map<string, TimeseriesSample[]>, config: TimeseriesConfig): PlotView => {
+  if (config.mode === 'xy') {
+    const samples = config.series
+      .filter(s => s.enabled && s.id !== config.xSeriesId)
+      .flatMap(s => data.get(s.id) ?? []);
+    const horizontal = getPlotRange(
+      samples.map(p => ({ time: p.time, value: p.time })),
+      true,
+      -1,
+      1
+    );
+    return {
+      start: horizontal.min,
+      end: horizontal.max,
+      ...getPlotRange(samples, config.autoScale, config.minY, config.maxY),
+    };
+  }
   let end = 0;
   for (const s of config.series)
     if (s.enabled) {
@@ -97,7 +124,7 @@ export function drawPlot(
   const grid = theme.getPropertyValue('--border-color').trim() || '#88888844';
   const x = (time: number) => b.left + ((time - view.start) / (view.end - view.start)) * b.width;
   const y = (value: number) => b.top + ((view.max - value) / (view.max - view.min)) * b.height;
-  ctx.font = '11px system-ui';
+  ctx.font = `11px ${theme.fontFamily}`;
   ctx.lineWidth = 1;
   ctx.textBaseline = 'middle';
   for (let i = 0; i <= 4; i++) {
@@ -118,7 +145,9 @@ export function drawPlot(
     // Leave room for readable time labels on narrow phone plots.
     if (width < 360 && i % 2 !== 0) continue;
     ctx.fillText(
-      `${((view.start + fraction * (view.end - view.start) - view.end) / 1000).toFixed(2)}s`,
+      config.mode === 'xy'
+        ? Number((view.start + fraction * (view.end - view.start)).toPrecision(4)).toString()
+        : `${((view.start + fraction * (view.end - view.start) - view.end) / 1000).toFixed(2)}s`,
       px,
       height - 12
     );
@@ -128,21 +157,29 @@ export function drawPlot(
   ctx.rect(b.left, b.top, b.width, b.height);
   ctx.clip();
   for (const s of config.series) {
-    if (!s.enabled) continue;
-    const samples = decimateSamples(
-      (data.get(s.id) ?? []).filter(p => p.time >= view.start && p.time <= view.end),
-      Math.max(80, b.width * 2)
-    );
+    if (!s.enabled || (config.mode === 'xy' && s.id === config.xSeriesId)) continue;
+    const samples =
+      config.mode === 'xy'
+        ? decimateXY(data.get(s.id) ?? [], Math.max(80, b.width * 2))
+        : decimateSamples(
+            (data.get(s.id) ?? []).filter(p => p.time >= view.start && p.time <= view.end),
+            Math.max(80, b.width * 2)
+          );
     ctx.strokeStyle = s.color;
     ctx.fillStyle = s.color;
     ctx.lineWidth = 1.7;
     ctx.beginPath();
     samples.forEach((sample, i) => {
-      if (i === 0) ctx.moveTo(x(sample.time), y(sample.value));
+      if (
+        i === 0 ||
+        (sample as { breakBefore?: boolean }).breakBefore ||
+        (config.mode === 'xy' && config.xyStyle === 'scatter')
+      )
+        ctx.moveTo(x(sample.time), y(sample.value));
       else ctx.lineTo(x(sample.time), y(sample.value));
     });
     ctx.stroke();
-    if (config.showPoints || samples.length === 1)
+    if (config.showPoints || samples.length === 1 || (config.mode === 'xy' && config.xyStyle === 'scatter'))
       for (const p of samples) {
         ctx.beginPath();
         ctx.arc(x(p.time), y(p.value), 2, 0, Math.PI * 2);
@@ -160,9 +197,11 @@ export function drawPlot(
   }
   if (selection) {
     const [a, z] = selection;
-    ctx.fillStyle = '#579cff33';
+    ctx.fillStyle = theme.getPropertyValue('--primary-color').trim() || text;
+    ctx.globalAlpha = 0.2;
     ctx.strokeStyle = text;
     ctx.fillRect(a.x, a.y, z.x - a.x, z.y - a.y);
+    ctx.globalAlpha = 1;
     ctx.strokeRect(a.x, a.y, z.x - a.x, z.y - a.y);
   }
   ctx.restore();

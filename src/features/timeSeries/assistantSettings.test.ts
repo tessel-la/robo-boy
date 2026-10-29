@@ -190,6 +190,18 @@ describe('applyTimeSeriesSettings', () => {
     const result = apply(config([]), { colourScheme: 'dark' });
     expect(result.outcomes).toHaveLength(1);
     expect(result.outcomes[0].ok).toBe(false);
-    expect(result.outcomes[0].message).toMatch(/^Nothing in those settings applies to the Time Series panel\. Signals are referred to/);
+    expect(result.outcomes[0].message).toMatch(/^Nothing in those settings applies to the Plotting panel\. Signals are referred to/);
   });
+});
+
+
+it('configures XY using existing signal references, reports invalid choices and persists the new mode', () => {
+  const current = config([signal('a', '/odom', 'pose.pose.position.x', { label: 'Position X' }), signal('b', '/odom', 'pose.pose.position.y')]);
+  const result = apply(current, { mode: 'xy', xSignal: 'Position X', xyPairing: 'latest', xyToleranceMs: 50, xyStyle: 'scatter' });
+  expect(result.config).toMatchObject({ mode: 'xy', xSeriesId: 'a', xyPairing: 'latest', xyToleranceMs: 50, xyStyle: 'scatter' });
+  expect(result.outcomes.every(item => item.ok)).toBe(true);
+  const described = describeTimeSeries(new TimeSeriesEngine(result.config));
+  expect(described).toMatchObject({ mode: 'xy', xSeriesId: 'a', xyPairing: 'latest' });
+  const invalid = apply(result.config, { mode: 'spectrum', xSignal: 'missing', xyPairing: 'nearest', xyToleranceMs: 'fast', xyStyle: 'bars' });
+  expect(invalid.config).toEqual(result.config); expect(invalid.outcomes.every(item => !item.ok)).toBe(true);
 });

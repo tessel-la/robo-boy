@@ -89,7 +89,7 @@ test('migrates saved external tiles, plots multiple topics, derives signals and 
   page,
 }) => {
   await seed(page);
-  const panel = page.getByRole('region', { name: 'Time Series', exact: true });
+  const panel = page.getByRole('region', { name: 'Plotting', exact: true });
   await expect(panel).toBeVisible();
   await expect(panel.locator('iframe')).toHaveCount(0);
   await expect.poll(() => getActiveRosSubscriptionCount(page, longTopic)).toBe(1);
@@ -123,7 +123,7 @@ test('migrates saved external tiles, plots multiple topics, derives signals and 
   await panel.getByRole('button', { name: 'More', exact: true }).click();
   await panel.getByRole('button', { name: 'Export CSV', exact: true }).click();
   const download = await downloadEvent;
-  expect(download.suggestedFilename()).toContain('timeseries');
+  expect(download.suggestedFilename()).toContain('plotting');
   await page.reload();
   // Entry requires connecting again; persisted sessions may reconnect automatically.
   if (await page.getByTitle('Advanced Options').isVisible()) {
@@ -326,7 +326,7 @@ test('adds the native panel and discovers multiple numeric fields without extern
   await installRosMock(page, { topics: [{ name: '/joint_states', type: 'JointState' }] });
   await connect(page);
   await page.getByLabel('Add workspace panel').first().click();
-  await page.getByRole('button', { name: 'Time Series', exact: true }).click();
+  await page.getByRole('button', { name: 'Plotting', exact: true }).click();
   const panel = page.locator('.timeseries-panel');
   await panel.getByRole('button', { name: 'Add signals', exact: true }).click();
   await panel.getByRole('button', { name: '/joint_states JointState', exact: true }).click();
@@ -435,7 +435,7 @@ test('remains interactive with 16 topics at 200 Hz and caps both canvas work and
   const panel = page.locator('.timeseries-panel');
   const startClick = Date.now();
   await panel.getByRole('button', { name: 'Settings', exact: true }).click();
-  await expect(panel.getByLabel('Time series settings', { exact: true })).toBeVisible();
+  await expect(panel.getByLabel('Plotting settings', { exact: true })).toBeVisible();
   expect(Date.now() - startClick).toBeLessThan(2000);
   await panel.getByRole('button', { name: 'Done', exact: true }).click();
   const result = await workload;
@@ -443,7 +443,7 @@ test('remains interactive with 16 topics at 200 Hz and caps both canvas work and
   expect(result.paints).toBeLessThanOrEqual(Math.ceil((result.elapsed / 1000) * 21) + 3);
   await expect(panel.locator('.timeseries-footer')).toContainText('3,200 samples');
   await page.screenshot({ path: '/tmp/roboboy-timeseries-streaming.png' });
-  console.log('Time Series browser workload:', result);
+  console.log('Plotting browser workload:', result);
   await page.getByLabel('Remove Streaming telemetry', { exact: true }).click();
   await expect.poll(() => getActiveRosSubscriptionCount(page, '/stream0')).toBe(0);
   await expect.poll(() => getActiveRosSubscriptionCount(page, '/stream15')).toBe(0);

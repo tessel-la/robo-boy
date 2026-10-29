@@ -58,6 +58,76 @@
   overflow: hidden;
   padding-top: 52px;
 }
+.timeseries-mode-bar {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 8px;
+}
+.timeseries-mode-bar select {
+  min-height: 40px;
+}
+.timeseries-mode-bar select[aria-label='X signal'] {
+  flex: 1;
+  text-overflow: ellipsis;
+}
+.timeseries-analysis {
+  position: absolute;
+  z-index: 3;
+  top: 54px;
+  right: 10px;
+  width: min(560px, calc(100% - 20px));
+  max-height: calc(100% - 112px);
+  display: flex;
+  flex-direction: column;
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.timeseries-analysis header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border-color);
+}
+.timeseries-analysis-body {
+  min-height: 0;
+  overflow: auto;
+  padding: 12px;
+  overscroll-behavior: contain;
+}
+.timeseries-analysis label {
+  display: grid;
+  gap: 4px;
+}
+.timeseries-analysis p {
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.5;
+}
+.timeseries-stat-table {
+  overflow-x: auto;
+}
+.timeseries-stat-table table {
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+  width: 100%;
+}
+.timeseries-stat-table th,
+.timeseries-stat-table td {
+  padding: 8px;
+  text-align: right;
+  border-bottom: 1px solid var(--border-color);
+  white-space: nowrap;
+}
+.timeseries-stat-table th:first-child {
+  text-align: left;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .timeseries-plot canvas {
   display: block;
   height: 100%;

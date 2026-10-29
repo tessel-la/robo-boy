@@ -67,7 +67,7 @@ export default function ValueTree({
               <FiCopy />
             </button>
             {typeof value === 'number' && Number.isFinite(value) && onPlot && (
-              <button aria-label={`Plot ${path}`} title="Plot in Time Series" onClick={() => onPlot(path)}>
+              <button aria-label={`Plot ${path}`} title="Open in Plotting" onClick={() => onPlot(path)}>
                 <FiTrendingUp />
               </button>
             )}

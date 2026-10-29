@@ -183,7 +183,7 @@ export default function TimeSeriesPanel({
     };
   }, [ros, connected, connectionGeneration, active, engine]);
   return (
-    <section ref={rootRef} className="timeseries-panel" aria-label="Time Series">
+    <section ref={rootRef} className="timeseries-panel" aria-label="Plotting">
       <div ref={contentRef} className="timeseries-content" aria-hidden={settings || undefined}>
         <header className="timeseries-header">
           <button
@@ -213,6 +213,7 @@ export default function TimeSeriesPanel({
           engine={engine}
           config={config}
           active={active}
+          onChange={save}
           onOpenSettings={() => setSettings(true)}
           onToggle={id =>
             save({

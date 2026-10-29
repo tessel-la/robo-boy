@@ -254,7 +254,7 @@ test('labels browser-only inspection honestly when the companion is absent', asy
   await expect(panel.getByText(/Received in the browser · previews are throttled to 10 per second/)).toBeVisible();
 });
 
-test('opens selected data in Time Series and 3D', async ({ page }) => {
+test('opens selected data in Plotting and 3D', async ({ page }) => {
   await seed(page);
   const panel = explorer(page);
   await sendCompanion(page);

@@ -14,6 +14,8 @@ import { useEffect, useId, useRef, useState } from 'react';
 import type { TimeSeriesEngine } from './engine';
 import { displayName, type TimeseriesConfig } from './config';
 import TimeSeriesLegend from './TimeSeriesLegend';
+import IntervalStatistics, { type AnalysisInterval } from './IntervalStatistics';
+import { xyData, xyCsv } from './analysis';
 import { createCsv, type TimeseriesSample } from './data';
 import {
   drawPlot,
@@ -33,8 +35,24 @@ interface Props {
   active: boolean;
   onToggle: (id: string) => void;
   onOpenSettings: () => void;
+  onChange: (config: TimeseriesConfig) => void;
 }
-export default function TimeSeriesPlot({ engine, config, active, onToggle, onOpenSettings }: Props) {
+export default function TimeSeriesPlot({ engine, config, active, onToggle, onOpenSettings, onChange }: Props) {
+  const [interval, setInterval] = useState<AnalysisInterval | null>(null);
+  const projected = useRef<{
+    raw: Map<string, TimeseriesSample[]>;
+    config: TimeseriesConfig;
+    data: Map<string, TimeseriesSample[]>;
+  }>();
+  const project = (raw: Map<string, TimeseriesSample[]>) => {
+    if (projected.current?.raw !== raw || projected.current.config !== engine.config)
+      projected.current = {
+        raw,
+        config: engine.config,
+        data: engine.config.mode === 'xy' ? xyData(raw, engine.config) : raw,
+      };
+    return projected.current.data;
+  };
   const [moreOpen, setMoreOpen] = useState(false);
   const moreRef = useRef<HTMLDivElement>(null);
   const moreButtonRef = useRef<HTMLButtonElement>(null);
@@ -79,20 +97,26 @@ export default function TimeSeriesPlot({ engine, config, active, onToggle, onOpe
     snapshot.current = null;
     selection.current = null;
     setInspecting(false);
+    setInterval(null);
     redraw.current();
   };
   const hold = () => {
     if (!snapshot.current) snapshot.current = engine.snapshot();
-    if (!view.current) view.current = liveView(snapshot.current, engine.config);
+    if (!view.current) view.current = liveView(project(snapshot.current), engine.config);
     setInspecting(true);
     return view.current;
   };
   const zoom = (factor: number) => {
-    view.current = zoomView(hold(), factor);
+    view.current = zoomView(hold(), factor, 0.5, 0.5, engine.config.mode);
     redraw.current();
   };
 
   const processingKey = JSON.stringify([
+    config.mode,
+    config.xSeriesId,
+    config.xyPairing,
+    config.xyToleranceMs,
+    config.xyStyle,
     config.sampleLimit,
     config.series.map(s => [s.id, s.topic, s.messageType, s.fieldPath, s.filter, s.math]),
   ]);
@@ -101,6 +125,7 @@ export default function TimeSeriesPlot({ engine, config, active, onToggle, onOpe
     snapshot.current = null;
     selection.current = null;
     setInspecting(false);
+    setInterval(null);
   }, [processingKey]);
 
   useEffect(() => {
@@ -120,11 +145,14 @@ export default function TimeSeriesPlot({ engine, config, active, onToggle, onOpe
         lastRevision = engine.revision;
       }
       const shown = snapshot.current ?? data,
-        currentView = view.current ?? liveView(shown, engine.config);
-      drawPlot(canvas, shown, engine.config, currentView, cursor.current, selection.current);
+        currentView = view.current ?? liveView(project(shown), engine.config);
+      drawPlot(canvas, project(shown), engine.config, currentView, cursor.current, selection.current);
       if (rangeReadout.current) {
         const v = currentView;
-        const text = `Window ${((v.end - v.start) / 1000).toFixed(2)}s · Y ${Number(v.min.toPrecision(4))} to ${Number(v.max.toPrecision(4))}`;
+        const text =
+          engine.config.mode === 'xy'
+            ? `X ${Number(v.start.toPrecision(4))} to ${Number(v.end.toPrecision(4))} · Y ${Number(v.min.toPrecision(4))} to ${Number(v.max.toPrecision(4))}`
+            : `Window ${((v.end - v.start) / 1000).toFixed(2)}s · Y ${Number(v.min.toPrecision(4))} to ${Number(v.max.toPrecision(4))}`;
         if (rangeReadout.current.textContent !== text) rangeReadout.current.textContent = text;
       }
     };
@@ -137,14 +165,27 @@ export default function TimeSeriesPlot({ engine, config, active, onToggle, onOpe
       if (time - lastLegend >= 250) {
         const shown = snapshot.current ?? data,
           values: Record<string, string> = {};
-        const v = view.current ?? liveView(shown, engine.config),
+        const v = view.current ?? liveView(project(shown), engine.config),
           bounds = canvas.getBoundingClientRect();
-        const cursorTime = cursor.current ? pointToValue(cursor.current, v, bounds.width, bounds.height).time : null;
+        const coordinates = cursor.current ? pointToValue(cursor.current, v, bounds.width, bounds.height) : null;
+        const cursorTime = coordinates?.time ?? null;
         let count = 0;
         for (const s of engine.config.series) {
-          const samples = shown.get(s.id) ?? [];
-          count += samples.length;
-          const p = cursorTime === null ? samples[samples.length - 1] : nearestSample(samples, cursorTime);
+          const samples = project(shown).get(s.id) ?? [];
+          if (s.enabled) count += samples.length;
+          const p =
+            cursorTime === null
+              ? samples[samples.length - 1]
+              : engine.config.mode === 'xy'
+                ? samples.reduce<TimeseriesSample | undefined>((best, item) => {
+                    const distance = (point: TimeseriesSample) =>
+                      Math.hypot(
+                        (point.time - cursorTime) / (v.end - v.start),
+                        (point.value - coordinates!.value) / (v.max - v.min)
+                      );
+                    return !best || distance(item) < distance(best) ? item : best;
+                  }, undefined)
+                : nearestSample(samples, cursorTime);
           values[s.id] = engine.errors.get(s.id) ?? (p ? `${Number(p.value.toPrecision(6))} ${s.unit}` : '—');
         }
         setLegend({ count, values });
@@ -154,7 +195,9 @@ export default function TimeSeriesPlot({ engine, config, active, onToggle, onOpe
           readout.current.textContent =
             cursorTime === null
               ? 'Legend shows latest values'
-              : `Cursor: ${new Date(cursorTime).toLocaleTimeString()} · legend shows nearest samples`;
+              : engine.config.mode === 'xy'
+                ? `Cursor: X ${Number(cursorTime.toPrecision(6))}, Y ${Number(coordinates!.value.toPrecision(6))} · nearest paired samples`
+                : `Cursor: ${new Date(cursorTime).toLocaleTimeString()} · legend shows nearest samples`;
         lastLegend = time;
       }
       frame = requestAnimationFrame(tick);
@@ -188,7 +231,8 @@ export default function TimeSeriesPlot({ engine, config, active, onToggle, onOpe
       const p = point(event);
       cursor.current = p;
       if (pointers.has(event.pointerId)) pointers.set(event.pointerId, p);
-      if (pinch && pointers.size >= 2) view.current = zoomView(pinch.view, pinch.distance / Math.max(1, distance()));
+      if (pinch && pointers.size >= 2)
+        view.current = zoomView(pinch.view, pinch.distance / Math.max(1, distance()), 0.5, 0.5, engine.config.mode);
       else if (drag) {
         if (drag.pan) {
           const r = canvas.getBoundingClientRect(),
@@ -208,7 +252,11 @@ export default function TimeSeriesPlot({ engine, config, active, onToggle, onOpe
       if (!pointers.has(event.pointerId)) return;
       if (drag && !drag.pan && event.type === 'pointerup') {
         const r = canvas.getBoundingClientRect();
-        view.current = selectionView(drag.point, point(event), drag.view, r.width, r.height) ?? view.current;
+        view.current =
+          selectionView(drag.point, point(event), drag.view, r.width, r.height, engine.config.mode) ?? view.current;
+        const selected = view.current;
+        if (selected && engine.config.mode === 'time')
+          setInterval(previous => previous && { ...previous, start: selected.start, end: selected.end });
       }
       pointers.delete(event.pointerId);
       drag = null;
@@ -226,7 +274,8 @@ export default function TimeSeriesPlot({ engine, config, active, onToggle, onOpe
         hold(),
         event.deltaY > 0 ? 1.2 : 1 / 1.2,
         Math.max(0, Math.min(1, (p.x - b.left) / b.width)),
-        Math.max(0, Math.min(1, 1 - (p.y - b.top) / b.height))
+        Math.max(0, Math.min(1, 1 - (p.y - b.top) / b.height)),
+        engine.config.mode
       );
       draw();
     };
@@ -259,20 +308,41 @@ export default function TimeSeriesPlot({ engine, config, active, onToggle, onOpe
 
   const exportCsv = () => {
     const data = snapshot.current ?? engine.snapshot();
-    const csv = createCsv(
-      new Map(
-        config.series.map(s => [
-          `${displayName(s)} [${s.unit}] · ${s.topic}:${s.fieldPath} · ${s.id}`,
-          data.get(s.id) ?? [],
-        ])
-      )
-    );
+    const csv =
+      config.mode === 'xy'
+        ? xyCsv(xyData(data, config), config)
+        : createCsv(
+            new Map(
+              config.series.map(s => [
+                `${displayName(s)} [${s.unit}] · ${s.topic}:${s.fieldPath} · ${s.id}`,
+                data.get(s.id) ?? [],
+              ])
+            )
+          );
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
     const link = document.createElement('a');
     link.href = url;
-    link.download = `roboboy-timeseries-${Date.now()}.csv`;
+    link.download = `roboboy-plotting-${Date.now()}.csv`;
     link.click();
     setTimeout(() => URL.revokeObjectURL(url), 0);
+  };
+  const analyze = () => {
+    hold();
+    const raw = snapshot.current!;
+    let origin = Infinity,
+      end = -Infinity;
+    for (const series of config.series)
+      if (series.enabled || series.id === config.xSeriesId)
+        for (const point of raw.get(series.id) ?? []) {
+          origin = Math.min(origin, point.time);
+          end = Math.max(end, point.time);
+        }
+    if (!Number.isFinite(origin)) return;
+    setInterval({
+      origin,
+      start: config.mode === 'time' ? Math.max(origin, view.current!.start) : origin,
+      end: config.mode === 'time' ? Math.min(end, view.current!.end) : end,
+    });
   };
   return (
     <>
@@ -314,6 +384,31 @@ export default function TimeSeriesPlot({ engine, config, active, onToggle, onOpe
           </button>
           {moreOpen && (
             <div id={moreId} className="timeseries-more-actions" role="group" aria-label="More plot controls">
+              <div className="timeseries-mode-bar">
+                <select
+                  aria-label="Plot mode"
+                  value={config.mode}
+                  onChange={event => onChange({ ...config, mode: event.target.value as 'time' | 'xy' })}
+                >
+                  <option value="time">Time series</option>
+                  <option value="xy">XY plot</option>
+                </select>
+                {config.mode === 'xy' && (
+                  <select
+                    aria-label="X signal"
+                    value={config.xSeriesId}
+                    onChange={event => onChange({ ...config, xSeriesId: event.target.value })}
+                  >
+                    <option value="">Choose X signal</option>
+                    {config.series.map(series => (
+                      <option key={series.id} value={series.id}>
+                        {displayName(series)}
+                        {series.unit ? ` (${series.unit})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
               <div className="timeseries-interaction-hint" role="status">
                 {paused
                   ? 'Paused · tap Resume to capture'
@@ -363,6 +458,15 @@ export default function TimeSeriesPlot({ engine, config, active, onToggle, onOpe
                 Export CSV
               </button>
               <button
+                disabled={!legend.count}
+                onClick={() => {
+                  analyze();
+                  closeMore();
+                }}
+              >
+                Interval statistics
+              </button>
+              <button
                 className="timeseries-danger"
                 onClick={() => {
                   engine.clear();
@@ -382,7 +486,7 @@ export default function TimeSeriesPlot({ engine, config, active, onToggle, onOpe
           ref={canvasRef}
           tabIndex={0}
           role="img"
-          aria-label="Time series plot. Drag to zoom; pinch or scroll to zoom; use Pan to move. Plus, minus, and Escape control zoom."
+          aria-label={`${config.mode === 'xy' ? 'XY' : 'Time series'} plot. Drag to zoom; pinch or scroll to zoom; use Pan to move. Plus, minus, and Escape control zoom.`}
           onDoubleClick={reset}
           onKeyDown={event => {
             if (event.key === 'Escape' || event.key === 'Home') {
@@ -411,13 +515,35 @@ export default function TimeSeriesPlot({ engine, config, active, onToggle, onOpe
               </>
             ) : config.series.every(s => !s.enabled) ? (
               'All signals are hidden. Use the legend or Settings to show one.'
+            ) : config.mode === 'xy' ? (
+              !config.xSeriesId ? (
+                'Choose an X signal above, then add or show a Y signal.'
+              ) : (
+                'Waiting for paired numeric samples. Check X and Y signals and XY pairing in Settings.'
+              )
             ) : (
               'Waiting for numeric ROS messages…'
             )}
           </div>
         )}
       </div>
-      <TimeSeriesLegend series={config.series} values={legend.values} onToggle={onToggle} />
+      {interval && snapshot.current && (
+        <IntervalStatistics
+          data={snapshot.current}
+          config={config}
+          interval={interval}
+          onChange={setInterval}
+          onClose={() => {
+            setInterval(null);
+            moreButtonRef.current?.focus();
+          }}
+        />
+      )}
+      <TimeSeriesLegend
+        series={config.series.filter(series => config.mode !== 'xy' || series.id !== config.xSeriesId)}
+        values={legend.values}
+        onToggle={onToggle}
+      />
       <div className="timeseries-footer">
         <output aria-label="Visible plot range" ref={rangeReadout} />
         <output className="timeseries-cursor-readout" ref={readout}>

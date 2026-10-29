@@ -1,8 +1,8 @@
-# Native Time Series migration
+# Native Plotting migration
 
 ## Using the panel
 
-Add **Time Series** from the standard panel menu, then open **Settings → Add ROS topic**.
+The **Plotting** panel was previously named **Time Series**. Add **Plotting** from the standard panel menu, then open **Settings → Add ROS topic**.
 Up to eight numeric fields are selected automatically; use **Add another field** to choose a
 detected path or type a custom nested/indexed path. Configure up to 16 signals. A legend click
 hides or shows a signal; settings retain its source, color, label, unit, filter and math.
@@ -30,20 +30,57 @@ never execute JavaScript. Normalization maps a fixed input range to 0–1 withou
 derivatives use backward differences and integrals use the trapezoidal rule in seconds.
 
 The plot uses the same floating pill-menu and round-icon design as BT, TF and 3D panels.
-On mobile, signals occupy one horizontally scrollable legend row. Status/help and extra
-actions no longer reserve separate rows above the plot. Settings adapt to tile width. Plot/performance settings control
+On mobile, signals occupy one horizontally scrollable legend row. Mode, axis selection and extra actions use the existing **More** menu. Settings adapt to tile width. Plot/performance settings control
 retention (1–600 seconds), per-signal capacity (100–10,000 samples), bridge throttle (0–2,000 ms),
 rendering (5–60 Hz), point markers and automatic/manual Y. Edits save with the workspace and
 travel with exported layouts. Filter/math/source edits clear affected history; label/color/
 visibility edits retain it. Native panels use the same trusted ROS connection as other built-ins.
 
+## XY plots
+
+Choose **More → Plot mode → XY plot**, then explicitly choose an **X signal**. Each visible
+signal other than X becomes a Y curve. Settings under **XY settings** choose **Trajectory**
+(ordered lines) or **Scatter** (points). The X axis uses the selected signal's processed values
+and unit; the ordinary math/filter pipeline applies to both axes. Existing capture limits,
+zoom, pan, pause, legend visibility and CSV controls remain available. XY CSV exports
+`series,time_ms,x,y`, preserving each Y sample's original panel-clock time.
+
+**Same message only** is the default: X and Y must have been processed from the same incoming
+message. Equal timestamps on separate messages are not sufficient. For different topics,
+explicitly choose **Latest X within tolerance** and set **Maximum X age (ms)** (0–2,000 ms).
+Pairing follows Y arrivals, uses only a preceding X within that age, never uses a future X,
+and never crosses connection epochs. Unmatched Y samples create gaps in trajectories.
+The clock is live reception time or the existing replay playback clock, not `header.stamp`;
+this is not acquisition-time sensor synchronization. A hidden X stays subscribed while it
+is the XY axis. Removing X leaves the axis unselected rather than choosing a replacement.
+
+## Interval statistics
+
+Open **More → Interval statistics** to inspect a frozen copy of captured history while
+acquisition continues. In time-series mode the initial interval is the visible time range;
+in XY mode it is the captured time span. **Start (s)** and **End (s)** are relative to the
+first sample in that capture. Statistics include every finite processed sample in the inclusive
+interval, before drawing/decimation: count, minimum, maximum, mean, RMS, population standard
+deviation and last-minus-first change (**Change**). They are sample-weighted, not time-weighted.
+A signal without samples shows a count of zero and unavailable values. Reversed bounds show
+an error. Closing statistics leaves the capture frozen; **Reset / Live** resumes the live view.
+Retention and sample capacity bound this analysis; it does not scan the full recording.
+
+The saved configuration is schema 5. Versions 1–4 migrate to the existing time-series mode;
+`timeSeries`, the legacy external-panel mapping and workspace storage identities remain
+unchanged. The new mode/pairing settings save and export with the existing panel state. Mode,
+axis and display changes preserve captured source buffers. There is no new backend or chart
+library. The engine attaches tile-local message/connection identity to its bounded samples;
+XY pairing is a cached linear merge over those samples. Dense XY drawing samples points in arrival order without reordering trajectory turns; statistics and CSV retain every captured sample. FFT and cross-panel cursor/zoom
+synchronization remain separate increments.
+
 ## Assistant control
 
-The AI assistant can configure an open Time Series panel through its settings bridge
+The AI assistant can configure an open Plotting panel through its settings bridge
 (`assistantSettings.ts`): add, remove, hide, relabel and recolour signals, derive curves
 ("plot /odom speed squared"), combine up to four signals with an expression, set smoothing,
 scale, offset, normalization, derivative or integral, and change the time window, sample
-limit, Y axis, points, throttle and render rate, or pause and clear. A field that is not yet
+limit, Y axis, points, throttle and render rate, or pause and clear. It can also select `mode`, `xSignal`, `xyPairing`, `xyToleranceMs` and `xyStyle` through the same validated configuration. A field that is not yet
 plotted can be named as `{topic, fieldPath}` and is added as a hidden input.
 
 Each turn the model sees every signal's status: plotting (with sample count and latest value),
@@ -141,7 +178,7 @@ Verified on the feature branch using the current source and the installed Chrome
   244 animation frames (~60 Hz), 76 canvas draws (<20 Hz), maximum observed animation
   gap 16.8 ms, bounded history of 3,200 samples. Settings remained interactive.
 - Production web build, TypeScript, scoped ESLint, configuration syntax and diff whitespace checks pass.
-- Removed the obsolete iframe Time Series test and its pinned CI artifact checkout;
+- Removed the obsolete iframe Plotting test and its pinned CI artifact checkout;
   Hello and WebRTC remain external tests. No new runtime dependencies.
 
 These checks use simulated rosbridge traffic and Chrome desktop/mobile emulation. Physical
