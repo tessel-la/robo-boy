@@ -175,8 +175,23 @@ the 3D panel subscribes, measured:
 
 Deflate saves only about 12% of the traffic on such messages. Over 16 Mbit/s neither setting
 helps much: the cloud alone fills the link. A LAN-only deployment that streams large point
-clouds can set `ROSBRIDGE_USE_COMPRESSION=false`. Remote users need a lower rate or resolution
-for such topics.
+clouds can set `ROSBRIDGE_USE_COMPRESSION=false`.
+
+The ROS image now provides `/roboboy/cloudini/<source topic>` visualization streams using
+Cloudini 1.4.1 with ZSTD and 1 mm XYZ resolution. The relay discovers up to 64 point-cloud
+topics and subscribes to raw data only while compressed readers exist. It normalizes XYZ
+types, byte order, and row padding, preserves acquisition stamps/frames, and limits each
+derived cloud to the first 1,000,000 points. Raw topics and recordings retain all original
+fields and precision. The 3D view prefers the derived topic when discovery advertises it;
+saved topic names and backends without the relay continue to use raw PointCloud2.
+
+Decoding runs in one shared worker per connection/topic, with one active frame and one
+newest pending frame. The decoder checks embedded/outer layouts and output capacity before
+writing, accepts at most 8 MiB encoded/32 MiB decoded data, and releases the WASM heap after
+the last consumer leaves. The self-contained codec works with relative packaged-app URLs;
+Tauri allows WASM compilation without enabling JavaScript eval. Rebuild the ROS image to
+enable compression. `npm run test:cloudini` exercises real web/Electron workers and raw-cloud
+compatibility; `npm run build:cloudini` regenerates the checksum-pinned codec artifact.
 
 Write-queue drops are per client and cover every topic and service of that client. One heavy
 subscription can therefore still starve that browser's service responses.

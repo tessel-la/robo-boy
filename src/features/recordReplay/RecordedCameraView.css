@@ -13,3 +13,5 @@
   border: 1px solid var(--border-color, rgb(255 255 255 / 20%));
   pointer-events: none;
 }
+
+.recorded-camera .camera-depth-readout { bottom: 44px; }

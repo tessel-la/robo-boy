@@ -1,3 +1,4 @@
+import { updateDepthGeometry } from './depthGeometry';
 import * as THREE from 'three';
 import type { Ros } from 'roslib';
 import type { CustomTFProvider } from '../../tfUtils';
@@ -66,6 +67,12 @@ export class CameraImageClient {
     new THREE.BufferGeometry(),
     new THREE.LineBasicMaterial({ color: 0x38bdf8, toneMapped: false })
   );
+  readonly depthPoints = new THREE.Points(
+    new THREE.BufferGeometry(),
+    new THREE.PointsMaterial({ size: 2, sizeAttenuation: false, vertexColors: true, transparent: true, toneMapped: false })
+  );
+  private depthFrame: SharedImageFrame | null = null;
+  private depthKey = '';
   private options = normalizeCameraImageOptions();
   private frame: SharedImageFrame | null = null;
   private textureFrame: SharedImageFrame | null = null;
@@ -103,7 +110,7 @@ export class CameraImageClient {
     this.object.name = `Camera image: ${config.topic}`;
     this.object.visible = false;
     this.icon.material.color.copy(this.frustum.material.color);
-    this.object.add(this.plane, this.frustum, this.icon);
+    this.object.add(this.plane, this.depthPoints, this.frustum, this.icon);
     config.rootObject.add(this.object);
     this.updateOptions(config.options);
     const subscribe =
@@ -131,6 +138,9 @@ export class CameraImageClient {
       this.resetSnapshots();
     this.plane.material.opacity = this.options.opacity;
     this.plane.visible = this.options.renderMode === 'plane';
+    this.depthPoints.visible = this.options.renderMode === 'depth';
+    this.depthPoints.material.opacity = this.options.opacity;
+    this.depthPoints.material.size = this.options.depthPointSize;
     this.frustum.visible = this.options.showFrustum;
     if (previous.cameraInfoTopic !== this.options.cameraInfoTopic) {
       this.stopInfo?.();
@@ -197,6 +207,7 @@ export class CameraImageClient {
     if (this.displayed) this.releaseCandidate(this.displayed);
     this.displayed = undefined;
     this.clearTexture();
+    this.clearDepth();
     this.clearWait();
     this.displayedFixedFrame = undefined;
     this.inspection = { frozen: false, status: this.lastStatus ?? null };
@@ -284,8 +295,8 @@ export class CameraImageClient {
     for (const candidate of this.candidates) {
       try {
         if (candidate.frame.projectionError) throw new Error(candidate.frame.projectionError);
-        if (/compresseddepth/i.test(candidate.frame.encoding))
-          throw new Error('Compressed depth is unsupported in this layer. Select a color or mono image topic.');
+        if (this.options.renderMode === 'depth' && !candidate.frame.depth)
+          throw new Error('Depth points require 16UC1 or 32FC1 ROS depth images.');
         const calibration = matchCameraInfo(
           this.samples,
           candidate.frame.header,
@@ -293,7 +304,7 @@ export class CameraImageClient {
           this.options.toleranceMs
         );
         const { width, height } = candidate.frame.image;
-        if (Math.max(width, height) > (this.config.maxTextureSize ?? 8192))
+        if (this.options.renderMode !== 'depth' && Math.max(width, height) > (this.config.maxTextureSize ?? 8192))
           throw new Error('Image exceeds this GPU’s texture size limit.');
         const key = JSON.stringify([
           calibration.k,
@@ -363,6 +374,7 @@ export class CameraImageClient {
       if (this.displayed) this.releaseCandidate(this.displayed);
       this.displayed = undefined;
       this.clearTexture();
+      this.clearDepth();
       this.showState(newest.error);
       return;
     }
@@ -383,7 +395,11 @@ export class CameraImageClient {
       this.displayed = ready;
       clearTimeout(ready.deadline);
       this.updateGeometry(ready.projection!);
-      if (this.textureFrame !== ready.frame) this.updateTexture(ready.frame);
+      if (this.options.renderMode === 'depth') this.updateDepth(ready);
+      else {
+        this.clearDepth();
+        if (this.textureFrame !== ready.frame) this.updateTexture(ready.frame);
+      }
       this.clearWait();
       this.notify();
       this.config.requestRender();
@@ -448,6 +464,24 @@ export class CameraImageClient {
     texture.needsUpdate = true;
     this.textureFrame = frame;
   }
+  private updateDepth(candidate: Candidate) {
+    const key = `${candidate.projection!.key}:${this.options.depthMaxRange}`;
+    if (this.depthFrame === candidate.frame && this.depthKey === key) return;
+    this.clearTexture();
+    updateDepthGeometry(
+      this.depthPoints.geometry,
+      candidate.frame.depth!,
+      candidate.projection!.corners.map(corner => corner.map(value => value / this.options.distance)),
+      this.options.depthMaxRange
+    );
+    this.depthFrame = candidate.frame;
+    this.depthKey = key;
+  }
+  private clearDepth() {
+    this.depthPoints.geometry.setDrawRange(0, 0);
+    this.depthFrame = null;
+    this.depthKey = '';
+  }
   private clearTexture() {
     this.plane.material.map?.dispose();
     this.plane.material.map = null;
@@ -464,6 +498,8 @@ export class CameraImageClient {
     this.object.removeFromParent();
     this.plane.geometry.dispose();
     this.plane.material.dispose();
+    this.depthPoints.geometry.dispose();
+    this.depthPoints.material.dispose();
     this.frustum.geometry.dispose();
     this.frustum.material.dispose();
     this.icon.geometry.dispose();

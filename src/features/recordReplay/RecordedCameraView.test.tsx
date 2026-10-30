@@ -113,9 +113,24 @@ describe('RecordedCameraView', () => {
     context.putImageData.mockImplementationOnce(() => { throw new Error('Canvas draw failed'); });
     const frame = { topic: '/cam/image_raw', time: START, message: { width: 1, height: 1, encoding: 'rgb8', step: 3, data: new Uint8Array([1, 2, 3]) } };
     await deliver([frame]);
-    expect(screen.getByText('This recorded frame could not be drawn.')).toBeVisible();
+    expect(screen.getByText('This camera frame could not be drawn.')).toBeVisible();
     expect(screen.getByLabelText('Recorded frame from /cam/image_raw')).not.toBeVisible();
     await deliver([frame]);
     expect(screen.getByRole('img', { name: 'Recorded frame from /cam/image_raw' })).toBeVisible();
   });
+});
+
+it('shows metric depth readings from the replay source and replaces them at the playback cursor', async () => {
+  const ros = openRecording(CAMERA_TOPICS.slice(0, 1));
+  render(<RecordedCameraView ros={ros} preferredTopic="/cam/image_raw" />);
+  const frame = (millimetres: number) => ({ topic: '/cam/image_raw', time: START, message: {
+    width: 1, height: 1, encoding: '16UC1', step: 2, data: new Uint8Array([millimetres & 255, millimetres >> 8]),
+  } });
+  await deliver([frame(1000)]);
+  const canvas = screen.getByRole('img');
+  fireEvent.focus(canvas);
+  expect(screen.getByLabelText('Depth measurement')).toHaveTextContent('1.000 m');
+  await deliver([frame(2500)]);
+  expect(screen.getByLabelText('Depth measurement')).toHaveTextContent('2.500 m');
+  expect(worker.last('seek').topics).toEqual(['/cam/image_raw']);
 });

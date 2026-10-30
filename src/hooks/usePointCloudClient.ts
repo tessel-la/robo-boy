@@ -40,6 +40,7 @@ interface UsePointCloudClientProps {
   ros3dViewer: React.RefObject<ROS3D.Viewer | null>;
   customTFProvider: React.RefObject<CustomTFProvider | null>;
   selectedPointCloudTopic: string;
+  messageType?: string;
   fixedFrame: string;
   material?: PointCloudMaterialOptions;
   options?: PointCloudClientOptions;
@@ -54,6 +55,7 @@ export function usePointCloudClient({
   ros3dViewer,
   customTFProvider,
   selectedPointCloudTopic,
+  messageType = 'sensor_msgs/PointCloud2',
   fixedFrame,
   material = {},
   options = {},
@@ -205,6 +207,7 @@ export function usePointCloudClient({
       tfClient: customTFProvider.current,
       rootObject: ros3dViewer.current.scene,
       topic: selectedPointCloudTopic,
+      messageType,
       max_pts: options.maxPoints ?? (isMobile() ? 100000 : 200000),
       throttle_rate: options.throttleRate ?? 33, // ~30Hz
       compression: 'cbor' as const,
@@ -336,7 +339,7 @@ export function usePointCloudClient({
       ros3dViewer.current?.requestRender?.();
     };
 
-  }, [ros, isRosConnected, ros3dViewer, customTFProvider, selectedPointCloudTopic, material, options, fixedFrame, onStatus]);
+  }, [ros, isRosConnected, ros3dViewer, customTFProvider, selectedPointCloudTopic, messageType, material, options, fixedFrame, onStatus]);
 
   return {
     axisRanges: axisRanges.current,

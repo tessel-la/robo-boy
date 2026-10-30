@@ -41,6 +41,8 @@
     "test": "vitest --config config/vitest.config.ts",
     "test:panel-installer": "node --test scripts/install-panels.test.mjs",
     "test:robot-resources": "node scripts/test-robot-resources.mjs",
+    "test:cloudini": "node scripts/test-cloudini.mjs",
+    "build:cloudini": "sh scripts/build-cloudini.sh",
     "test:camera-metadata": "node --test scripts/jpeg-ros-metadata.test.mjs",
     "test:mesh-proxy": "node --test scripts/mesh-proxy.test.mjs",
     "test:embed-proxy": "node scripts/test-embed-proxy.mjs",

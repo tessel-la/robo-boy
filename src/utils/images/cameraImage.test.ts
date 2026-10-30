@@ -514,3 +514,43 @@ it('freezes a complete camera snapshot while shared acquisition continues, then 
   c.dispose();
   expect(c.getSnapshot().displayed).toBeUndefined();
 });
+
+it('renders metric depth with acquisition-time TF, excludes invalid pixels and reuses bounded GPU buffers', async () => {
+  const options = { cameraInfoTopic: '/cam/camera_info', renderMode: 'depth' as const };
+  const c = make({ options });
+  const depth = (sec: number, values = [1000, 0, 2000, 3000]) => {
+    const data = new Uint8Array(8), view = new DataView(data.buffer);
+    values.forEach((value, i) => view.setUint16(i * 2, value, true));
+    return { header: header(sec), width: 2, height: 2, step: 4, encoding: '16UC1', data };
+  };
+  history.ingest(tf(1, 10), false); history.ingest(tf(3, 30), false);
+  receive('/cam/camera_info', info(0));
+  receive('/cam/image_raw', depth(2)); await flush();
+  expect(c.object.visible).toBe(true);
+  expect(c.plane.visible).toBe(false);
+  expect(c.depthPoints.visible).toBe(true);
+  expect(c.plane.material.map).toBeNull();
+  expect(c.object.position.x).toBe(20);
+  expect(c.depthPoints.geometry.drawRange.count).toBe(3);
+  expect([...c.depthPoints.geometry.getAttribute('position').array].slice(0, 9)).toEqual([-0.5, -0.5, 1, -1, 0, 2, 0, 0, 3]);
+  const position = c.depthPoints.geometry.getAttribute('position');
+  receive('/cam/image_raw', depth(4, [2000, 0, 0, 0])); await flush();
+  expect(c.object.position.x).toBe(20);
+  expect(c.depthPoints.geometry.drawRange.count).toBe(3);
+  history.ingest(tf(5, 50), false);
+  expect(c.object.position.x).toBe(40);
+  expect(c.depthPoints.geometry.getAttribute('position')).toBe(position);
+  expect(c.depthPoints.geometry.drawRange.count).toBe(1);
+  c.updateOptions({ ...options, depthMaxRange: 1, depthPointSize: 4, opacity: 0.4 });
+  expect(c.depthPoints.geometry.drawRange.count).toBe(0);
+  expect(c.depthPoints.material.size).toBe(4);
+  expect(c.depthPoints.material.opacity).toBe(0.4);
+  expect(subscriptions).toHaveLength(2);
+  receive('/cam/image_raw', image(5)); await flush();
+  expect(c.object.visible).toBe(false);
+  expect(c.depthPoints.geometry.drawRange.count).toBe(0);
+  expect(status).toHaveBeenLastCalledWith(expect.stringContaining('16UC1'));
+  const dispose = vi.spyOn(c.depthPoints.geometry, 'dispose');
+  c.dispose(); c.dispose();
+  expect(dispose).toHaveBeenCalledOnce();
+});

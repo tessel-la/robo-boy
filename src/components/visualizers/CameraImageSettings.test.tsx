@@ -116,3 +116,32 @@ it('configures and removes explicit surface receivers, including unavailable sav
   view.rerender(<CameraImageSettings {...props} options={{ renderMode: 'surfaces' }} />);
   expect(screen.getByText('Add a URDF or mesh-marker layer to receive the image.')).toBeInTheDocument();
 });
+
+it('persists depth mode with metric controls and enforces ROS even for saved video settings', () => {
+  expect(normalizeCameraImageOptions({ renderMode: 'depth', imageSource: 'webrtc' }).imageSource).toBe('ros');
+  expect(normalizeCameraImageOptions({ depthMaxRange: NaN, depthPointSize: Infinity })).toMatchObject({
+    depthMaxRange: 10,
+    depthPointSize: 2,
+  });
+  const onChange = vi.fn();
+  const props = { id: 'c', topic: '/depth/image_rect', topics: [], onChange };
+  const view = render(<CameraImageSettings {...props} />);
+  fireEvent.change(screen.getByLabelText('Projection mode for Camera image on /depth/image_rect'), {
+    target: { value: 'depth' },
+  });
+  expect(onChange).toHaveBeenLastCalledWith('c', { renderMode: 'depth', imageSource: 'ros' });
+  view.rerender(<CameraImageSettings {...props} options={{ renderMode: 'depth' }} />);
+  expect(screen.getByRole('slider', { name: 'Maximum depth (m)' })).toBeVisible();
+  expect(screen.getByLabelText('Point size')).toBeVisible();
+  expect(screen.queryByLabelText('Image source for Camera image on /depth/image_rect')).not.toBeInTheDocument();
+});
+
+it('matches compressedDepth calibration without changing the exact ROS topic', async () => {
+  const { cameraInfoTopicFor, cameraPanelTopic } = await import('../../utils/images/cameraImageOptions');
+  expect(
+    cameraInfoTopicFor('/depth/image_rect/compressedDepth', [
+      { name: '/depth/camera_info', type: 'sensor_msgs/msg/CameraInfo' },
+    ])
+  ).toBe('/depth/camera_info');
+  expect(cameraPanelTopic('/depth/image_rect/compressedDepth', 'ros')).toBe('/depth/image_rect/compressedDepth');
+});

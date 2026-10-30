@@ -25,6 +25,27 @@ RUN cd /tmp/video && patch -p1 < /tmp/video.patch \
     && cmake --build /tmp/video-build -j2 && cmake --install /tmp/video-build \
     && install -Dm644 LICENSE /opt/roboboy-video/share/licenses/web_video_server/LICENSE
 
+# The read-only point-cloud relay links Cloudini directly. Compilers stay out of runtime.
+FROM ros:${ROS_DISTRO}-ros-core-${ROS_UBUNTU_CODENAME} AS cloudini-build
+ARG ROS_DISTRO
+SHELL ["/bin/bash", "-c"]
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      build-essential cmake curl ca-certificates libzstd-dev liblz4-dev \
+      ros-${ROS_DISTRO}-rclcpp ros-${ROS_DISTRO}-sensor-msgs ros-${ROS_DISTRO}-point-cloud-interfaces \
+    && rm -rf /var/lib/apt/lists/*
+COPY infra/cloudini/fetch.sh /fetch.sh
+RUN sh /fetch.sh /deps
+COPY infra/cloudini /src
+RUN source /opt/ros/${ROS_DISTRO}/setup.bash \
+    && cmake -S /src -B /build -DCMAKE_BUILD_TYPE=Release -DCLOUDINI_SOURCE_DIR=/deps/cloudini \
+      -DCLOUDINI_FORCE_VENDORED_DEPS=OFF -DCMAKE_INSTALL_PREFIX=/opt/roboboy-cloudini \
+    && cmake --build /build --target pointcloud-relay cloudini-test -j2 \
+    && ctest --test-dir /build --output-on-failure \
+    && cmake --install /build \
+    && install -Dm644 /deps/cloudini/LICENSE /opt/roboboy-cloudini/share/licenses/cloudini/LICENSE \
+    && head -28 /deps/cloudini/cloudini_lib/include/cloudini_lib/contrib/ankerl/unordered_dense.h \
+      > /opt/roboboy-cloudini/share/licenses/unordered_dense-LICENSE
+
 FROM ros:${ROS_DISTRO}-ros-core-${ROS_UBUNTU_CODENAME}
 
 ARG ROS_DISTRO
@@ -41,6 +62,7 @@ RUN echo 'APT::Acquire::Retries "3";' > /etc/apt/apt.conf.d/80-retries && \
       ros-${ROS_DISTRO}-rmw-fastrtps-cpp \
       ros-${ROS_DISTRO}-rosbridge-server \
       ros-${ROS_DISTRO}-map-msgs \
+      ros-${ROS_DISTRO}-point-cloud-interfaces libzstd1 liblz4-1 \
       python3-tornado patch \
       ros-${ROS_DISTRO}-image-transport \
       ros-${ROS_DISTRO}-cv-bridge \
@@ -78,6 +100,7 @@ RUN source /opt/ros/${ROS_DISTRO}/setup.bash && \
 RUN mkdir -p /overlay_ws
 
 COPY --from=video-build /opt/roboboy-video /opt/roboboy-video
+COPY --from=cloudini-build /opt/roboboy-cloudini /opt/roboboy-cloudini
 
 WORKDIR /ros_ws
 

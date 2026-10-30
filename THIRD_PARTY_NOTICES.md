@@ -16,6 +16,13 @@ shell and renderer notices together when distributing Electron. Native runtimes,
 libraries, external panels, and robot assets retain separate license obligations; this file does
 not relicense them.
 
+The point-cloud worker includes Cloudini 1.4.1 (Apache-2.0), ZSTD 1.5.7 (BSD),
+LZ4 1.10.0 (BSD), ankerl::unordered_dense (MIT), and Emscripten runtime code.
+The pinned sources and bounded decoder are built by `scripts/build-cloudini.sh`;
+their retained license texts in `src/utils/cloudini/vendor/codec.LICENSE` are
+included in the distributed `licenses.txt`. Cloudini source:
+https://github.com/facontidavide/cloudini/tree/0c7135c943889540205ba6833cad8dfd65178079.
+
 ## Source licenses omitted from npm releases
 
 The notice generator includes these unmodified upstream texts for the exact releases below.

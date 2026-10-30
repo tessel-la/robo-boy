@@ -279,11 +279,15 @@ const CameraView: React.FC<CameraViewProps> = ({
                   aria-label="Camera image source"
                   value={imageSource}
                   onChange={event =>
-                    setOptions({ imageSource: event.target.value as CameraImageOptions['imageSource'] })
+                    setOptions({
+                      imageSource: event.target.value as CameraImageOptions['imageSource'],
+                      // A camera opened from a depth layer must still allow a new playback source.
+                      ...(settings.renderMode === 'depth' ? { renderMode: undefined } : {}),
+                    })
                   }
                 >
                   <option value="stream">Camera streamer</option>
-                  <option value="ros">ROS messages</option>
+                  <option value="ros">ROS messages (color / depth)</option>
                   <option value="webrtc">WebRTC</option>
                 </select>
               </label>
@@ -306,6 +310,7 @@ const CameraView: React.FC<CameraViewProps> = ({
                 </label>
               )}
 
+              <p className="panel-settings-status">For metric depth, choose ROS messages and a 16UC1, 32FC1 or compressedDepth PNG topic.</p>
               {imageSource === 'webrtc' && <WebRtcSourceSettings value={settings} onChange={setOptions} />}
             </div>
           </div>

@@ -12,6 +12,7 @@ interface PointCloudVizProps {
   ros3dViewer: React.RefObject<ROS3D.Viewer | null>;
   customTFProvider: React.RefObject<CustomTFProvider | null>;
   topic: string;
+  messageType?: string;
   fixedFrame: string;
   options?: PointCloudOptions;
   visualizationId?: string;
@@ -24,6 +25,7 @@ const PointCloudViz: React.FC<PointCloudVizProps> = ({
   ros3dViewer,
   customTFProvider,
   topic,
+  messageType,
   fixedFrame,
   options,
   visualizationId = '',
@@ -59,6 +61,7 @@ const PointCloudViz: React.FC<PointCloudVizProps> = ({
     customTFProvider,
     fixedFrame,
     selectedPointCloudTopic: topic,
+    messageType,
     material: materialOptions,
     options: clientOptions,
     clientRef,  // Pass the ref to store the client

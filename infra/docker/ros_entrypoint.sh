@@ -102,6 +102,13 @@ fi
 echo "--- Launching ROS Components ---"
 
 # Read-only discovery and expiring, on-demand traffic probes.
+# Discover point clouds and compress only streams that a viewer subscribes to.
+(while true; do
+    /opt/roboboy-cloudini/bin/pointcloud-relay
+    echo "[pointcloud-relay] exited, restarting in 2s..."
+    sleep 2
+done) &
+
 (while true; do
     python3 /ros_ws/inspection_runner.py
     echo "[inspection_runner] exited, restarting in 2s..."

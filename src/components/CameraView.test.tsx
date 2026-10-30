@@ -399,3 +399,12 @@ it('uses the shared panel menu and dismisses settings without replacing the imag
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   expect(screen.getByRole('img')).toBe(image);
 });
+
+it('allows a Camera opened from a depth layer to choose a different playback source', () => {
+  const changed = vi.fn();
+  render(<CameraView ros={createMockRos() as any} cameraTopic="/depth/image" availableTopics={['/depth/image']}
+    onTopicChange={vi.fn()} sourceOptions={{ renderMode: 'depth', imageSource: 'ros' }} onSourceOptionsChange={changed} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Camera settings' }));
+  fireEvent.change(screen.getByLabelText('Camera image source'), { target: { value: 'webrtc' } });
+  expect(changed).toHaveBeenCalledWith({ imageSource: 'webrtc', renderMode: undefined });
+});

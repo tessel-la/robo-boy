@@ -1,0 +1,14 @@
+FROM emscripten/emsdk:4.0.22@sha256:a08b927777707813e64af195db105f935bd554f5825606b2048031151a9635f5 AS build
+COPY infra/cloudini/fetch.sh /fetch.sh
+RUN sh /fetch.sh /deps
+COPY infra/cloudini /src
+RUN emcmake cmake -S /src -B /build -DCMAKE_BUILD_TYPE=Release \
+      -DCLOUDINI_SOURCE_DIR=/deps/cloudini -DCPM_zstd_SOURCE=/deps/zstd -DCPM_lz4_SOURCE=/deps/lz4 \
+    && cmake --build /build --target codec -j2 \
+    && (cat /deps/cloudini/LICENSE /deps/zstd/LICENSE /deps/lz4/lib/LICENSE; \
+        head -28 /deps/cloudini/cloudini_lib/include/cloudini_lib/contrib/ankerl/unordered_dense.h; \
+        cat /emsdk/upstream/emscripten/LICENSE) | sed -e 's/[[:blank:]]*$//' -e :a -e '/^\n*$/{$d;N;ba;}' > /build/codec.LICENSE
+
+FROM scratch AS artifact
+COPY --from=build /build/codec.js /codec.js
+COPY --from=build /build/codec.LICENSE /codec.LICENSE

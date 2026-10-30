@@ -41,22 +41,24 @@ export default function CameraImageSettings({
         checked={values.visible}
         onChange={visible => onChange(id, { visible })}
       />
-      <SelectField
-        id={`camera-source-${id}`}
-        label="Image source"
-        ariaLabel={`Image source for ${label}`}
-        value={values.imageSource}
-        onChange={imageSource =>
-          onChange(id, {
-            imageSource: imageSource as CameraImageOptions['imageSource'],
-            ...(imageSource === 'webrtc' ? { videoTiming: 'latest' as const } : {}),
-          })
-        }
-      >
-        <option value="stream">Camera streamer</option>
-        <option value="ros">ROS image messages</option>
-        <option value="webrtc">WebRTC</option>
-      </SelectField>
+      {values.renderMode !== 'depth' && (
+        <SelectField
+          id={`camera-source-${id}`}
+          label="Image source"
+          ariaLabel={`Image source for ${label}`}
+          value={values.imageSource}
+          onChange={imageSource =>
+            onChange(id, {
+              imageSource: imageSource as CameraImageOptions['imageSource'],
+              ...(imageSource === 'webrtc' ? { videoTiming: 'latest' as const } : {}),
+            })
+          }
+        >
+          <option value="stream">Camera streamer</option>
+          <option value="ros">ROS image messages</option>
+          <option value="webrtc">WebRTC</option>
+        </SelectField>
+      )}
       {values.imageSource === 'stream' && (
         <>
           <SelectField
@@ -144,11 +146,43 @@ export default function CameraImageSettings({
         label="Projection mode"
         ariaLabel={`Projection mode for ${label}`}
         value={values.renderMode}
-        onChange={renderMode => onChange(id, { renderMode: renderMode as 'plane' | 'surfaces' })}
+        onChange={renderMode =>
+          onChange(id, {
+            ...(renderMode === 'depth' ? { imageSource: 'ros' as const } : {}),
+            renderMode: renderMode as CameraImageOptions['renderMode'],
+          })
+        }
       >
         <option value="plane">Image plane</option>
         <option value="surfaces">Mesh surfaces</option>
+        <option value="depth">Depth points (ROS)</option>
       </SelectField>
+      {values.renderMode === 'depth' && (
+        <>
+          <ScaleField
+            id={`depth-range-${id}`}
+            label="Maximum depth (m)"
+            value={values.depthMaxRange}
+            min={0.1}
+            max={1000}
+            precision={1}
+            onChange={depthMaxRange => onChange(id, { depthMaxRange })}
+          />
+          <NumberField
+            id={`depth-size-${id}`}
+            label="Point size"
+            unit="px"
+            value={values.depthPointSize}
+            min={1}
+            max={10}
+            onChange={depthPointSize => onChange(id, { depthPointSize })}
+          />
+          <p className="panel-settings-status">
+            Metric ROS depth, sampled to at most 100,000 points. Invalid pixels are omitted. Brightness uses a fixed
+            0–10 m scale.
+          </p>
+        </>
+      )}
       {values.renderMode === 'surfaces' && (
         <>
           <fieldset className="camera-surface-targets">
@@ -224,16 +258,18 @@ export default function CameraImageSettings({
         </>
       )}
       <div className="viz-settings-group">
-        <ScaleField
-          id={`camera-distance-${id}`}
-          label="Image plane distance"
-          ariaLabel={`Image plane distance in metres for ${label}`}
-          value={values.distance}
-          min={0.01}
-          max={100}
-          precision={2}
-          onChange={distance => onChange(id, { distance })}
-        />
+        {values.renderMode !== 'depth' && (
+          <ScaleField
+            id={`camera-distance-${id}`}
+            label="Image plane distance"
+            ariaLabel={`Image plane distance in metres for ${label}`}
+            value={values.distance}
+            min={0.01}
+            max={100}
+            precision={2}
+            onChange={distance => onChange(id, { distance })}
+          />
+        )}
         <PercentField
           id={`camera-opacity-${id}`}
           label="Image opacity"

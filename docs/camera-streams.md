@@ -39,6 +39,12 @@ For MJPEG, selecting **Capture time** requires valid embedded acquisition metada
 
 Camera source/quality controls and 3D source/calibration/timing/rate controls are independent. Changing 3D rate does not change Camera's requested playback rate. Higher rates add bitmap/GPU work and can compete for device resources. 3D retains complete image/pose snapshots while waiting for TF, independently of the sampling rate. Refresh Camera to retry a failed WebRTC session; changing/removing a 3D source also releases its subscription. No silent ROS/HLS fallback is performed. Replay always bypasses live MJPEG and WHEP endpoints, including saved WebRTC choices. The existing external WebRTC panel is unchanged and does not share in-process sessions with built-in panels.
 
+## Metric depth
+
+Select ROS messages in Camera or Depth points (ROS) in a 3D Camera image layer. Both consumers share the exact depth topic’s decoder and metric frame, including during replay. 16UC1 is millimetres and 32FC1 is metres. compressedDepth PNG retains the full 16-bit payload and applies the transport’s inverse-depth quantization for 32FC1. PNG dimensions, chunk bounds/CRCs, decompressed size and quantization are validated before use; RVL is unsupported. MJPEG/WebRTC carry display pixels and cannot supply metric geometry.
+
+Camera shows a fixed 0–10 m preview plus a pointer/touch/keyboard pixel measurement. 3D uses the existing CameraInfo/TF rules and bounds geometry to 100,000 regularly sampled points, with configurable range and point size. Missing TF/calibration holds the last complete snapshot; malformed data clears it. Mono16 is still an intensity image. See the [user guide](user-guide.md) for controls and limits.
+
 ## Deployment and validation
 
 ### Remote connections
