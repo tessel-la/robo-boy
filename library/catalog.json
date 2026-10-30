@@ -50,9 +50,10 @@
         "behaviorTree"
       ],
       "version": "1.0.0",
-      "url": "genesis/control/1.0.0.json",
+      "url": "genesis-manipulator/control/1.0.0.json",
       "sha256": "5548a8bee3b25424cf4011e96e88015bcaa8285f19dad0d0a227ecb07c95c11f",
       "tags": [
+        "genesis-manipulator",
         "genesis",
         "simulator",
         "manipulator",

@@ -1,7 +1,7 @@
 import catalogData from '../../../library/catalog.json';
 import pandaSource from '../../../library/generic/panda-inspection/1.0.0.json?raw';
 import genericSource from '../../../library/generic/inspection/1.0.0.json?raw';
-import genesisSource from '../../../library/genesis/control/1.0.0.json?raw';
+import genesisSource from '../../../library/genesis-manipulator/control/1.0.0.json?raw';
 import { checkedRelease } from './catalog';
 import type { Catalog, CachedRelease, LibrarySource } from './store';
 export const OFFICIAL_SOURCE_ID = 'roboboy-official-content';

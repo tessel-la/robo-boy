@@ -38,7 +38,7 @@ the collection does not run the controls or BT; the BT is available separately t
    repository also works offline using **Add folder**; local manifest paths cannot leave that folder.
 
 Official releases live in [Robo-Boy Catalog](https://github.com/tessel-la/robo-boy-catalog), grouped
-by simulator (`genesis/`, `microduck/`) with shared examples under `generic/`. This directory keeps
+by simulator (`genesis-manipulator/`, `microduck/`) with shared examples under `generic/`. This directory keeps
 an offline starter snapshot; the catalog repository owns new releases. Online refresh reads
 `main/catalog.json` from that repository. Community catalogs cannot mark
 entries as Official. There is no account service, upload server or Git client inside Robo-Boy;
