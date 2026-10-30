@@ -107,8 +107,8 @@ export function decodeTree(value: unknown, depth = 0): BehaviorTree {
     id: tree.id,
     name: tree.name,
     description: typeof tree.description === 'string' ? tree.description : undefined,
-    createdAt: typeof tree.createdAt === 'number' ? tree.createdAt : Date.now(),
-    updatedAt: typeof tree.updatedAt === 'number' ? tree.updatedAt : Date.now(),
+    createdAt: typeof tree.createdAt === 'number' ? tree.createdAt : 0,
+    updatedAt: typeof tree.updatedAt === 'number' ? tree.updatedAt : 0,
     blackboardDefaults: tree.blackboardDefaults,
     blackboardTypes: tree.blackboardTypes,
     nodes: tree.nodes.map((node: any) => ({

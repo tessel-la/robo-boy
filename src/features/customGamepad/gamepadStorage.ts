@@ -1,3 +1,4 @@
+import { getLibraryPads } from '../library/runtime';
 import { readContentFile, importError } from '../library/json';
 import { readPads, copyPads, serializePads } from './portablePad';
 import { CustomGamepadLayout, GamepadLibraryItem } from './types';
@@ -35,7 +36,7 @@ export function loadGamepadLibrary(): GamepadLibraryItem[] {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (!stored) {
-      return [...defaultGamepadLibrary];
+      return [...defaultGamepadLibrary, ...getLibraryPads()];
     }
 
     const data: StorageData = JSON.parse(stored);
@@ -43,14 +44,14 @@ export function loadGamepadLibrary(): GamepadLibraryItem[] {
     // Version check - if version mismatch, reset to defaults
     if (data.version !== STORAGE_VERSION) {
       console.warn('Gamepad storage version mismatch, resetting to defaults');
-      return [...defaultGamepadLibrary];
+      return [...defaultGamepadLibrary, ...getLibraryPads()];
     }
 
     // Combine defaults with custom layouts
-    return [...defaultGamepadLibrary, ...data.customLayouts];
+    return [...defaultGamepadLibrary, ...getLibraryPads(), ...data.customLayouts];
   } catch (error) {
     console.error('Failed to load gamepad library:', error);
-    return [...defaultGamepadLibrary];
+    return [...defaultGamepadLibrary, ...getLibraryPads()];
   }
 }
 

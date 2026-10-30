@@ -31,7 +31,7 @@ Existing Pad `{ "version": "1.0.0", "layouts": [...] }`, BT
 workspace layouts remain readable. A missing wrapper version on older Pad/BT files is accepted.
 Exports keep those established wrappers. Unsupported future versions fail without writes.
 
-The import foundation also accepts this package envelope:
+Library and the existing file importers also accept this package envelope:
 
 ```json
 {
@@ -65,10 +65,42 @@ workspace entry document; workspace bodies use the saved-layout shape. A package
 (`panel.layoutId`) names its **package document ID**, e.g. `pad/drive`. Every referenced Pad must be
 included. Document IDs are unique within the package; Pad body IDs must also be unique.
 
-Package schema version, document format version and release version are separate. Release IDs are
-never reused as local authoring IDs. This first format does not yet accept compatibility ranges,
-requirements or bindings: unknown package fields fail explicitly rather than silently ignoring a
-constraint. Packages that combine workspaces and BTs wait for the shared transactional repository.
+Package schema version, document format version and release version are separate. Library supports
+mixed workspace/Pad/BT collections and optional `description`, `author`, `license`, `tags` and
+`compatibility: { "roboboy": ">=0.19.0-0 <1.0.0" }`. Unsupported or incompatible versions fail
+before writes. The narrow existing Pad/BT/workspace importers keep their established scope; use
+Library for mixed collections. Review can remap declared topic, service, action and frame fields;
+arbitrary text and ROS message payloads are never rewritten.
+
+## Browsing, importing and sharing libraries
+
+Open **Library** in the connection menu next to **Workspace layouts** and **Manage panels**, or
+from the entry screen. Pad, BT and workspace menus also link to filtered Library views.
+
+- **My library** includes your saved Pads, BTs and workspace layouts, plus imported collections.
+- **Official** includes bundled Panda/generic inspection examples and an online refresh action.
+- **Add catalog** accepts public HTTPS JSON catalogs, including GitHub raw/blob URLs. Downloads use
+  no credentials or redirects, validate hashes over exact bytes, and validate every document body.
+- **Add folder** snapshots a robot repository/library folder. A manifest can group related documents;
+  legacy exports are also discovered, with unambiguous adjacent Pad dependencies included.
+- **Import selected/all** reviews names/frames and commits the complete selection together. Import
+  saves snapshots without opening panels or changing controls. Opening a document is a separate action.
+- Imported Pads are reusable templates; customize one to create an editable Pad. BTs open fresh editor
+  copies. Workspaces open with new panel/layout IDs and preserve their Pad/BT/3D dependencies. Live
+  control panels require a robot connection; entry-screen opening uses the existing local replay mode.
+- **Export collection** includes dependencies. **Export selected/all** creates a portable backup of
+  the listed collections. Import that JSON on another origin/device. Local collection names are
+  included when exporting. Online sharing uses your own repository/hosting; see the
+  [library publishing guide](../library/README.md).
+- Refreshing a source checks for updates; **Review newer release** imports a new independent copy.
+  Existing copies are not overwritten. Folder refresh asks you to select the folder again.
+- **Archive collection** hides it but preserves workspace references. Enable **Show archived
+  collections** to export or restore it. Removing a catalog does not remove imported copies.
+
+Browser, Electron and Tauri use the same JSON catalog flow. Hosts must permit CORS; private
+repositories requiring credentials are outside this flow. The folder picker works with local clones.
+Source catalogs and verified releases are cached for offline browsing/import after download. Each
+operation is bounded; folder import accepts up to 3000 files / 200 JSON / 32 MiB total.
 
 Files are limited to 5 MiB, 100 documents/layouts, 100 panels per layout, 500 Pad components, and
 500 nodes/1000 edges per tree. Subtrees are limited to ten nested levels. JSON depth, total value
@@ -81,14 +113,22 @@ before import. Custom Pad handlers are not supported in portable files.
 live under `customGamepad`, `behaviorTree`, and `workspace`; BT structural validation is shared with
 the assistant from the BT domain. `MainControlView` remains the workspace coordinator.
 
-The existing feature stores remain authoritative. Pad imports validate the entire collection before
-one localStorage write. Workspace imports prepare all documents first, check current storage, write
-fresh resources, and expose saved layouts last. A failed write rolls back completed writes when their
-values still match the import's writes, preserving another writer's changes. Existing malformed or
-unsupported stores are preserved and reported. Storage is reread after review, so edits completed
-while the dialog was open are retained.
+The existing feature stores remain authoritative for authored edits and existing file import menus.
+Library aggregates them without migration. Reusable collections, their package-local dependencies,
+provenance, sources and exact downloaded releases live in the origin-local IndexedDB database
+`robo-boy-content-library`. A native readwrite transaction commits selected collections together;
+ID collisions, cancellation and write failures abort the batch. Metadata edits compare revisions
+inside the transaction to reject stale changes from another window. Same-window events and a
+BroadcastChannel refresh other views. Archived snapshots remain resolvable, avoiding cross-window
+workspace-reference deletion races.
 
-This is a guarded synchronous batch, **not a crash-atomic or cross-tab transaction**. An interrupted
-process can leave unused fresh resources. Shared IndexedDB document storage and revision-checked
-transactions are the next persistence phase. Catalog browsing, provenance, updates and online publishing
-will build on that phase; this change adds no network source or executable-panel installation path.
+App owns the Library lifecycle and hydrates templates before mounting a connection workspace.
+The coordinator receives only explicit document-open requests. Domain codecs own body validation,
+3D normalization and BT execution-state removal. The existing external-panel manager and Library
+share management header chrome and the SHA-256 implementation, while their apply/storage lifecycles
+stay separate: importing JSON does not install code, grant panel permissions or contact ROS.
+
+Existing localStorage file imports keep their guarded synchronous batch and rollback checks; those
+legacy writes are not crash-atomic or cross-tab transactions. Library import is transactional within
+IndexedDB, while explicitly opening a workspace still uses the existing workspace localStorage stores.
+Browser storage is isolated by origin/profile; switching URL or desktop profile does not migrate it.

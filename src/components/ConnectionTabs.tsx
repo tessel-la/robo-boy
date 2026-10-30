@@ -1,3 +1,4 @@
+import { useLibrary } from '../features/library/LibraryProvider';
 import { type ReactNode, useEffect, useId, useRef, useState } from 'react';
 import type { ConnectionStatus } from '../runtime/connections';
 import './ConnectionTabs.css';
@@ -64,6 +65,7 @@ export default function ConnectionTabs({
   themeControl,
   appUpdateControl,
 }: ConnectionTabsProps) {
+  const { openLibrary } = useLibrary();
   const [isSwitcherOpen, setIsSwitcherOpen] = useState(false);
   const navRef = useRef<HTMLElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -187,6 +189,18 @@ export default function ConnectionTabs({
               );
             })}
           </div>
+          <button
+            type="button"
+            className="connection-switcher-tool"
+            onClick={() => {
+              setIsSwitcherOpen(false);
+              openLibrary();
+            }}
+            aria-label="Library"
+          >
+            <span>Library</span>
+            <span>Local, official & custom content</span>
+          </button>
           {onManageWorkspaceLayouts && (
             <button
               type="button"

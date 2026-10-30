@@ -177,7 +177,8 @@ export function decodePad(value: unknown): CustomGamepadLayout {
       : record(pad.rosConfig, 'Pad ROS defaults');
   text(ros.defaultTopic, 'Default ROS topic');
   text(ros.defaultMessageType, 'Default ROS message type');
-  const now = new Date().toISOString();
+  // Missing source dates stay stable across catalog refreshes; copying assigns local dates.
+  const now = new Date(0).toISOString();
   const portableComponents = components.map(value => {
     const item = record(value, 'Component');
     const action = item.action

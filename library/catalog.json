@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "title": "Robo-Boy official",
+  "items": [
+    {
+      "id": "la.tessel.panda.inspection",
+      "title": "Panda inspection",
+      "description": "Inspection workspace, a passive joint readout Pad and a readiness BT example. Adapt topics and frames to your robot before use. No hardware validation is claimed.",
+      "kind": "collection",
+      "kinds": [
+        "workspace",
+        "pad",
+        "behaviorTree"
+      ],
+      "version": "1.0.0",
+      "url": "robots/panda/inspection.json",
+      "sha256": "a9151861b1521e402e7ebefee3ba343dce142e23bd6f532952e6b59cee90b448",
+      "tags": [
+        "panda",
+        "inspection"
+      ]
+    },
+    {
+      "id": "la.tessel.generic.inspection",
+      "title": "Robot inspection",
+      "description": "Inspection workspace, a passive joint readout Pad and a readiness BT example. Adapt topics and frames to your robot before use. No hardware validation is claimed.",
+      "kind": "collection",
+      "kinds": [
+        "workspace",
+        "pad",
+        "behaviorTree"
+      ],
+      "version": "1.0.0",
+      "url": "robots/generic/inspection.json",
+      "sha256": "b3fcdd57fff4f7ad2c58fd59e79775f2abe117577291d51089d553f6cb323aae",
+      "tags": [
+        "generic",
+        "inspection"
+      ]
+    }
+  ]
+}

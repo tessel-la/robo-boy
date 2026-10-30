@@ -145,11 +145,13 @@ Open the theme selector to choose a built-in theme or create a custom palette. C
 
 ## Local Data
 
-Robo-Boy has no user account or application database. Custom themes, gamepads, behavior trees, panel sizing, and visualization settings are stored in `localStorage`. Data is isolated by browser, profile, and site origin. Persistent behavior-tree executions are transient ROS runtime sessions; they are not stored as user data and end if the ROS stack restarts.
+Robo-Boy has no cloud user account or server-side application database. Custom themes, gamepads, behavior trees, panel sizing, and visualization settings are stored in `localStorage`. Reusable Library collections and cached sources use IndexedDB. Data is isolated by browser, profile, and site origin. Persistent behavior-tree executions are transient ROS runtime sessions; they are not stored as user data and end if the ROS stack restarts.
 
 ### Importing reusable content
 
-Use the existing Pad, Behavior Tree or Workspace layouts import menu to review a JSON file before
-creating editable copies. Pad imports populate the library without switching active controls; BT
-imports open an independent editor copy; workspace imports add saved layouts without applying them.
+Open **Library** in the connection switcher, next to **Workspace layouts** and **Manage panels**,
+or on the entry screen. Browse Official, add a public HTTPS catalog, choose a robot repository folder,
+or import JSON. Review selected/all collections before saving local copies, then explicitly open a
+workspace, add a Pad or open a BT. Export a collection or selected/all library content to share it.
+The existing Pad, BT and workspace import menus remain available.
 See [Portable content files](portable-content.md) for supported formats and sharing limits.

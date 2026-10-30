@@ -1,3 +1,5 @@
+import { LibraryProvider, LibraryWorkspaceGate } from './features/library/LibraryProvider';
+import type { LibraryOpenRequest } from './features/library/runtime';
 import { lazy, Suspense, useState, useEffect, useRef } from 'react';
 import './App.css';
 import EntrySection from './components/EntrySection';
@@ -45,6 +47,7 @@ const safeSetStorageItem = (key: string, value: string): void => {
 };
 
 function WorkspaceApp() {
+  const [libraryRequest, setLibraryRequest] = useState<{ target: string; request: LibraryOpenRequest } | null>(null);
   const [connectionSessions, setConnectionSessions] = useState<ConnectionSession[]>([]);
   const [activeConnectionId, setActiveConnectionId] = useState<string | null>(null);
   const [isAddingConnection, setIsAddingConnection] = useState(false);
@@ -156,7 +159,7 @@ function WorkspaceApp() {
     if (existing) {
       setActiveConnectionId(existing.id);
       setIsAddingConnection(false);
-      return;
+      return existing.id;
     }
 
     const session: ConnectionSession = {
@@ -169,6 +172,7 @@ function WorkspaceApp() {
     setActiveConnectionId(session.id);
     setIsAddingConnection(false);
     console.log('Opening connection:', target.description);
+    return session.id;
   };
 
   const handleSelectConnection = (id: string) => {
@@ -241,86 +245,104 @@ function WorkspaceApp() {
 
   return (
     <>
-      <AppUpdatePrompt />
-      <div className="App">
-        <main>
-          <div className="connection-shell">
-            <div className="connection-shell-content">
-              {connectionSessions.map(session => {
-                const isActive = !isAddingConnection && activeConnectionId === session.id && !session.isClosing;
-                return (
-                  <section
-                    id={`connection-session-${session.id}`}
-                    className="connection-session"
-                    role="tabpanel"
-                    aria-label={session.label}
-                    aria-hidden={!isActive}
-                    hidden={!isActive}
-                    key={session.id}
-                  >
-                    <RuntimeConfigProvider connectionParams={session.params}>
-                      <Suspense
-                        fallback={
-                          <WorkspaceOpening
-                            stage="loading"
-                            target={session.label}
-                            url={
-                              session.params.offline ? undefined : resolveRuntimeEndpoints(session.params).rosbridgeUrl
-                            }
-                            offline={session.params.offline}
-                            standalone
-                          />
-                        }
-                      >
-                        <MainControlView
-                          connectionParams={session.params}
-                          isActive={isActive}
-                          storageScope={session.storageScope}
-                          onConnectionStatusChange={status => handleConnectionStatusChange(session.id, status)}
-                          appControls={appControls}
-                          onDisconnect={() => handleCloseConnection(session.id)}
-                          connectionNavigation={{
-                            tabs: connectionSessions,
-                            activeTabId: activeConnectionId,
-                            isAdding: isAddingConnection,
-                            onSelect: handleSelectConnection,
-                            onClose: handleCloseConnection,
-                            onAdd: () => setIsAddingConnection(true),
-                            themeControl,
-                            appUpdateControl: <AppUpdateMenuItem />,
-                          }}
-                        />
-                      </Suspense>
-                    </RuntimeConfigProvider>
+      <LibraryProvider
+        onUse={request => {
+          const target =
+            activeConnectionId && !isAddingConnection
+              ? activeConnectionId
+              : handleConnect({ offline: true, ros2Option: 'ip', ros2Value: 'localhost' });
+          setLibraryRequest({ target, request });
+        }}
+      >
+        <AppUpdatePrompt />
+        <div className="App">
+          <main>
+            <div className="connection-shell">
+              <div className="connection-shell-content">
+                {connectionSessions.map(session => {
+                  const isActive = !isAddingConnection && activeConnectionId === session.id && !session.isClosing;
+                  return (
+                    <section
+                      id={`connection-session-${session.id}`}
+                      className="connection-session"
+                      role="tabpanel"
+                      aria-label={session.label}
+                      aria-hidden={!isActive}
+                      hidden={!isActive}
+                      key={session.id}
+                    >
+                      <RuntimeConfigProvider connectionParams={session.params}>
+                        <Suspense
+                          fallback={
+                            <WorkspaceOpening
+                              stage="loading"
+                              target={session.label}
+                              url={
+                                session.params.offline
+                                  ? undefined
+                                  : resolveRuntimeEndpoints(session.params).rosbridgeUrl
+                              }
+                              offline={session.params.offline}
+                              standalone
+                            />
+                          }
+                        >
+                          <LibraryWorkspaceGate>
+                            <MainControlView
+                              libraryRequest={
+                                libraryRequest?.target === session.id ? libraryRequest.request : undefined
+                              }
+                              onLibraryRequestHandled={() => setLibraryRequest(null)}
+                              connectionParams={session.params}
+                              isActive={isActive}
+                              storageScope={session.storageScope}
+                              onConnectionStatusChange={status => handleConnectionStatusChange(session.id, status)}
+                              appControls={appControls}
+                              onDisconnect={() => handleCloseConnection(session.id)}
+                              connectionNavigation={{
+                                tabs: connectionSessions,
+                                activeTabId: activeConnectionId,
+                                isAdding: isAddingConnection,
+                                onSelect: handleSelectConnection,
+                                onClose: handleCloseConnection,
+                                onAdd: () => setIsAddingConnection(true),
+                                themeControl,
+                                appUpdateControl: <AppUpdateMenuItem />,
+                              }}
+                            />
+                          </LibraryWorkspaceGate>
+                        </Suspense>
+                      </RuntimeConfigProvider>
+                    </section>
+                  );
+                })}
+                {(connectionSessions.length === 0 || isAddingConnection) && (
+                  <section className="connection-picker" aria-label="Open a robot connection">
+                    <div className="connection-picker-top-bar">
+                      <ConnectionTabs
+                        tabs={connectionSessions}
+                        activeTabId={activeConnectionId}
+                        isAdding
+                        onSelect={handleSelectConnection}
+                        onClose={handleCloseConnection}
+                        onAdd={() => setIsAddingConnection(true)}
+                        themeControl={themeControl}
+                        appUpdateControl={<AppUpdateMenuItem />}
+                      />
+                    </div>
+                    <EntrySection onConnect={handleConnect} embedded />
                   </section>
-                );
-              })}
-              {(connectionSessions.length === 0 || isAddingConnection) && (
-                <section className="connection-picker" aria-label="Open a robot connection">
-                  <div className="connection-picker-top-bar">
-                    <ConnectionTabs
-                      tabs={connectionSessions}
-                      activeTabId={activeConnectionId}
-                      isAdding
-                      onSelect={handleSelectConnection}
-                      onClose={handleCloseConnection}
-                      onAdd={() => setIsAddingConnection(true)}
-                      themeControl={themeControl}
-                      appUpdateControl={<AppUpdateMenuItem />}
-                    />
-                  </div>
-                  <EntrySection onConnect={handleConnect} embedded />
-                </section>
-              )}
+                )}
+              </div>
             </div>
-          </div>
-        </main>
-        {isThemeCreatorOpen && (
-          <Suspense fallback={null}>
-            <ThemeCreator isOpen onClose={closeThemeCreator} onSave={handleSaveTheme} existingTheme={themeToEdit} />
-          </Suspense>
-        )}
-      </div>
+          </main>
+          {isThemeCreatorOpen && (
+            <Suspense fallback={null}>
+              <ThemeCreator isOpen onClose={closeThemeCreator} onSave={handleSaveTheme} existingTheme={themeToEdit} />
+            </Suspense>
+          )}
+        </div>
+      </LibraryProvider>
     </>
   );
 }

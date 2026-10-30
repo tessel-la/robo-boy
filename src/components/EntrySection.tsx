@@ -1,3 +1,4 @@
+import { useLibrary } from '../features/library/LibraryProvider';
 import React, { useState, useEffect, useRef, useId } from 'react';
 import { FiChevronDown, FiSliders } from 'react-icons/fi';
 import type { ConnectionParams } from '../runtime/connections';
@@ -59,6 +60,7 @@ const TrashIcon = () => (
 );
 
 const EntrySection: React.FC<EntrySectionProps> = ({ onConnect, embedded = false }) => {
+  const { openLibrary } = useLibrary();
   const fleet = hasEnterpriseRobots() ? (getEnterpriseSession()?.robots ?? []) : [];
   const [robotId, setRobotId] = useState(fleet[0]?.id ?? '');
   const [ros2Value, setRos2Value] = useState<string>('');
@@ -452,6 +454,9 @@ const EntrySection: React.FC<EntrySectionProps> = ({ onConnect, embedded = false
               Connect
             </button>
           </form>
+          <button type="button" className="advanced-toggle" onClick={() => openLibrary()}>
+            Library
+          </button>
           <button
             type="button"
             className="advanced-toggle"

@@ -1,3 +1,4 @@
+import { useLibrary } from '../../library/LibraryProvider';
 import { useImportSession } from '../../library/useImportSession';
 import React, { useState, useRef, useEffect } from 'react';
 import { MdSelectAll } from 'react-icons/md';
@@ -82,6 +83,7 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
   blackboardTypes,
   onBlackboardDefaultsChange,
 }) => {
+  const {openLibrary}=useLibrary();
   const startImport = useImportSession(currentTree?.id, !isEditingLocked);
   const [menuOpen, setMenuOpen] = useState(false);
   const [savedTrees, setSavedTrees] = useState(listBehaviorTrees());
@@ -268,6 +270,7 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
             </svg>
             Export
           </button>
+          <button className="bt-menu-action-btn" onClick={()=>{closeMenu();openLibrary('behaviorTree');}}>Browse Library</button>
           <button className="bt-menu-action-btn" onClick={handleImport}>
             <svg width="14" height="16" viewBox="0 0 14 16" fill="currentColor">
               <path d="M7 11V2M3 6l4-5 4 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" fill="none" />

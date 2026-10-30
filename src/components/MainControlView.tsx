@@ -1,3 +1,5 @@
+import { useLibrary } from '../features/library/LibraryProvider';
+import { getLibraryTree, type LibraryOpenRequest } from '../features/library/runtime';
 import {
   normalizeWorkspacePanel, normalizeSavedWorkspaceLayout, normalizeWorkspaceTileOrder,
   withoutApprovedRosTopics, visualizationStorageKey,
@@ -391,6 +393,8 @@ export interface ActivePanel {
 }
 
 interface MainControlViewProps {
+  libraryRequest?: LibraryOpenRequest;
+  onLibraryRequestHandled?: () => void;
   connectionParams: ConnectionParams;
   onDisconnect: () => void;
   isActive?: boolean;
@@ -844,6 +848,8 @@ const WORKSPACE_MENU_COMFORT = 320;
 
 const MainControlView: React.FC<MainControlViewProps> = ({
   connectionParams,
+  libraryRequest,
+  onLibraryRequestHandled,
   onDisconnect,
   isActive = true,
   storageScope,
@@ -973,11 +979,16 @@ const MainControlView: React.FC<MainControlViewProps> = ({
     document.addEventListener('visibilitychange', visibility);
     return () => document.removeEventListener('visibilitychange', visibility);
   }, [isActive, replaySession]);
+  const { openLibrary } = useLibrary();
+  const libraryHandled = useRef<string>();
+  const treeReaders = useRef(new Map<string, BehaviorTreeAssistantBridge>());
   const assistantRef = useRef<GlobalAssistantHandle>(null);
   const handleOpenAssistant = useCallback((context: { panelId: string }) => {
     assistantRef.current?.open({ pinBehaviorTreePanelId: context.panelId });
   }, []);
   const handleRegisterAssistantBridge = useCallback((panelId: string, bridge: BehaviorTreeAssistantBridge | null) => {
+    if (bridge) treeReaders.current.set(panelId, bridge);
+    else treeReaders.current.delete(panelId);
     assistantRef.current?.registerBehaviorTreeBridge(panelId, bridge);
   }, []);
   const handleRegisterPadDraftReader = useCallback((reader: (() => CustomGamepadLayout) | null) => {
@@ -1238,6 +1249,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({
 
   useEffect(() => {
     writeConnectionStorage(WORKSPACE_SAVED_LAYOUTS_KEY, JSON.stringify(savedWorkspaceLayouts), storageScope);
+    window.dispatchEvent(new Event('robo-boy-workspaces-changed'));
   }, [savedWorkspaceLayouts, storageScope]);
 
   useEffect(() => {
@@ -1812,6 +1824,25 @@ const MainControlView: React.FC<MainControlViewProps> = ({
     setWorkspaceReplaceMenuStyle(null);
     return newPanel.id;
   };
+
+  useEffect(() => {
+    if (!isActive || !libraryRequest || libraryHandled.current === libraryRequest.id) return;
+    libraryHandled.current = libraryRequest.id;
+    if (libraryRequest.kind === 'workspace' && libraryRequest.workspace) {
+      for (const scene of libraryRequest.visualizations ?? []) {
+        saveVisualizationStateForKey(visualizationStorageKey(scene.panelId, storageScope), scene.state);
+      }
+      handleLoadSavedWorkspaceLayout(libraryRequest.workspace);
+    } else if (libraryRequest.kind === 'pad' && libraryRequest.padId) {
+      handleAddWorkspacePanel('pad', undefined, undefined, { layoutId: libraryRequest.padId });
+    } else if (libraryRequest.kind === 'behaviorTree' && libraryRequest.tree) {
+      const id = handleAddWorkspacePanel('behaviorTree');
+      if (id) setWorkspacePanels(previous => previous.map(panel =>
+        panel.id === id ? { ...panel, initialTree: libraryRequest.tree! } : panel
+      ));
+    }
+    onLibraryRequestHandled?.();
+  }, [libraryRequest, isActive]);
 
   const handleWorkspaceDragStart = (event: React.DragEvent<HTMLButtonElement>, type: WorkspacePanelType) => {
     if (isWorkspaceStacked && workspacePanels.length >= 2) {
@@ -2403,7 +2434,12 @@ const MainControlView: React.FC<MainControlViewProps> = ({
 
   const createSavedWorkspaceSnapshot = (title: string, existingLayout?: SavedWorkspaceLayout): SavedWorkspaceLayout => {
     const now = new Date().toISOString();
-    const panels = workspacePanels.map(withoutApprovedRosTopics);
+    const panels = workspacePanels.map(panel => ({
+      ...withoutApprovedRosTopics(panel),
+      initialTree: panel.type === 'behaviorTree'
+        ? treeReaders.current.get(panel.id)?.getCurrentTree() ?? panel.initialTree
+        : undefined,
+    }));
     const tileOrder = normalizeWorkspaceTileOrder(
       normalizedWorkspaceTileOrder,
       panels.map(panel => panel.id)
@@ -2702,6 +2738,11 @@ const MainControlView: React.FC<MainControlViewProps> = ({
       .map(item => item.layout);
     const exportPanel = (panel: WorkspacePanel): ExportedWorkspacePanel => {
       const portable = withoutApprovedRosTopics(panel);
+      if (panel.type === 'behaviorTree') {
+        portable.initialTree = treeReaders.current.get(panel.id)?.getCurrentTree() ?? panel.initialTree
+          ?? (panel.treeId ? getLibraryTree(panel.treeId) ?? undefined : undefined);
+        portable.treeId = undefined;
+      }
       if (panel.type === 'pad' && panel.layoutId) portable.layoutId = getGamepadLayout(panel.layoutId)?.layout.id ?? panel.layoutId;
       if (!isBuiltInPanelId(panel.type)) portable.panelState = undefined;
       return panel.type === '3d'
@@ -3179,6 +3220,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({
                 </section>
 
                 <section className="workspace-pad-library-actions" aria-label="Pad library actions">
+                  <button type="button" className="workspace-pad-library-button" onClick={()=>{setWorkspacePadMenu(null);openLibrary('pad');}}>Browse Library</button>
                   <button
                     type="button"
                     className="workspace-pad-library-button"
@@ -3445,6 +3487,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({
           onExecutionControlsChange={controls => {
             btExecutionControls.current = controls;
           }}
+          initialTree={panel.initialTree ?? (panel.treeId ? getLibraryTree(panel.treeId) ?? undefined : undefined)}
           panelId={panel.id}
           onOpenAssistant={handleOpenAssistant}
           onRegisterAssistantBridge={handleRegisterAssistantBridge}
@@ -3709,6 +3752,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({
             )}
           </div>
         </form>
+        <button type="button" className="workspace-pad-library-button" onClick={()=>openLibrary('workspace')}>Browse Library</button>
         <div className="workspace-template-transfer-row">
           <button
             type="button"

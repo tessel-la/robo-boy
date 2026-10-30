@@ -1,3 +1,4 @@
+import { decodeImportedVisualization, decodeWorkspaceDocument } from './portableDocument';
 import { collection, importError, parseContentJson, readContentFile, record, text } from '../library/json';
 import { readContentPackage } from '../library/packages';
 import { copyPads, decodePad } from '../customGamepad/portablePad';
@@ -21,36 +22,6 @@ interface WorkspaceImport {
   pads: CustomGamepadLayout[];
   visualizations: Array<{ panelId: string; state: VisualizationPanelState }>;
   warnings: string[];
-}
-function visualization(value: unknown): VisualizationPanelState {
-  const state = record(value, '3D settings');
-  if (state.visualizations !== undefined)
-    for (const item of collection(state.visualizations, '3D layers', 100)) {
-      const layer = record(item, '3D layer');
-      text(layer.id, 'Layer id');
-      text(layer.type, 'Layer type');
-      if (typeof layer.topic !== 'string') throw new Error('Invalid 3D topic.');
-      if (layer.options !== undefined) record(layer.options, 'Layer options');
-    }
-  if (state.fixedFrame !== undefined && typeof state.fixedFrame !== 'string') throw new Error('Invalid fixed frame.');
-  if (
-    state.displayedTfFrames !== undefined &&
-    (!Array.isArray(state.displayedTfFrames) ||
-      state.displayedTfFrames.some((frame: unknown) => typeof frame !== 'string'))
-  )
-    throw new Error('Invalid TF frames.');
-  for (const key of [
-    'showAllTfFrames',
-    'showTfAxes',
-    'showTfFrameLabels',
-    'showTfConnections',
-    'showTfLabelBackground',
-  ])
-    if (state[key] !== undefined && typeof state[key] !== 'boolean') throw new Error(`Invalid 3D flag: ${key}.`);
-  for (const key of ['tfAxesScale', 'tfAxesWidth', 'tfLabelScale', 'tfAxesOpacity', 'tfLabelOpacity'])
-    if (state[key] !== undefined && (typeof state[key] !== 'number' || state[key] < 0))
-      throw new Error(`Invalid 3D setting: ${key}.`);
-  return normalizeVisualizationState(state);
 }
 /** Prepare complete independent copies without writing any feature storage. */
 export function planWorkspaceImport(source: string): WorkspaceImport {
@@ -116,66 +87,13 @@ export function planWorkspaceImport(source: string): WorkspaceImport {
   const visualizations: WorkspaceImport['visualizations'] = [];
   const layouts = candidates.map(candidate => {
     const raw = record(candidate, 'Workspace layout');
-    text(raw.id, 'Layout id');
-    text(raw.title, 'Layout title');
-    const rawPanels = collection(raw.panels, 'Workspace panels', 100) as ExportedWorkspacePanel[];
-    const ids = new Set<string>();
-    for (const item of rawPanels) {
-      const panel = record(item, 'Workspace panel');
-      text(panel.id, 'Panel id');
-      text(panel.type, 'Panel type');
-      text(panel.title, 'Panel title');
-      if (ids.has(panel.id)) throw new Error('Panel ids must be unique within a layout.');
-      ids.add(panel.id);
-      if (panel.layoutId !== undefined) text(panel.layoutId, 'Pad reference');
-      if (panel.cameraTopic !== undefined && typeof panel.cameraTopic !== 'string')
-        throw new Error('Invalid camera topic.');
-    }
-    if (
-      raw.tileOrder !== undefined &&
-      (!Array.isArray(raw.tileOrder) || raw.tileOrder.some((id: unknown) => typeof id !== 'string'))
-    )
-      throw new Error('Invalid tile order.');
-    if (raw.layout !== undefined) {
-      const geometry = record(raw.layout, 'Workspace geometry');
-      if (geometry.version !== undefined && geometry.version !== 2)
-        throw new Error('Unsupported workspace geometry version.');
-      if (geometry.version === 2) {
-        const seenTiles = new Set<string>();
-        const visit = (value: unknown, depth = 0): void => {
-          if (depth > 32) throw new Error('Workspace splits are too deeply nested.');
-          if (value === null && depth === 0) return;
-          const node = record(value, 'Workspace split or tile');
-          if (node.type === 'tile') {
-            if (!ids.has(node.id) || seenTiles.has(node.id))
-              throw new Error('Invalid or duplicate workspace tile reference.');
-            seenTiles.add(node.id);
-          } else if (
-            node.type === 'split' &&
-            ['x', 'y'].includes(node.axis) &&
-            typeof node.ratio === 'number' &&
-            node.ratio > 0 &&
-            node.ratio < 1
-          ) {
-            visit(node.first, depth + 1);
-            visit(node.second, depth + 1);
-          } else throw new Error('Invalid workspace geometry.');
-        };
-        visit(geometry.root);
-      }
-    }
-    const normalized = normalizeSavedWorkspaceLayout(raw, false);
-    if (!normalized || normalized.panels.length !== rawPanels.length)
-      throw new Error('Workspace contains an invalid panel.');
-    rawPanels.forEach((panel, index) => {
-      if (isBuiltInPanelId(panel.type) && panel.panelState !== undefined && !normalized.panels[index].panelState)
-        throw new Error('Workspace contains invalid built-in panel settings.');
-    });
+    const normalized = decodeWorkspaceDocument(raw);
+    const rawPanels = normalized.panels;
     const panelMap = new Map(rawPanels.map(panel => [panel.id, `workspace-panel-${createUuid()}`]));
     const panels = normalized.panels.map((panel, index) => {
       const id = panelMap.get(panel.id)!;
       if (rawPanels[index].visualization !== undefined && panel.type === '3d')
-        visualizations.push({ panelId: id, state: visualization(rawPanels[index].visualization) });
+        visualizations.push({ panelId: id, state: decodeImportedVisualization(rawPanels[index].visualization) });
       if (!isBuiltInPanelId(panel.type)) {
         warnings.add(
           'External panel settings and ROS approvals are excluded. Required panels must already be installed and enabled.'

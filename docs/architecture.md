@@ -275,5 +275,8 @@ Robo-Boy core may import SDK types; it must never import an external panel's sou
 Pad, Behavior Tree and workspace file imports share a bounded JSON/envelope boundary and inert
 review under `src/features/library/`. Their codecs remain feature-owned; workspace document types
 and normalization live under `src/features/workspace/` rather than in `MainControlView`. Existing
-feature stores remain authoritative. See [Portable content files](portable-content.md) for compatibility,
+feature stores remain authoritative for authored edits. Library collections, source catalogs and verified
+release snapshots use IndexedDB transactions with revision checks; App owns hydration and explicit open
+requests. Source browsing does not use the executable-panel installation backend. The two managers
+share management header chrome and integrity hashing. See [Portable content files](portable-content.md) for compatibility,
 copy/reference behavior, limits, rollback and the current cross-tab/crash-atomicity boundary.

@@ -1,0 +1,165 @@
+{
+  "schemaVersion": 1,
+  "id": "la.tessel.panda.inspection",
+  "version": "1.0.0",
+  "title": "Panda inspection",
+  "description": "Inspection workspace, a passive joint readout Pad and a readiness BT example. Adapt topics and frames to your robot before use. No hardware validation is claimed.",
+  "author": "tessel·la",
+  "license": "Apache-2.0",
+  "tags": [
+    "panda",
+    "inspection"
+  ],
+  "compatibility": {
+    "roboboy": ">=0.19.0-0 <1.0.0"
+  },
+  "entryDocument": "workspace/inspection",
+  "documents": [
+    {
+      "id": "pad/joints",
+      "kind": "pad",
+      "formatVersion": 1,
+      "data": {
+        "id": "joints",
+        "name": "Joint readout",
+        "gridSize": {
+          "width": 8,
+          "height": 4
+        },
+        "cellSize": 60,
+        "components": [
+          {
+            "id": "joint-one",
+            "type": "readout",
+            "position": {
+              "x": 0,
+              "y": 0,
+              "width": 4,
+              "height": 2
+            },
+            "label": "Joint 1",
+            "action": {
+              "topic": "/joint_states",
+              "messageType": "sensor_msgs/msg/JointState",
+              "field": "position[0]"
+            },
+            "config": {
+              "unit": "rad",
+              "decimals": 3
+            }
+          }
+        ],
+        "rosConfig": {
+          "defaultTopic": "/joint_states",
+          "defaultMessageType": "sensor_msgs/msg/JointState"
+        },
+        "metadata": {
+          "created": "2026-10-29T00:00:00.000Z",
+          "modified": "2026-10-29T00:00:00.000Z",
+          "version": "1.0.0"
+        }
+      }
+    },
+    {
+      "id": "bt/readiness",
+      "kind": "behaviorTree",
+      "formatVersion": 1,
+      "data": {
+        "id": "readiness",
+        "name": "Readiness example",
+        "description": "A blackboard condition example; does not move the robot. Replace this with your own task tree.",
+        "nodes": [
+          {
+            "id": "ready",
+            "type": "condition",
+            "position": {
+              "x": 0,
+              "y": 0
+            },
+            "data": {
+              "label": "Ready?",
+              "condition": "ready",
+              "operator": "equals",
+              "expectedValue": true
+            }
+          }
+        ],
+        "edges": [],
+        "createdAt": 1793232000000,
+        "updatedAt": 1793232000000,
+        "blackboardDefaults": {
+          "ready": true
+        },
+        "blackboardTypes": {
+          "ready": "bool"
+        }
+      }
+    },
+    {
+      "id": "workspace/inspection",
+      "kind": "workspace",
+      "formatVersion": 1,
+      "data": {
+        "id": "inspection",
+        "title": "Panda inspection",
+        "panels": [
+          {
+            "id": "scene",
+            "type": "3d",
+            "title": "3D view",
+            "visualization": {
+              "visualizations": [],
+              "fixedFrame": "panda_link0",
+              "displayedTfFrames": [],
+              "showAllTfFrames": true
+            }
+          },
+          {
+            "id": "pad",
+            "type": "pad",
+            "title": "Pad controls",
+            "layoutId": "pad/joints"
+          },
+          {
+            "id": "tree",
+            "type": "behaviorTree",
+            "title": "Behavior tree",
+            "treeId": "bt/readiness"
+          }
+        ],
+        "tileOrder": [
+          "scene",
+          "pad",
+          "tree"
+        ],
+        "layout": {
+          "version": 2,
+          "root": {
+            "type": "split",
+            "axis": "x",
+            "ratio": 0.65,
+            "first": {
+              "type": "tile",
+              "id": "scene"
+            },
+            "second": {
+              "type": "split",
+              "axis": "y",
+              "ratio": 0.5,
+              "first": {
+                "type": "tile",
+                "id": "pad"
+              },
+              "second": {
+                "type": "tile",
+                "id": "tree"
+              }
+            }
+          }
+        },
+        "createdAt": "2026-10-29T00:00:00.000Z",
+        "updatedAt": "2026-10-29T00:00:00.000Z"
+      }
+    }
+  ]
+}

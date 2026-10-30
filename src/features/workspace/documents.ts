@@ -1,3 +1,4 @@
+import type { BehaviorTree } from '../behaviorTree/types';
 import { getConnectionStorageKey } from '../../runtime/connectionStorage';
 import { BUILT_IN_PANELS, LEGACY_TIME_SERIES_ID } from '../../panels/builtInPanels';
 import { isValidPanelId } from '../../panels/registry';
@@ -13,6 +14,8 @@ export interface WorkspacePanel {
   title: string;
   cameraTopic?: string;
   layoutId?: string;
+  treeId?: string;
+  initialTree?: BehaviorTree;
   panelState?: StoredPanelState;
   approvedRosTopics?: RoboBoyRosTopic[];
   /** Set when the Data Explorer configures this tile, so a tile that already shows the same panel
@@ -68,6 +71,14 @@ export const normalizeWorkspacePanel = (panel: unknown, allowApprovedRosTopics =
     title: candidate.type === 'pad' ? getWorkspaceTitle('pad') : candidate.title,
     cameraTopic: candidate.cameraTopic,
     layoutId: candidate.layoutId,
+    treeId: typeof candidate.treeId === 'string' ? candidate.treeId : undefined,
+    initialTree:
+      candidate.initialTree &&
+      typeof candidate.initialTree.id === 'string' &&
+      Array.isArray(candidate.initialTree.nodes) &&
+      Array.isArray(candidate.initialTree.edges)
+        ? candidate.initialTree
+        : undefined,
     panelState:
       storedPanelState && candidate.type === LEGACY_TIME_SERIES_ID
         ? { ...storedPanelState, panelId: 'timeSeries' }
