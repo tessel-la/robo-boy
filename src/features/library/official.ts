@@ -1,11 +1,11 @@
 import catalogData from '../../../library/catalog.json';
-import pandaSource from '../../../library/robots/panda/inspection.json?raw';
-import genericSource from '../../../library/robots/generic/inspection.json?raw';
-import genesisSource from '../../../library/robots/genesis/control.json?raw';
+import pandaSource from '../../../library/generic/panda-inspection/1.0.0.json?raw';
+import genericSource from '../../../library/generic/inspection/1.0.0.json?raw';
+import genesisSource from '../../../library/genesis/control/1.0.0.json?raw';
 import { checkedRelease } from './catalog';
 import type { Catalog, CachedRelease, LibrarySource } from './store';
 export const OFFICIAL_SOURCE_ID = 'roboboy-official-content';
-export const OFFICIAL_CATALOG_URL = 'https://raw.githubusercontent.com/tessel-la/robo-boy/dev/library/catalog.json';
+export const OFFICIAL_CATALOG_URL = 'https://raw.githubusercontent.com/tessel-la/robo-boy-catalog/main/catalog.json';
 export const officialSource: LibrarySource = {
   id: OFFICIAL_SOURCE_ID,
   title: 'Official',

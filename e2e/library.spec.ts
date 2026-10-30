@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { createHash } from 'node:crypto';
 const pandaSource = JSON.stringify({
-  ...JSON.parse(readFileSync(resolve('library/robots/panda/inspection.json'), 'utf8')),
+  ...JSON.parse(readFileSync(resolve('library/generic/panda-inspection/1.0.0.json'), 'utf8')),
   id: 'community.panda',
 });
 const catalog = JSON.parse(readFileSync(resolve('library/catalog.json'), 'utf8'));

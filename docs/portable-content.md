@@ -78,7 +78,9 @@ Open **Library** in the connection menu next to **Workspace layouts** and **Mana
 from the entry screen. Pad, BT and workspace menus also link to filtered Library views.
 
 - **My library** includes your saved Pads, BTs and workspace layouts, plus imported collections.
-- **Official** includes bundled Panda/generic inspection examples and an online refresh action.
+- **Official** includes offline starter collections and refreshes from
+  [Robo-Boy Catalog](https://github.com/tessel-la/robo-boy-catalog). Published content is grouped
+  by simulator, with shared examples under `generic/`.
 - **Add catalog** accepts public HTTPS JSON catalogs, including GitHub raw/blob URLs. Downloads use
   no credentials or redirects, validate hashes over exact bytes, and validate every document body.
 - **Add folder** snapshots a robot repository/library folder. A manifest can group related documents;

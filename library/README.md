@@ -23,13 +23,13 @@ the collection does not run the controls or BT; the BT is available separately t
 1. Export a collection from Library, or a workspace/Pad/BT from its existing menu. A workspace
    collection includes its referenced Pads, BT snapshots and 3D settings.
 2. Commit the JSON to your robot repository. Use a stable namespaced package `id`, SemVer `version`,
-   `title`, `entryDocument` and `documents`; see `robots/panda/inspection.json` for a complete example.
+   `title`, `entryDocument` and `documents`; see `generic/panda-inspection/1.0.0.json` for a complete example.
    Workspace `layoutId` and `treeId` reference package document IDs. Include every referenced document.
 3. Add an entry to a schema-version-1 `catalog.json` (or `roboboy-library.json` for local folders).
    Each entry has `id`, `title`, `kind` (`pad`, `behaviorTree`, `workspace` or `collection`), `version`,
    `url` and the lowercase hexadecimal `sha256` of the **exact file bytes**. Collections also list
    `kinds` so filtering works before download. Optional fields: `description` and `tags`.
-4. Run `sha256sum robots/panda/inspection.json` after the last edit/formatting change. Update the
+4. Run `sha256sum generic/panda-inspection/1.0.0.json` after the last edit/formatting change. Update the
    entry's hash. Keep published releases immutable; publish changes with a new version/path.
 5. Run `npm run check:content-library -- library/catalog.json` from the Robo-Boy repository.
    CI uses the same document validators as import review.
@@ -37,8 +37,10 @@ the collection does not run the controls or BT; the BT is available separately t
    for browser/desktop access. Relative package URLs resolve against the catalog URL. A cloned
    repository also works offline using **Add folder**; local manifest paths cannot leave that folder.
 
-Official content lives here and is bundled as an offline starting catalog. Online refresh reads
-`dev/library/catalog.json` from this repository once published. Community catalogs cannot mark
+Official releases live in [Robo-Boy Catalog](https://github.com/tessel-la/robo-boy-catalog), grouped
+by simulator (`genesis/`, `microduck/`) with shared examples under `generic/`. This directory keeps
+an offline starter snapshot; the catalog repository owns new releases. Online refresh reads
+`main/catalog.json` from that repository. Community catalogs cannot mark
 entries as Official. There is no account service, upload server or Git client inside Robo-Boy;
 sharing online means publishing JSON in your own repository/hosting and sharing its catalog URL.
 Executable external panels continue to use the separate panel inventory and permission review.

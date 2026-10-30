@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "title": "Robo-Boy official",
+  "title": "Robo-Boy Catalog",
   "items": [
     {
       "id": "la.tessel.panda.inspection",
@@ -13,9 +13,10 @@
         "behaviorTree"
       ],
       "version": "1.0.0",
-      "url": "robots/panda/inspection.json",
+      "url": "generic/panda-inspection/1.0.0.json",
       "sha256": "a9151861b1521e402e7ebefee3ba343dce142e23bd6f532952e6b59cee90b448",
       "tags": [
+        "generic",
         "panda",
         "inspection"
       ]
@@ -31,7 +32,7 @@
         "behaviorTree"
       ],
       "version": "1.0.0",
-      "url": "robots/generic/inspection.json",
+      "url": "generic/inspection/1.0.0.json",
       "sha256": "b3fcdd57fff4f7ad2c58fd59e79775f2abe117577291d51089d553f6cb323aae",
       "tags": [
         "generic",
@@ -49,10 +50,11 @@
         "behaviorTree"
       ],
       "version": "1.0.0",
-      "url": "robots/genesis/control.json",
+      "url": "genesis/control/1.0.0.json",
       "sha256": "5548a8bee3b25424cf4011e96e88015bcaa8285f19dad0d0a227ecb07c95c11f",
       "tags": [
         "genesis",
+        "simulator",
         "manipulator",
         "servo"
       ]

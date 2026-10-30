@@ -81,6 +81,32 @@ it('filters/searches, cancels reviews and surfaces invalid remappings without pa
   click('Close Library');
   expect(onClose).toHaveBeenCalled();
 });
+it('refreshes Official from its current endpoint after an app update moves the catalog', async () => {
+  const fetcher = vi.fn().mockResolvedValue({
+    ok: true,
+    headers: new Headers(),
+    body: null,
+    text: async () => JSON.stringify(officialSource.catalog),
+  });
+  vi.stubGlobal('fetch', fetcher);
+  dialog({
+    ...empty,
+    sources: [
+      {
+        ...officialSource,
+        url: 'https://raw.githubusercontent.com/tessel-la/robo-boy/dev/library/catalog.json',
+        catalog: { ...officialSource.catalog, items: [] },
+      },
+    ],
+  });
+  click(/Official/);
+  expect(screen.getByLabelText('Select Genesis control')).toBeVisible();
+  click('Refresh');
+  await waitFor(() => expect(fetcher).toHaveBeenCalled());
+  expect(fetcher.mock.calls[0][0]).toBe(officialSource.url);
+  await waitFor(() => expect(refresh).toHaveBeenCalled());
+  expect((await readLibrarySnapshot()).sources[0].url).toBe(officialSource.url);
+});
 it('renames with revision protection, archives and restores while preserving references', async () => {
   const item = makeCollection(cloneContent(bundledReleases[0].package));
   await writeLibrary({ collections: [item] });

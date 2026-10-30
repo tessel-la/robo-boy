@@ -84,8 +84,11 @@ export default function LibraryDialog({ initialFilter, data, storageError, refre
       if (prior instanceof HTMLElement && prior.isConnected) prior.focus();
     };
   }, []);
+  const savedOfficial = data.sources.find(source => source.id === OFFICIAL_SOURCE_ID);
   const sources = [
-    data.sources.find(source => source.id === OFFICIAL_SOURCE_ID) ?? officialSource,
+    // A catalog's relative paths belong to its endpoint. Reset the source when
+    // an app update moves Official, retaining independent imported collections.
+    savedOfficial && savedOfficial.url === officialSource.url ? savedOfficial : officialSource,
     ...data.sources.filter(source => source.id !== OFFICIAL_SOURCE_ID),
   ];
   const source = sourceId === 'mine' ? undefined : sources.find(source => source.id === sourceId);
