@@ -5,7 +5,7 @@ import { CAMERA_STREAM_PRESETS, probeCameraSourceSize, resolveCameraStreamParams
 import { isReplayRos } from '../../features/recordReplay/ReplaySession';
 import { subscribeToCameraInfo, subscribeToImages, type ImageEvent } from './cameraStreams';
 import { subscribeToMjpeg } from './mjpegStreams';
-import type { CameraImageOptions } from './cameraImageOptions';
+import { cameraPanelTopic, type CameraImageOptions } from './cameraImageOptions';
 
 /** Transport boundary: recorded/ROS timestamps or explicitly chosen latest-TF video. */
 export function subscribeToProjectionImages(
@@ -96,7 +96,7 @@ export function subscribeToProjectionImages(
   } else
     void (async () => {
       try {
-        const streamTopic = topic.replace(/\/compressed$/, '');
+        const streamTopic = cameraPanelTopic(topic, 'stream');
         const source = await probeCameraSourceSize(config.baseUrl, streamTopic);
         if (disposed) return;
         const params = source

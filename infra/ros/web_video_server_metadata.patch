@@ -14,8 +14,28 @@
 +++ b/src/streamers/jpeg_streamers.cpp
 @@ -31,0 +32,1 @@
 +#include "web_video_server/jpeg_ros_metadata.hpp"
-@@ -85,0 +87,4 @@
+@@ -66,1 +67,4 @@
+-  stream_.send_initial_header();
++  // Native images keep x-mixed-replace; WebKit fetch requires ordinary multipart.
++  const auto content_type = request.get_header_value_or_default("Accept", "") == "multipart/mixed" ?
++    "multipart/mixed" : "multipart/x-mixed-replace";
++  stream_.send_initial_header(content_type);
+@@ -85,0 +90,4 @@
 +  if (!invert_) {
 +    roboboy::add_ros_metadata(encoded_buffer, acquisition_header_.stamp.sec,
 +      acquisition_header_.stamp.nanosec, acquisition_header_.frame_id, source_width_, source_height_);
 +  }
+--- a/include/web_video_server/multipart_stream.hpp
++++ b/include/web_video_server/multipart_stream.hpp
+@@ -70,1 +70,1 @@
+-  void send_initial_header();
++  void send_initial_header(const std::string & content_type = "multipart/x-mixed-replace");
+--- a/src/multipart_stream.cpp
++++ b/src/multipart_stream.cpp
+@@ -67,1 +67,1 @@
+-void MultipartStream::send_initial_header()
++void MultipartStream::send_initial_header(const std::string & content_type)
+@@ -78,1 +78,2 @@
+-  .header("Content-type", "multipart/x-mixed-replace;boundary=" + boundary_)
++  .header("Vary", "Accept")
++  .header("Content-type", content_type + ";boundary=" + boundary_)

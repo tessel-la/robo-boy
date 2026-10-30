@@ -20,7 +20,7 @@ export class MjpegParser {
     contentType: string,
     private onFrame: (bytes: Uint8Array) => void
   ) {
-    const match = /^multipart\/x-mixed-replace\s*;[\s\S]*?boundary\s*=\s*(?:"([^"\r\n]+)"|([^;\s]+))/i.exec(
+    const match = /^multipart\/(?:x-mixed-replace|mixed)\s*;[\s\S]*?boundary\s*=\s*(?:"([^"\r\n]+)"|([^;\s]+))/i.exec(
       contentType
     );
     const value = match?.[1] ?? match?.[2];

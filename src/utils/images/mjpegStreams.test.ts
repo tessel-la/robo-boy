@@ -133,6 +133,7 @@ it('shares one full-rate reader/decoder, retaining bitmaps independently of TF/c
     stopB = subscribe(b, ros, '/video_stream/stream?quality=60&type=mjpeg&topic=/camera/image_raw');
   await flush();
   expect(fetch).toHaveBeenCalledOnce();
+  expect(fetch).toHaveBeenCalledWith(url, expect.objectContaining({ headers: { Accept: 'multipart/mixed' } }));
   controllers[0].enqueue(part());
   await flush();
   const first = a.mock.lastCall![0].frame;
@@ -156,6 +157,15 @@ it('shares one full-rate reader/decoder, retaining bitmaps independently of TF/c
   stopB();
   expect(aborts[0]).toHaveBeenCalled();
   expect(last.image.close).toHaveBeenCalledOnce();
+});
+
+it('decodes negotiated multipart/mixed with the same framing and acquisition metadata', async () => {
+  const received: Uint8Array[] = [];
+  const parser = new MjpegParser('multipart/mixed; boundary=frame', frame => received.push(frame));
+  for (const byte of part()) parser.push(new Uint8Array([byte]));
+  expect(received).toEqual([jpeg()]);
+  expect(jpegMetadata(received[0])).toEqual({ header, sourceSize: { width: 1280, height: 720 } });
+  expect(() => new MjpegParser('multipart/form-data; boundary=frame', () => {})).toThrow('boundary');
 });
 
 it('isolates robots and quality profiles, refreshing compatible consumers together', async () => {
