@@ -1,6 +1,7 @@
 import catalogData from '../../../library/catalog.json';
 import pandaSource from '../../../library/robots/panda/inspection.json?raw';
 import genericSource from '../../../library/robots/generic/inspection.json?raw';
+import genesisSource from '../../../library/robots/genesis/control.json?raw';
 import { checkedRelease } from './catalog';
 import type { Catalog, CachedRelease, LibrarySource } from './store';
 export const OFFICIAL_SOURCE_ID = 'roboboy-official-content';
@@ -13,6 +14,6 @@ export const officialSource: LibrarySource = {
   updatedAt: 0,
   catalog: catalogData as Catalog,
 };
-export const bundledReleases: CachedRelease[] = [pandaSource, genericSource].map((source, index) =>
+export const bundledReleases: CachedRelease[] = [pandaSource, genericSource, genesisSource].map((source, index) =>
   checkedRelease(source, catalogData.items[index] as Catalog['items'][number])
 );

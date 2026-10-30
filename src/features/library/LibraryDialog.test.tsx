@@ -47,9 +47,9 @@ it('reviews/imports all official collections atomically, maps names and opens on
   expect((await readLibrarySnapshot()).collections).toHaveLength(0);
   const bindings = screen.getAllByRole('textbox', { name: 'topic /joint_states' });
   fireEvent.change(bindings[0], { target: { value: '/panda/joints' } });
-  click('Import 2 collections');
-  await screen.findByText(/Imported 2 collections/);
-  expect((await readLibrarySnapshot()).collections).toHaveLength(2);
+  click(`Import ${bundledReleases.length} collections`);
+  await screen.findByText(`Imported ${bundledReleases.length} collections.`, { exact: false });
+  expect((await readLibrarySnapshot()).collections).toHaveLength(bundledReleases.length);
   expect(onUse).not.toHaveBeenCalled();
   const first = screen.getAllByRole('button', { name: 'Open workspace' })[0];
   fireEvent.click(first);

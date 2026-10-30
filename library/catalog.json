@@ -37,6 +37,25 @@
         "generic",
         "inspection"
       ]
+    },
+    {
+      "id": "la.tessel.genesis.control",
+      "title": "Genesis control",
+      "description": "Genesis workspace with 3D, TF tree, Camera and the three-joystick Genesis Control Pad, plus an X/Y twist BT example. Adapt topics and frames to your setup before use; no hardware validation is claimed.",
+      "kind": "collection",
+      "kinds": [
+        "workspace",
+        "pad",
+        "behaviorTree"
+      ],
+      "version": "1.0.0",
+      "url": "robots/genesis/control.json",
+      "sha256": "5548a8bee3b25424cf4011e96e88015bcaa8285f19dad0d0a227ecb07c95c11f",
+      "tags": [
+        "genesis",
+        "manipulator",
+        "servo"
+      ]
     }
   ]
 }

@@ -36,7 +36,7 @@ beforeEach(async () => {
 });
 describe('Library packages and ownership', () => {
   it('validates official collections, all document bodies, compatibility and dependency closure', () => {
-    expect(bundledReleases).toHaveLength(2);
+    expect(bundledReleases).toHaveLength(officialSource.catalog.items.length);
     for (const item of bundledReleases) expect(validateLibraryPackage(item.package).documents).toHaveLength(3);
     const pack = starter();
     pack.documents = pack.documents.filter(doc => doc.kind !== 'pad');
@@ -272,7 +272,7 @@ describe('transactional snapshots', () => {
     const saved = await readLibrarySnapshot();
     expect(saved.collections).toHaveLength(2);
     expect(saved.collections.find(item => item.id === items[0].id)!.origin).toEqual(items[0].origin);
-    expect(saved.releases).toHaveLength(2);
+    expect(saved.releases).toHaveLength(bundledReleases.length);
     expect(getLibraryPads()).toEqual([]);
   });
   it('aborts every write on identity collision, cancellation or uncloneable data', async () => {
