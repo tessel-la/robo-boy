@@ -316,7 +316,7 @@ const PanelManagerDialog = ({
   const installCatalogPanel = (panelId: string) => {
     if (!config) return;
     if (panelId === LEGACY_TIME_SERIES_ID) {
-      setNotice('Time Series is built into Robo-Boy. Add it from the panel menu.');
+      setNotice('Plotting is built into Robo-Boy. Add it from the panel menu.');
       return;
     }
     void requestPreview(withCatalogPanelSelected(config, installedIds, panelId), panelId);

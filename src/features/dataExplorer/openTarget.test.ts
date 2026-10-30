@@ -13,7 +13,7 @@ const topicsOf = (values: ReturnType<typeof recordValuesFor>) =>
   (values.options as unknown as { topics: string[]; allTopics: boolean }).topics;
 
 describe('opening a topic in another panel', () => {
-  it('adds a plotted line to an open Time Series and keeps its other lines and settings', () => {
+  it('adds a plotted line to an open Plotting and keeps its other lines and settings', () => {
     const first = timeSeriesValuesFor(undefined, request({ fieldPath: 'data' }));
     const config = first.config as unknown as { series: { topic: string; fieldPath: string }[] };
     expect(config.series.map(series => `${series.topic}:${series.fieldPath}`)).toEqual(['/speed:data']);

@@ -106,7 +106,7 @@ Navigation: drag to orbit, scroll to zoom, and pan with a middle- or right-butto
 
 ### Data Explorer
 
-The Data Explorer lists the robot's topics, services, actions and nodes with their publisher, subscriber, client and server counts, measures the traffic of topics you watch, shows message contents and interface schemas, draws who talks to whom, and collects diagnostics, logs and your own topic health rules. From a topic you can open Time Series, 3D, Camera, TF tree or recording settings. Endpoint counts, delivery settings and host-side rates need the ROS inspection companion, which the Docker stack starts; see [Data Explorer](data-explorer.md) for what each measurement means and how to deploy the companion.
+The Data Explorer lists the robot's topics, services, actions and nodes with their publisher, subscriber, client and server counts, measures the traffic of topics you watch, shows message contents and interface schemas, draws who talks to whom, and collects diagnostics, logs and your own topic health rules. From a topic you can open Plotting, 3D, Camera, TF tree or recording settings. Endpoint counts, delivery settings and host-side rates need the ROS inspection companion, which the Docker stack starts; see [Data Explorer](data-explorer.md) for what each measurement means and how to deploy the companion.
 
 In **Parameters**, select a node to inspect typed values and descriptions. Stage edits, choose **Review changes**,
 then **Apply changes** with robot control. Read-only values cannot be edited, and live changes are checked before
@@ -119,6 +119,10 @@ The behavior-tree editor provides sequence, selector, and parallel control nodes
 Enable **Keep running** before pressing Run when execution must continue after the browser is closed or disconnected. The ROS stack owns that run, publishes live status, and lets Robo-Boy reattach after login. A running-tree control appears in the app chrome; use it to jump back to the session or stop it. Leave the toggle off for the original browser-owned, session-only execution mode.
 
 Trees are stored in the current browser and can be imported or exported as JSON.
+
+### Plotting
+
+Plotting (previously Time Series) supports **Time series** and **XY plot** modes. Choose **Time / XY** beside **Signals** in the panel header, with the X signal beneath the header; configure same-message or explicit latest-X pairing in Settings. **More → Interval statistics** analyzes a frozen captured time interval. See [Plotting](native-time-series.md) for pairing, statistics and saved-layout compatibility.
 
 ## Custom Control Pads
 

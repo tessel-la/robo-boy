@@ -487,7 +487,7 @@ describe('GlobalAssistant', () => {
       ],
     }));
     const host = vi.fn((operations: WorkspaceEditOperation[]) => operations.map(operation => ({ operation, ok: true, panelId: 'new-plot', message: 'Added plot.' })));
-    const ref = renderOpenAssistant({ onApplyWorkspaceEdit: host, workspace: { ...workspace, panelCatalog: [{ id: 'timeSeries', name: 'Time Series' }] } });
+    const ref = renderOpenAssistant({ onApplyWorkspaceEdit: host, workspace: { ...workspace, panelCatalog: [{ id: 'timeSeries', name: 'Plotting' }] } });
     const oldApply = vi.fn(), apply = vi.fn(() => [{ ok: true, message: 'Added joint position.' }]);
     act(() => ref.current?.registerPanelSettingsBridge('old-plot', { panelType: 'timeSeries', settingsHelp: '', describe: () => ({}), apply: oldApply }));
     fireEvent.change(screen.getByLabelText('Ask the assistant'), { target: { value: 'add a time series panel with joint states' } });
@@ -511,7 +511,7 @@ describe('GlobalAssistant', () => {
       { op: 'configurePanel', panelType: 'timeSeries', settings: { paused: true } },
     ] }));
     const host = vi.fn((operations: WorkspaceEditOperation[]) => operations.map(operation => ({ operation, ok: true, panelId: 'new-plot', message: 'Added plot.' })));
-    const ref = renderOpenAssistant({ onApplyWorkspaceEdit: host, workspace: { ...workspace, panelCatalog: [{ id: 'timeSeries', name: 'Time Series' }] } });
+    const ref = renderOpenAssistant({ onApplyWorkspaceEdit: host, workspace: { ...workspace, panelCatalog: [{ id: 'timeSeries', name: 'Plotting' }] } });
     fireEvent.change(screen.getByLabelText('Ask the assistant'), { target: { value: 'add a time series panel' } });
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
     await waitFor(() => expect(host).toHaveBeenCalledOnce());
@@ -579,7 +579,7 @@ describe('GlobalAssistant', () => {
     sendAssistantChatMock.mockResolvedValueOnce(JSON.stringify({ kind: 'workspaceEdit', operations: [{ op: 'addPanel', panelType: 'timeSeries' }] }))
       .mockResolvedValueOnce(JSON.stringify({ kind: 'explanation', message: 'Plotting task continued.' }));
     renderOpenAssistant({
-      workspace: { ...workspace, panelCatalog: [{ id: 'timeSeries', name: 'Time Series' }] },
+      workspace: { ...workspace, panelCatalog: [{ id: 'timeSeries', name: 'Plotting' }] },
       onApplyWorkspaceEdit: operations => operations.map(operation => ({ operation, ok: true, panelId: 'plot', message: 'Added plot.' })),
     });
     fireEvent.change(screen.getByLabelText('Ask the assistant'), { target: { value: 'add a timeserie panel with the joints states showing in the ui' } });

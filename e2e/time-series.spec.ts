@@ -89,7 +89,7 @@ test('migrates saved external tiles, plots multiple topics, derives signals and 
   page,
 }) => {
   await seed(page);
-  const panel = page.getByRole('region', { name: 'Time Series', exact: true });
+  const panel = page.getByRole('region', { name: 'Plotting', exact: true });
   await expect(panel).toBeVisible();
   await expect(panel.locator('iframe')).toHaveCount(0);
   await expect.poll(() => getActiveRosSubscriptionCount(page, longTopic)).toBe(1);
@@ -106,7 +106,11 @@ test('migrates saved external tiles, plots multiple topics, derives signals and 
   const derived = panel.getByRole('region', { name: 'Position derived', exact: true });
   await derived.getByText('Math and derived signal', { exact: true }).click();
   await derived.getByLabel('Expression', { exact: true }).fill('x - y');
-  await derived.getByLabel('Secondary signal (y)').selectOption('b');
+  await derived.getByRole('button', { name: 'Secondary signal (y)', exact: true }).click();
+  await derived
+    .getByRole('group', { name: 'Secondary signal (y) choices' })
+    .getByRole('button', { name: /^Reference/ })
+    .click();
   await derived.getByLabel('Smoothing').selectOption('raw');
   await panel.getByRole('button', { name: 'Done', exact: true }).click();
   await publish(page, longTopic, { value: 10 });
@@ -123,7 +127,7 @@ test('migrates saved external tiles, plots multiple topics, derives signals and 
   await panel.getByRole('button', { name: 'More', exact: true }).click();
   await panel.getByRole('button', { name: 'Export CSV', exact: true }).click();
   const download = await downloadEvent;
-  expect(download.suggestedFilename()).toContain('timeseries');
+  expect(download.suggestedFilename()).toContain('plotting');
   await page.reload();
   // Entry requires connecting again; persisted sessions may reconnect automatically.
   if (await page.getByTitle('Advanced Options').isVisible()) {
@@ -210,8 +214,9 @@ test('rectangle zoom, wheel, pan, keyboard reset and clear work on the native ca
   await expect(panel.locator('.timeseries-footer')).toContainText('0 samples');
 });
 
-test('mobile settings contain long names and preserve a usable plot', async ({ page }) => {
+test('mobile settings contain long names and preserve a usable plot', async ({ page }, testInfo) => {
   await seed(page, true);
+  await expect(page.locator('.workspace-opening')).toHaveCount(0);
   const panel = page.locator('.timeseries-panel');
   for (const viewport of [
     { width: 320, height: 568 },
@@ -227,6 +232,18 @@ test('mobile settings contain long names and preserve a usable plot', async ({ p
         })
       )
       .toBeGreaterThan(0.75);
+    expect(await panel.locator('canvas').evaluate(el => el.getBoundingClientRect().height)).toBeGreaterThan(200);
+    const mode = panel.locator('.timeseries-header').getByRole('group', { name: 'Plot mode', exact: true });
+    await expect(mode).toBeVisible();
+    expect(await mode.evaluate(el => el.getBoundingClientRect().width)).toBeLessThanOrEqual(100);
+    await expect(panel.getByRole('button', { name: 'Settings', exact: true })).toContainText('Signals');
+    expect(
+      await mode.evaluate(el => {
+        const mode = el.getBoundingClientRect();
+        const signals = el.previousElementSibling!.getBoundingClientRect();
+        return mode.left >= signals.right && Math.abs(mode.top - signals.top) <= 4;
+      })
+    ).toBe(true);
     await expect
       .poll(() => panel.locator('.timeseries-legend').evaluate(el => el.getBoundingClientRect().height))
       .toBeLessThanOrEqual(52);
@@ -239,6 +256,7 @@ test('mobile settings contain long names and preserve a usable plot', async ({ p
         )
       )
       .toBeGreaterThanOrEqual(0);
+    await panel.screenshot({ path: testInfo.outputPath(`compact-header-${viewport.width}.png`) });
   }
   const primary = panel.locator('.timeseries-toolbar > button, .timeseries-more > button');
   expect(
@@ -326,7 +344,7 @@ test('adds the native panel and discovers multiple numeric fields without extern
   await installRosMock(page, { topics: [{ name: '/joint_states', type: 'JointState' }] });
   await connect(page);
   await page.getByLabel('Add workspace panel').first().click();
-  await page.getByRole('button', { name: 'Time Series', exact: true }).click();
+  await page.getByRole('button', { name: 'Plotting', exact: true }).click();
   const panel = page.locator('.timeseries-panel');
   await panel.getByRole('button', { name: 'Add signals', exact: true }).click();
   await panel.getByRole('button', { name: '/joint_states JointState', exact: true }).click();
@@ -435,7 +453,7 @@ test('remains interactive with 16 topics at 200 Hz and caps both canvas work and
   const panel = page.locator('.timeseries-panel');
   const startClick = Date.now();
   await panel.getByRole('button', { name: 'Settings', exact: true }).click();
-  await expect(panel.getByLabel('Time series settings', { exact: true })).toBeVisible();
+  await expect(panel.getByLabel('Plotting settings', { exact: true })).toBeVisible();
   expect(Date.now() - startClick).toBeLessThan(2000);
   await panel.getByRole('button', { name: 'Done', exact: true }).click();
   const result = await workload;
@@ -443,7 +461,7 @@ test('remains interactive with 16 topics at 200 Hz and caps both canvas work and
   expect(result.paints).toBeLessThanOrEqual(Math.ceil((result.elapsed / 1000) * 21) + 3);
   await expect(panel.locator('.timeseries-footer')).toContainText('3,200 samples');
   await page.screenshot({ path: '/tmp/roboboy-timeseries-streaming.png' });
-  console.log('Time Series browser workload:', result);
+  console.log('Plotting browser workload:', result);
   await page.getByLabel('Remove Streaming telemetry', { exact: true }).click();
   await expect.poll(() => getActiveRosSubscriptionCount(page, '/stream0')).toBe(0);
   await expect.poll(() => getActiveRosSubscriptionCount(page, '/stream15')).toBe(0);

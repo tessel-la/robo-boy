@@ -186,7 +186,7 @@ describe('PanelManagerDialog', () => {
     );
   });
 
-  it('omits legacy Time Series from the available catalog while offering other external panels', async () => {
+  it('omits legacy Plotting from the available catalog while offering other external panels', async () => {
     api.catalog.mockResolvedValue({
       panels: [
         { id: 'la.tessel.roboboy.timeseries', name: 'ROS Time Series', description: 'Plots.', version: '2.0.0' },
@@ -209,7 +209,7 @@ describe('PanelManagerDialog', () => {
     expect(screen.getAllByRole('button', { name: 'Install' })).toHaveLength(1);
   });
 
-  it('directs a requested legacy Time Series install to the built-in panel', async () => {
+  it('directs a requested legacy Plotting install to the built-in panel', async () => {
     render(
       <PanelManagerDialog
         installedPanels={[]}
@@ -221,7 +221,7 @@ describe('PanelManagerDialog', () => {
       />
     );
 
-    await screen.findByText('Time Series is built into Robo-Boy. Add it from the panel menu.');
+    await screen.findByText('Plotting is built into Robo-Boy. Add it from the panel menu.');
     expect(api.preview).not.toHaveBeenCalled();
     expect(api.apply).not.toHaveBeenCalled();
   });
@@ -312,7 +312,7 @@ describe('PanelManagerDialog', () => {
     await waitFor(() => expect(api.apply).toHaveBeenCalledWith('', 'sha256-plan'));
   });
 
-  it('keeps a legacy external Time Series installation removable', async () => {
+  it('keeps a legacy external Plotting installation removable', async () => {
     const officialSummary = {
       id: 'la.tessel.roboboy.timeseries',
       name: 'ROS Time Series',

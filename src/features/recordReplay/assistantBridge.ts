@@ -13,7 +13,7 @@ import { defaultRecordOptions, type RecorderStatus, type RecordOptions } from '.
  */
 
 export const RECORD_REPLAY_SETTINGS_HELP = [
-  'Record & Replay plays MCAP recordings (Camera, Time Series, TF, 3D and the Data Explorer follow it) and drives the recorder on the ROS host. Its settings report the open recording (name, duration, every topic with type, message count, average rate and a short definition), the playback cursor, messages sampled from it, recordings stored on the ROS host, and the recorder\'s state and options.',
+  'Record & Replay plays MCAP recordings (Camera, Plotting, TF, 3D and the Data Explorer follow it) and drives the recorder on the ROS host. Its settings report the open recording (name, duration, every topic with type, message count, average rate and a short definition), the playback cursor, messages sampled from it, recordings stored on the ROS host, and the recorder\'s state and options.',
   'It accepts: "openRecording":"<path of a recording file or single-file recording on the ROS host>" (a file on this device must be chosen by the user); "browse":"<folder on the ROS host>"; "closeRecording":true;',
   '"play":true|false; "seek":<seconds from the start>; "speed":0.25|0.5|1|2|4|8; "loop":true|false;',
   '"sample":["/topic",...] (up to 6) reads the latest message of each topic at the cursor (after "seek" when both are given); the messages appear in "samples" on the next turn, so ask about them in "followUp";',
@@ -104,7 +104,7 @@ export function describeRecordReplay(input: RecordReplayBridgeInput) {
             unreadable: topic.error,
             definition: topic.definition ? topic.definition.slice(0, 300) + (topic.definition.length > 300 ? '…' : '') : undefined,
           })),
-          followedBy: 'Camera, Time Series, TF, 3D and the Data Explorer show this recording; robot controls stay on the live robot.',
+          followedBy: 'Camera, Plotting, TF, 3D and the Data Explorer show this recording; robot controls stay on the live robot.',
         }
       : { state: replay.phase === 'loading' ? 'opening a recording' : replay.phase === 'error' ? 'error' : 'no recording open', error: replay.error },
     samples: input.samples.length

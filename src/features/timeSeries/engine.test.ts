@@ -134,6 +134,6 @@ describe('streaming engine', () => {
     expect([...engine.runtime.values()].every(r => r.buffer.size === 1000)).toBe(true);
     // 64k arrivals represent 20 seconds of 16 x 200 Hz telemetry; loose guard catches quadratic regressions.
     expect(elapsed).toBeLessThan(5000);
-    console.info(`Time Series: 64,000 arrivals / 16 streams in ${elapsed.toFixed(1)} ms`);
+    console.info(`Plotting: 64,000 arrivals / 16 streams in ${elapsed.toFixed(1)} ms`);
   });
 });

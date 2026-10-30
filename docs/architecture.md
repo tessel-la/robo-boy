@@ -208,6 +208,14 @@ flow instead of owning a second BT-editing implementation; opening the assistant
 Ctrl/Cmd+I pins that bridge rather than starting another conversation. See
 [AI assistant](ai-assistant.md) for capabilities, trust boundaries, and privacy/credential handling.
 
+### Plotting
+
+The built-in **Plotting** panel retains the `timeSeries` identity. Its existing tile-owned engine and
+subscription controller serve both time-series and XY views. Bounded samples carry transient message/connection
+identity for explicit XY pairing; rendering caches pairing by source snapshot/configuration. Interval analysis
+uses a frozen sample snapshot independently of continuing acquisition. Serializable schema-5 settings migrate
+previous configurations to time-series mode. See [Plotting](native-time-series.md) for user-facing behavior.
+
 ## State And Persistence
 
 State is intentionally local to the browser:

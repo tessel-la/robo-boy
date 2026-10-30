@@ -144,3 +144,19 @@ it('discards topic types returned by a previous connection and reports inactive 
   act(() => { outcomes = bridge.apply({ addSignals: [{ topic: '/old', fieldPath: 'value' }] }); });
   expect(outcomes).toEqual([{ ok: false, message: '/old is not in the ROS graph, so its message type is unknown.' }]);
 });
+
+it('changes plot mode from the Signals header without losing captured history or subscriptions', async () => {
+  const p = props();
+  render(<TimeSeriesPanel {...p} />);
+  await act(async () => {});
+  act(() => mocks.topics[0].listener?.({ x: 1, y: 2 }));
+  const count = mocks.engine!.runtime.get('a')!.buffer.size;
+  expect(screen.getByRole('button', { name: 'Time series' })).toHaveAttribute('aria-pressed', 'true');
+  fireEvent.click(screen.getByRole('button', { name: 'XY plot' }));
+  expect(p.onStateChange.mock.lastCall?.[0].config.mode).toBe('xy');
+  expect(screen.getByRole('button', { name: 'XY plot' })).toHaveAttribute('aria-pressed', 'true');
+  expect(mocks.engine!.runtime.get('a')!.buffer.size).toBe(count);
+  fireEvent.click(screen.getByRole('button', { name: 'Time series' }));
+  expect(p.onStateChange.mock.lastCall?.[0].config.mode).toBe('time');
+  expect(mocks.topics).toHaveLength(1);
+});

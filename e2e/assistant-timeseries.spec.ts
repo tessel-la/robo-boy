@@ -87,7 +87,7 @@ for (const mode of ['desktop', 'mobile', 'missing-follow-up'] as const) {
     }
     await page.getByRole('button', { name: 'Close assistant', exact: true }).click();
     await expect(page.getByTestId('assistant-panel')).toHaveCount(0);
-    const plot = page.getByRole('region', { name: 'Time Series', exact: true });
+    const plot = page.getByRole('region', { name: 'Plotting', exact: true });
     await expect(plot).toHaveCount(1);
     await expect(plot.getByRole('button', { name: 'shoulder', exact: true })).toContainText('0.2 rad');
     await expect(plot.getByRole('button', { name: 'elbow', exact: true })).toContainText('-0.3 rad');
@@ -109,6 +109,6 @@ for (const mode of ['desktop', 'mobile', 'missing-follow-up'] as const) {
     expect(prompts.at(-1)).toContain('"connected":true');
     expect(prompts.at(-1)).toContain('"fieldPath":"position[1]"');
     expect(prompts.at(-1)).toContain('"latestSampleAt":');
-    expect(prompts.at(-1)).toContain('For Time Series');
+    expect(prompts.at(-1)).toContain('For Plotting');
   });
 }

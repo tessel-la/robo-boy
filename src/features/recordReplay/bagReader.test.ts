@@ -79,7 +79,7 @@ describe('BagReader', () => {
     const messages = [];
     for await (const item of reader.read(at(0), at(1), ['/joints'])) messages.push(item);
     const { position, data } = messages[0].message as { position: unknown; data: unknown };
-    // Panels index these like live messages (e.g. a Time Series signal on position[1]).
+    // Panels index these like live messages (e.g. a Plotting signal on position[1]).
     expect(Array.isArray(position)).toBe(true);
     expect(position).toEqual([0.25, -0.5, 1.5]);
     expect(data).toBeInstanceOf(Uint8Array);
