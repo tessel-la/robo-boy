@@ -21,6 +21,23 @@ const image = (sec = 2, color = [255, 0, 0]) => ({
   data: [...color, ...color, ...color, ...color],
 });
 async function setup(page: Page) {
+  // A new layer starts on the streamer before this fixture selects ROS. Serve its
+  // initial probe/response explicitly instead of relying on Vite's HTML fallback.
+  const jpeg = await sharp({ create: { width: 2, height: 2, channels: 3, background: '#ff0000' } })
+    .jpeg()
+    .toBuffer();
+  await page.route('**/video_stream/**', route => {
+    if (new URL(route.request().url()).pathname.endsWith('/snapshot'))
+      return route.fulfill({ contentType: 'image/jpeg', body: jpeg });
+    return route.fulfill({
+      contentType: 'multipart/mixed; boundary=frame',
+      body: Buffer.concat([
+        Buffer.from(`--frame\r\nContent-Type: image/jpeg\r\nContent-Length: ${jpeg.length}\r\n\r\n`),
+        jpeg,
+        Buffer.from('\r\n--frame--\r\n'),
+      ]),
+    });
+  });
   await installRosMock(page, {
     topics: [
       { name: topic, type: 'sensor_msgs/msg/Image' },
