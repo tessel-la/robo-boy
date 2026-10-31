@@ -1,10 +1,10 @@
 # Robo-Boy content library
 
 Open **Library** in the connection switcher, next to **Workspace layouts** and **Manage panels**.
-The entry screen also has a Library button. Browse Official or add a custom HTTPS catalog, import
-JSON files, or select a local robot repository folder. You can select entries or import a whole source.
-Every import is reviewed and creates independent local snapshots. Opening a workspace, Pad or BT is
-an explicit action after import.
+The entry screen also has a Library button. Use **Saved** to find layouts, Pads and behavior trees by name. Use **Browse** to find Official
+content or another source. **Import** offers **File…**, **Folder…** and **Online catalog…**.
+Review before saving, then choose **Open layout**, **Add Pad** or **Open tree**. Imported trees
+also appear in the BT editor’s **Saved Trees** menu and node palette, including after reload.
 
 The bundled Panda and generic inspection collections provide a workspace, passive JointState readout
 Pad and a readiness condition BT. They are examples, not hardware-validated configurations. Review
@@ -16,7 +16,7 @@ four-panel workspace (3D, TF tree, Camera and Pad), the three servo joysticks, a
 0.1 m/s; it does not request a 0.1 m displacement. The Pad and BT use
 `/arm_1/servo_node/delta_twist_cmds`. Frame, timestamp and servo requirements depend on the robot
 configuration. The workspace does not specify a camera topic or enable a URDF layer. Importing
-the collection does not run the controls or BT; the BT is available separately through **Open BT**.
+the collection does not run the controls or BT; the BT is available separately through **Open tree**.
 
 ## Publish a collection
 
@@ -35,7 +35,7 @@ the collection does not run the controls or BT; the BT is available separately t
    CI uses the same document validators as import review.
 6. Share an HTTPS raw catalog URL (GitHub blob links are normalized). Serve public JSON with CORS
    for browser/desktop access. Relative package URLs resolve against the catalog URL. A cloned
-   repository also works offline using **Add folder**; local manifest paths cannot leave that folder.
+   repository also works offline using **Import → Folder…**; local manifest paths cannot leave that folder.
 
 Official releases live in [Robo-Boy Catalog](https://github.com/tessel-la/robo-boy-catalog), grouped
 by simulator (`genesis-manipulator/`, `microduck/`) with shared examples under `generic/`. This directory keeps
@@ -60,10 +60,10 @@ again; Robo-Boy does not scan arbitrary paths or watch the checkout. Maximums: 3
 
 | Input | Action | Discovery |
 | --- | --- | --- |
-| An exported Pad, BT, workspace or collection JSON | **Import files** | Reads the supported document format; no catalog required. |
-| A folder of exports, including a cloned robot repository | **Add folder** | Recursively inspects the selected files for supported exports. With a `catalog.json` or `roboboy-library.json`, uses its entries and verifies their hashes instead. |
-| A library catalog hosted on GitHub or HTTPS | **Add catalog** | Reads the catalog and its referenced packages; GitHub blob links to the catalog are accepted. |
-| A GitHub repository homepage | — | Does not crawl the repository. Supply its catalog file URL or clone it and use **Add folder**. |
+| An exported Pad, BT, workspace or collection JSON | **Import → File…** | Reads the supported document format; no catalog required. |
+| A folder of exports, including a cloned robot repository | **Import → Folder…** | Recursively inspects the selected files for supported exports. With a `catalog.json` or `roboboy-library.json`, uses its entries and verifies their hashes instead. |
+| A library catalog hosted on GitHub or HTTPS | **Import → Online catalog…** | Reads the catalog and its referenced packages; GitHub blob links to the catalog are accepted. |
+| A GitHub repository homepage | — | Does not crawl the repository. Supply its catalog file URL or clone it and use **Import → Folder…**. |
 
 Discovery identifies supported JSON structures, not arbitrary robot configuration files. Recognized
 content is reviewed before import. Adding a source does not automatically import or activate it.

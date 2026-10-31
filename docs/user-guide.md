@@ -154,8 +154,9 @@ Robo-Boy has no cloud user account or server-side application database. Custom t
 ### Importing reusable content
 
 Open **Library** in the connection switcher, next to **Workspace layouts** and **Manage panels**,
-or on the entry screen. Browse Official, add a public HTTPS catalog, choose a robot repository folder,
-or import JSON. Review selected/all collections before saving local copies, then explicitly open a
-workspace, add a Pad or open a BT. Export a collection or selected/all library content to share it.
+or on the entry screen. **Saved** lists layouts, Pads and behavior trees by name; **Browse** shows
+Official and custom sources. **Import** offers a JSON file, folder or online catalog. Review, save,
+then open the content. Imported trees also appear in the BT editor’s **Saved Trees** menu.
+Export and collection management are under **Saved options** and **Details & collection**.
 The existing Pad, BT and workspace import menus remain available.
 See [Portable content files](portable-content.md) for supported formats and sharing limits.

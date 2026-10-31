@@ -199,7 +199,7 @@ export default function ConnectionTabs({
             aria-label="Library"
           >
             <span>Library</span>
-            <span>Local, official & custom content</span>
+            <span>Layouts, Pads & behavior trees</span>
           </button>
           {onManageWorkspaceLayouts && (
             <button

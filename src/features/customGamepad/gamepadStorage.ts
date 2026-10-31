@@ -268,10 +268,10 @@ export async function importGamepadFile(file: File, signal?: AbortSignal): Promi
         title: 'Import Pads',
         items: pads.map(pad => `${pad.name} · ${pad.components.length} components`),
         details: [
-          'Create independent editable copies in your Pad library.',
-          'Review ROS names in the editor before use. Robot compatibility has not been checked. Import does not select or arm a Pad.',
+          'Save these Pads for later use.',
+          'Check topics and controls before use.',
         ],
-        action: 'Import copies',
+        action: 'Import',
       },
       signal
     );

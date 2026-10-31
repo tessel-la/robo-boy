@@ -2,6 +2,7 @@ import { readContentFile, importError } from '../../library/json';
 import { readTree, copyTree, serializeTree } from '../portableTree';
 import { BehaviorTree, SavedBehaviorTree } from '../types';
 import { syncReferencedSubtrees } from '../subtreeUtils';
+import { getLibraryTree, getLibraryTrees } from '../../library/runtime';
 
 const STORAGE_KEY = 'robo-boy-behavior-trees';
 const STORAGE_VERSION = '1.0.0';
@@ -33,6 +34,12 @@ export const listBehaviorTrees = (): SavedBehaviorTree[] => {
     return [];
   }
 };
+
+/** Imported templates remain in Library; authoring writes only touch saved editor trees. */
+export const listAvailableBehaviorTrees = () => [
+  ...listBehaviorTrees().map(item => ({ ...item, imported: false })),
+  ...getLibraryTrees().map(tree => ({ tree, version: STORAGE_VERSION, imported: true })),
+];
 
 /**
  * Save a behavior tree to localStorage
@@ -111,7 +118,9 @@ export const loadBehaviorTree = (id: string): BehaviorTree | null => {
   try {
     const trees = listBehaviorTrees();
     const found = trees.find((t) => t.tree.id === id);
-    return found ? found.tree : null;
+    if (found) return found.tree;
+    const imported = getLibraryTree(id);
+    return imported ? copyTree(imported) : null;
   } catch (error) {
     console.error('Failed to load behavior tree:', error);
     return null;
@@ -173,15 +182,17 @@ export const importBehaviorTree = async (file: File, signal?: AbortSignal): Prom
         title: 'Import Behavior Tree',
         items: [`${tree.name} · ${tree.nodes.length} nodes`],
         details: [
-          'Open an independent copy in the editor. Unsaved editor changes will be replaced. Save the imported copy to keep it in your library.',
-          'Embedded subtrees are copied as snapshots. Execution results and links to saved source trees are removed.',
-          'Review ROS names and payloads before running. Robot compatibility has not been checked.',
+          'Save this tree and open it in the editor. Unsaved editor changes will be replaced.',
+          'Check topics and commands before running.',
         ],
-        action: 'Open copy',
+        action: 'Import',
       },
       signal
     );
-    return accepted && !signal?.aborted ? copyTree(tree) : null;
+    if (!accepted || signal?.aborted) return null;
+    const imported = copyTree(tree);
+    if (!saveBehaviorTree(imported)) throw new Error('Unable to save the imported tree. Check browser storage and retry.');
+    return imported;
   } catch (error) {
     if (!signal?.aborted) {
       const { showImportError } = await import('../../library/ImportReview');

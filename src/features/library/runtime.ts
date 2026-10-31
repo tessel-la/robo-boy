@@ -11,6 +11,7 @@ export const libraryDocumentId = (collectionId: string, docId: string) => `libra
 export function setLibrarySnapshot(next: LibraryCollection[]) {
   collections = next;
   window.dispatchEvent(new Event('robo-boy-gamepads-changed'));
+  window.dispatchEvent(new Event('robo-boy-behavior-trees-changed'));
   window.dispatchEvent(new Event('robo-boy-library-ready'));
 }
 export function getLibraryPads(): GamepadLibraryItem[] {
@@ -29,6 +30,18 @@ export function getLibraryPads(): GamepadLibraryItem[] {
         };
       })
   );
+}
+export function getLibraryTrees(): BehaviorTree[] {
+  return collections
+    .filter(item => !item.archivedAt)
+    .flatMap(item =>
+      item.package.documents
+        .filter(doc => doc.kind === 'behaviorTree')
+        .map(doc => ({
+          ...(cloneContent(doc.data) as BehaviorTree),
+          id: libraryDocumentId(item.id, doc.id),
+        }))
+    );
 }
 export function getLibraryTree(id: string): BehaviorTree | null {
   for (const item of collections)

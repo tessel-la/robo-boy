@@ -21,16 +21,22 @@ import {
   type CachedRelease,
 } from './store';
 import { officialSource, bundledReleases, OFFICIAL_SOURCE_ID } from './official';
-import { openLibraryDocument, type LibraryOpenRequest } from './runtime';
+import { libraryDocumentId, openLibraryDocument, type LibraryOpenRequest } from './runtime';
 import { readSavedContent, type SavedContent } from './savedContent';
 import type { LibraryData, LibraryFilter } from './LibraryProvider';
+import type { ContentDocument } from './packages';
 import './LibraryDialog.css';
+const documentName = (doc: ContentDocument) => {
+  const data = doc.data as { name?: string; title?: string };
+  return data.name ?? data.title ?? doc.id;
+};
 interface Preview {
   package: LibraryPackage;
   origin?: LibraryCollection['origin'];
   bindings: Binding[];
   collection?: LibraryCollection;
   saved?: SavedContent;
+  documentId?: string;
 }
 interface Props {
   initialFilter: LibraryFilter;
@@ -42,6 +48,8 @@ interface Props {
 }
 export default function LibraryDialog({ initialFilter, data, storageError, refresh, onClose, onUse }: Props) {
   const dialog = useRef<HTMLDialogElement>(null);
+  const previewPanel = useRef<HTMLElement>(null);
+  const itemsPanel = useRef<HTMLElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const folderInput = useRef<HTMLInputElement>(null);
   const controller = useRef(new AbortController());
@@ -56,11 +64,15 @@ export default function LibraryDialog({ initialFilter, data, storageError, refre
   const [error, setError] = useState('');
   const [url, setUrl] = useState('');
   const [addingSource, setAddingSource] = useState(false);
+  const [selecting, setSelecting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [names, setNames] = useState<Record<string, string>>({});
   const [showArchived, setShowArchived] = useState(false);
   const [saved, setSaved] = useState(() => readSavedContent());
   const [folderRefresh, setFolderRefresh] = useState<string>();
+  useEffect(() => {
+    if (preview.length && window.matchMedia?.('(max-width: 760px)').matches) previewPanel.current?.focus();
+  }, [preview.length, reviewing]);
   useEffect(() => {
     const prior = document.activeElement;
     dialog.current?.showModal();
@@ -103,27 +115,32 @@ export default function LibraryDialog({ initialFilter, data, storageError, refre
         description: item.description,
         kinds: item.kinds ?? (item.kind === 'collection' ? [] : [item.kind]),
         catalog: item,
+        documentId: undefined as string | undefined,
         collection: undefined as LibraryCollection | undefined,
         saved: undefined as SavedContent | undefined,
       }))
     : [
         ...data.collections
           .filter(item => showArchived || !item.archivedAt)
-          .map(item => ({
-            id: item.id,
-            title: item.title,
-            description: item.archivedAt ? 'Archived · references preserved' : item.package.description,
-            kinds: documentKinds(item.package),
-            collection: item,
-            catalog: undefined as CatalogItem | undefined,
-            saved: undefined as SavedContent | undefined,
-          })),
+          .flatMap(item =>
+            item.package.documents.map(doc => ({
+              id: libraryDocumentId(item.id, doc.id),
+              title: documentName(doc),
+              description: item.archivedAt ? `${item.title} · Archived` : item.title,
+              kinds: [doc.kind],
+              documentId: doc.id,
+              collection: item,
+              catalog: undefined as CatalogItem | undefined,
+              saved: undefined as SavedContent | undefined,
+            }))
+          ),
         ...saved.items.map(item => ({
           id: item.id,
           title: item.title,
           description: 'Saved on this device',
           kinds: documentKinds(item.package),
           saved: item,
+          documentId: undefined as string | undefined,
           collection: undefined as LibraryCollection | undefined,
           catalog: undefined as CatalogItem | undefined,
         })),
@@ -156,6 +173,7 @@ export default function LibraryDialog({ initialFilter, data, storageError, refre
     setBusy(false);
     setSourceId(id);
     setSelected([]);
+    setSelecting(false);
     setPreview([]);
     setReviewing(false);
     setError('');
@@ -176,6 +194,7 @@ export default function LibraryDialog({ initialFilter, data, storageError, refre
           package: row.collection.package,
           bindings: packageBindings(row.collection.package),
           collection: row.collection,
+          documentId: row.documentId,
         },
       ]);
 
@@ -185,11 +204,13 @@ export default function LibraryDialog({ initialFilter, data, storageError, refre
       setPreview([{ package: row.saved.package, bindings: packageBindings(row.saved.package), saved: row.saved }]);
       return;
     }
+    setPreview([]);
     if (row.catalog && source)
       await run(async signal => {
         const release = await resolveRelease(source, row.catalog!, releases.get(row.catalog!.sha256), signal);
         if (signal.aborted) return;
         if (!releases.has(release.sha256)) await writeLibrary({ releases: [release] }, signal);
+        if (signal.aborted) return;
         setPreview([
           {
             package: release.package,
@@ -204,15 +225,8 @@ export default function LibraryDialog({ initialFilter, data, storageError, refre
         ]);
       });
   };
-  const prepareImport = () =>
+  const prepareImport = (ids: string[]) =>
     run(async signal => {
-      const ids = selected.length
-        ? selected
-        : !preview.length && source
-          ? visible.map(row => row.id)
-          : (preview
-              .map(item => item.origin?.itemId ?? item.collection?.id ?? item.saved?.id)
-              .filter(Boolean) as string[]);
       const plans: Preview[] = [];
       const downloaded: CachedRelease[] = [];
       let totalBytes = 0;
@@ -234,9 +248,6 @@ export default function LibraryDialog({ initialFilter, data, storageError, refre
               sha256: release.sha256,
             },
           });
-        } else if (row?.collection || row?.saved) {
-          const pack = (row.collection ?? row.saved)!.package;
-          plans.push({ package: pack, bindings: packageBindings(pack) });
         }
       }
       if (!plans.length) throw new Error('Select content to import.');
@@ -260,9 +271,7 @@ export default function LibraryDialog({ initialFilter, data, storageError, refre
           bindings: packageBindings(collection.package),
         }))
       );
-      setNotice(
-        `Imported ${collections.length} collection${collections.length === 1 ? '' : 's'}. Choose a document below to open it.`
-      );
+      setNotice(`Imported ${collections.length} collection${collections.length === 1 ? '' : 's'}. Ready to open.`);
     });
   const readFile = (file: File) =>
     run(async signal => {
@@ -289,11 +298,12 @@ export default function LibraryDialog({ initialFilter, data, storageError, refre
       await writeLibrary({ sources: [result.source], releases: result.releases }, signal);
       await refresh();
       setSourceId(result.source.id);
-      setSelected(result.source.catalog.items.map(item => item.id));
+      setSelected([]);
+      setSelecting(false);
       setPreview([]);
       setReviewing(false);
       setNotice(
-        `Folder available offline. ${result.skipped} unrelated JSON file${result.skipped === 1 ? '' : 's'} ignored. Select entries or import the collection.`
+        `Folder added. ${result.skipped ? `${result.skipped} unrelated JSON files skipped.` : 'Choose what to import.'}`
       );
       setFolderRefresh(undefined);
     });
@@ -329,7 +339,7 @@ export default function LibraryDialog({ initialFilter, data, storageError, refre
       const catalog = readCatalog(await fetchContent(source.url!, signal));
       await writeLibrary({ sources: [{ ...source, catalog, updatedAt: Date.now() }] }, signal);
       await refresh();
-      setNotice('Catalog refreshed. Existing copies are unchanged.');
+      setNotice('Catalog updated.');
     });
   const download = (value: unknown, name: string) => {
     const text = JSON.stringify(value, null, 2);
@@ -345,7 +355,14 @@ export default function LibraryDialog({ initialFilter, data, storageError, refre
     URL.revokeObjectURL(url);
   };
   const exported = () => {
-    const chosen = selected.length ? rows.filter(row => selected.includes(row.id)) : rows;
+    const chosen = [
+      ...new Map(
+        (selected.length ? rows.filter(row => selected.includes(row.id)) : rows).map(row => [
+          row.collection?.id ?? row.id,
+          row,
+        ])
+      ).values(),
+    ];
     const packages = chosen
       .map(row => (row.collection ? { ...row.collection.package, title: row.collection.title } : row.saved?.package))
       .filter(Boolean);
@@ -384,9 +401,7 @@ export default function LibraryDialog({ initialFilter, data, storageError, refre
         previous.map(entry => (entry.collection?.id === next.id ? { ...entry, collection: next } : entry))
       );
       setConfirmDelete(null);
-      setNotice(
-        changes.archivedAt ? 'Collection archived. Workspace references remain available.' : 'Collection updated.'
-      );
+      setNotice(changes.archivedAt ? 'Collection archived. Open layouts still work.' : 'Saved.');
     });
   const updates = (item: LibraryCollection) => {
     const origin = item.origin;
@@ -412,32 +427,53 @@ export default function LibraryDialog({ initialFilter, data, storageError, refre
       <ManagementDialogHeader
         title="Library"
         titleId="library-title"
-        subtitle="Workspaces, behavior trees and Pads"
+        subtitle="Layouts, Pads & behavior trees"
         closeLabel="Close Library"
         onClose={onClose}
       />
 
       <div className="library-toolbar">
-        <button disabled={busy || !!storageError} onClick={() => fileInput.current?.click()}>
-          Import file
-        </button>
-        <button
-          disabled={busy || !!storageError}
-          onClick={() => {
-            setFolderRefresh(undefined);
-            folderInput.current?.click();
-          }}
-        >
-          Add folder
-        </button>
-        <button disabled={busy || !!storageError} onClick={() => setAddingSource(value => !value)}>
-          Add catalog
-        </button>
-        {sourceId === 'mine' && (
-          <button disabled={busy || !rows.length} onClick={exported}>
-            Export {selected.length ? 'selected' : 'all'}
+        <nav aria-label="Library views">
+          <button aria-pressed={sourceId === 'mine'} onClick={() => chooseSource('mine')}>
+            Saved
           </button>
-        )}
+          <button aria-pressed={sourceId !== 'mine'} onClick={() => chooseSource(OFFICIAL_SOURCE_ID)}>
+            Browse
+          </button>
+        </nav>
+        <details className="library-import-menu">
+          <summary>Import</summary>
+          <div>
+            <button
+              disabled={busy || !!storageError}
+              onClick={event => {
+                event.currentTarget.closest('details')?.removeAttribute('open');
+                fileInput.current?.click();
+              }}
+            >
+              File…
+            </button>
+            <button
+              disabled={busy || !!storageError}
+              onClick={event => {
+                event.currentTarget.closest('details')?.removeAttribute('open');
+                setFolderRefresh(undefined);
+                folderInput.current?.click();
+              }}
+            >
+              Folder…
+            </button>
+            <button
+              disabled={busy || !!storageError}
+              onClick={event => {
+                event.currentTarget.closest('details')?.removeAttribute('open');
+                setAddingSource(value => !value);
+              }}
+            >
+              Online catalog…
+            </button>
+          </div>
+        </details>
         <input
           ref={fileInput}
           type="file"
@@ -491,109 +527,109 @@ export default function LibraryDialog({ initialFilter, data, storageError, refre
         {(error || storageError) && <p role="alert">{error || storageError}</p>}
         {storageError && <button onClick={() => void refresh()}>Retry storage</button>}
       </div>
-      <div className="library-layout">
-        <nav aria-label="Library sources">
-          <button className={sourceId === 'mine' ? 'selected' : ''} onClick={() => chooseSource('mine')}>
-            My library
-          </button>
-          {sources.map(source => (
-            <button
-              className={sourceId === source.id ? 'selected' : ''}
-              key={source.id}
-              onClick={() => chooseSource(source.id)}
-            >
-              {source.id === OFFICIAL_SOURCE_ID ? 'Official' : source.title}
-              <small>
-                {source.id === OFFICIAL_SOURCE_ID
-                  ? 'Bundled + online'
-                  : source.type === 'folder'
-                    ? 'Folder snapshot'
-                    : 'HTTPS catalog'}
-              </small>
-            </button>
-          ))}
-        </nav>
-        <section className="library-items" aria-label="Library content">
-          {sourceId === 'mine' && (
-            <label className="library-check">
-              <input type="checkbox" checked={showArchived} onChange={event => setShowArchived(event.target.checked)} />
-              Show archived collections
-            </label>
+      <div className={`library-layout${preview.length || busy ? ' library-has-preview' : ''}`}>
+        <section ref={itemsPanel} tabIndex={-1} className="library-items" aria-label="Library content">
+          {source && (
+            <div className="library-source-picker">
+              <label>
+                Source
+                <select value={sourceId} onChange={event => chooseSource(event.target.value)}>
+                  {sources.map(item => (
+                    <option key={item.id} value={item.id}>
+                      {item.id === OFFICIAL_SOURCE_ID ? 'Official' : item.title}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button disabled={busy} onClick={() => void refreshSource()}>
+                Refresh
+              </button>
+            </div>
           )}
           <div className="library-filters">
             <label className="library-search">
               Search
-              <input value={search} onChange={event => setSearch(event.target.value)} type="search" />
+              <input
+                value={search}
+                onChange={event => {
+                  chooseSource(sourceId);
+                  setSearch(event.target.value);
+                }}
+                type="search"
+              />
             </label>
             <label>
-              Kind
-              <select value={kind} onChange={event => setKind(event.target.value as LibraryFilter)}>
+              Type
+              <select
+                value={kind}
+                onChange={event => {
+                  chooseSource(sourceId);
+                  setKind(event.target.value as LibraryFilter);
+                }}
+              >
                 <option value="all">All</option>
-                <option value="workspace">Workspaces</option>
+                <option value="workspace">Layouts</option>
                 <option value="behaviorTree">Behavior trees</option>
                 <option value="pad">Pads</option>
               </select>
             </label>
           </div>
-          {source && (
-            <div className="library-source-actions">
-              <span>
-                {source.updatedAt ? `Cached ${new Date(source.updatedAt).toLocaleDateString()}` : 'Available offline'}
-              </span>
-              <button disabled={busy} onClick={() => void refreshSource()}>
-                Refresh{source.type === 'folder' ? ' folder' : ''}
+          {source && visible.length > 0 && (
+            <div className="library-selection">
+              <button
+                aria-pressed={selecting}
+                disabled={busy || reviewing}
+                onClick={() => {
+                  setSelecting(!selecting);
+                  setSelected([]);
+                }}
+              >
+                {selecting ? 'Done selecting' : 'Select multiple'}
               </button>
-              {source.id !== OFFICIAL_SOURCE_ID && (
-                <button
-                  disabled={busy}
-                  onClick={() =>
-                    void run(async signal => {
-                      await writeLibrary({ removeSources: [source.id] }, signal);
-                      await refresh();
-                      chooseSource('mine');
-                    })
-                  }
-                >
-                  Remove source
-                </button>
+              {selecting && (
+                <label className="library-check">
+                  <input
+                    type="checkbox"
+                    disabled={busy || reviewing}
+                    checked={visible.every(row => selected.includes(row.id))}
+                    onChange={event => setSelected(event.target.checked ? visible.map(row => row.id) : [])}
+                  />
+                  Select all
+                </label>
               )}
             </div>
-          )}
-          {visible.length > 0 && (
-            <label className="library-check">
-              <input
-                type="checkbox"
-                checked={visible.every(row => selected.includes(row.id))}
-                onChange={event => setSelected(event.target.checked ? visible.map(row => row.id) : [])}
-              />
-              Select all ({visible.length})
-            </label>
           )}
           <div className="library-list">
             {visible.map(row => (
               <div className="library-row" key={row.id}>
-                <input
-                  type="checkbox"
-                  aria-label={`Select ${row.title}`}
-                  checked={selected.includes(row.id)}
-                  onChange={event =>
-                    setSelected(previous =>
-                      event.target.checked ? [...previous, row.id] : previous.filter(id => id !== row.id)
-                    )
-                  }
-                />
+                {selecting && (
+                  <input
+                    type="checkbox"
+                    aria-label={`Select ${row.title}`}
+                    disabled={busy || reviewing}
+                    checked={selected.includes(row.id)}
+                    onChange={event =>
+                      setSelected(previous =>
+                        event.target.checked ? [...previous, row.id] : previous.filter(id => id !== row.id)
+                      )
+                    }
+                  />
+                )}
                 <button onClick={() => void selectRow(row.id)}>
                   <strong>{row.title}</strong>
                   <span>
-                    {row.kinds.map(kind => (kind === 'behaviorTree' ? 'BT' : kind)).join(' · ')}
-                    {row.catalog ? ` · ${row.catalog.version}` : ''}
+                    {row.kinds
+                      .map(kind =>
+                        kind === 'behaviorTree' ? 'Behavior tree' : kind === 'workspace' ? 'Layout' : 'Pad'
+                      )
+                      .join(' · ')}
                   </span>
                   <small>{row.description}</small>
-                  {row.collection && updates(row.collection) && <em>Update available · import as a new copy</em>}
+                  {row.collection && updates(row.collection) && <em>Update available</em>}
                 </button>
               </div>
             ))}
-            {!visible.length && <p>No matching content. Import a file, choose a folder or browse Official.</p>}
+            {!visible.length && <p>No matching items. Browse Official or import a file.</p>}
           </div>
           {sourceId === 'mine' && saved.warnings.length > 0 && (
             <details>
@@ -603,70 +639,108 @@ export default function LibraryDialog({ initialFilter, data, storageError, refre
               ))}
             </details>
           )}
-          <button
-            className="library-primary"
-            disabled={busy || !!storageError || (!selected.length && !preview.length && !(source && visible.length))}
-            onClick={() => void prepareImport()}
-          >
-            {source ? (selected.length ? 'Import selected' : 'Import all') : 'Create independent copies'}
-          </button>
+          {source ? (
+            <>
+              {!reviewing && (
+                <button
+                  className={selected.length ? 'library-primary' : undefined}
+                  disabled={busy || !!storageError || !(selected.length || visible.length)}
+                  onClick={() => void prepareImport(selected.length ? selected : visible.map(row => row.id))}
+                >
+                  {selected.length ? `Import selected (${selected.length})` : 'Import all'}
+                </button>
+              )}
+              {source.id !== OFFICIAL_SOURCE_ID && (
+                <details className="library-options">
+                  <summary>Source details</summary>
+                  <p>{source.type === 'folder' ? 'Folder saved on this device' : source.url}</p>
+                  <button
+                    disabled={busy}
+                    onClick={() =>
+                      void run(async signal => {
+                        await writeLibrary({ removeSources: [source.id] }, signal);
+                        await refresh();
+                        chooseSource('mine');
+                      })
+                    }
+                  >
+                    Remove source
+                  </button>
+                </details>
+              )}
+            </>
+          ) : (
+            <details className="library-options">
+              <summary>Saved options</summary>
+              <button disabled={busy || !rows.length} onClick={exported}>
+                Export all
+              </button>
+              <label className="library-check">
+                <input
+                  type="checkbox"
+                  checked={showArchived}
+                  onChange={event => {
+                    chooseSource('mine');
+                    setShowArchived(event.target.checked);
+                  }}
+                />
+                Show archived collections
+              </label>
+            </details>
+          )}
         </section>
-        <section className="library-preview" aria-label="Content preview">
+        <section ref={previewPanel} tabIndex={-1} className="library-preview" aria-label="Content preview">
+          <button
+            className="library-back"
+            onClick={() => {
+              chooseSource(sourceId);
+              requestAnimationFrame(() => itemsPanel.current?.focus());
+            }}
+          >
+            ← Back
+          </button>
           {preview.length === 0 ? (
-            <p>
-              Select an item to preview its documents. Importing keeps your active workspace and controls unchanged.
-            </p>
+            <p>Choose an item to see details and open or import it.</p>
           ) : (
             <>
               <h3>{reviewing ? 'Review import' : 'Preview'}</h3>
-              <p>
-                {reviewing
-                  ? 'Every selected collection will be saved together. Review robot names below before importing.'
-                  : 'Imported collections are independent snapshots. Opening a document is a separate action.'}
-              </p>
+              {reviewing && <p>Check topics and frames before use. Importing does not run controls.</p>}
               {preview.map((item, index) => (
                 <article key={`${item.package.id}:${index}`}>
-                  <h4>{item.collection?.title ?? item.saved?.title ?? item.package.title}</h4>
-                  <p>{item.package.description}</p>
-                  <p className="library-meta">
-                    Version {item.package.version}
-                    {item.origin
-                      ? ` · ${item.origin.sourceId === OFFICIAL_SOURCE_ID ? 'Official' : 'Custom source'}`
-                      : ''}
-                    {item.package.author ? ` · ${item.package.author}` : ''}
-                    {item.package.license ? ` · ${item.package.license}` : ''}
-                  </p>
-                  {item.collection?.origin && (
-                    <p>
-                      Imported release: {item.collection.origin.version} · {item.collection.origin.sha256.slice(0, 12)}
-                    </p>
-                  )}
-                  {item.package.documents.map(doc => (
-                    <div className="library-document" key={doc.id}>
-                      <span>
-                        <strong>{(doc.data as any).name ?? (doc.data as any).title}</strong>
-                        <small>
-                          {doc.kind === 'behaviorTree'
-                            ? `${(doc.data as any).nodes.length} nodes`
-                            : doc.kind === 'pad'
-                              ? `${(doc.data as any).components.length} components`
-                              : `${(doc.data as any).panels.length} panels`}
-                        </small>
-                      </span>
-                      {!reviewing && (item.collection || item.saved) && (
-                        <button onClick={() => openDocument(item, doc.id)}>
-                          {doc.kind === 'workspace'
-                            ? 'Open workspace'
-                            : doc.kind === 'behaviorTree'
-                              ? 'Open BT'
-                              : 'Add Pad'}
-                        </button>
-                      )}
-                    </div>
-                  ))}
+                  <h4>
+                    {item.documentId
+                      ? documentName(item.package.documents.find(doc => doc.id === item.documentId)!)
+                      : (item.collection?.title ?? item.saved?.title ?? item.package.title)}
+                  </h4>
+                  {!reviewing && !item.documentId && <p>{item.package.description}</p>}
+                  {item.package.documents
+                    .filter(doc => !item.documentId || doc.id === item.documentId)
+                    .map(doc => (
+                      <div className="library-document" key={doc.id}>
+                        <span>
+                          <strong>{documentName(doc)}</strong>
+                          <small>
+                            {doc.kind === 'behaviorTree'
+                              ? `${(doc.data as any).nodes.length} nodes`
+                              : doc.kind === 'pad'
+                                ? `${(doc.data as any).components.length} components`
+                                : `${(doc.data as any).panels.length} panels`}
+                          </small>
+                        </span>
+                        {!reviewing && (item.collection || item.saved) && (
+                          <button onClick={() => openDocument(item, doc.id)}>
+                            {doc.kind === 'workspace'
+                              ? 'Open layout'
+                              : doc.kind === 'behaviorTree'
+                                ? 'Open tree'
+                                : 'Add Pad'}
+                          </button>
+                        )}
+                      </div>
+                    ))}
                   {reviewing && item.bindings.length > 0 && (
-                    <details open>
-                      <summary>Robot names and frames ({item.bindings.length})</summary>
+                    <details>
+                      <summary>Topics and frames ({item.bindings.length})</summary>
                       {item.bindings.map((binding, bindingIndex) => (
                         <label className="library-binding" key={`${binding.kind}:${binding.from}`}>
                           {binding.kind}: {binding.from}
@@ -693,80 +767,102 @@ export default function LibraryDialog({ initialFilter, data, storageError, refre
                     </details>
                   )}
                   {!reviewing && (
-                    <button
-                      onClick={() =>
-                        download(
-                          { ...item.package, title: item.collection?.title ?? item.package.title },
-                          `${item.collection?.title ?? item.package.title}.roboboy.json`
-                        )
-                      }
-                    >
-                      Export collection
-                    </button>
-                  )}
-                  {item.collection && !reviewing && (
-                    <>
-                      <label className="library-binding">
-                        Collection name
-                        <input
-                          aria-label="Collection name"
-                          value={names[item.collection.id] ?? item.collection.title}
-                          onChange={event =>
-                            setNames(previous => ({ ...previous, [item.collection!.id]: event.target.value }))
-                          }
-                        />
-                      </label>
+                    <details className="library-options">
+                      <summary>Details{item.collection ? ' & collection' : ''}</summary>
+                      <p className="library-meta">
+                        Version {item.package.version}
+                        {item.origin
+                          ? ` · ${item.origin.sourceId === OFFICIAL_SOURCE_ID ? 'Official' : 'Custom source'}`
+                          : ''}
+                        {item.package.author ? ` · ${item.package.author}` : ''}
+                        {item.package.license ? ` · ${item.package.license}` : ''}
+                      </p>
+                      {item.collection?.origin && (
+                        <p>
+                          Imported release: {item.collection.origin.version} ·{' '}
+                          {item.collection.origin.sha256.slice(0, 12)}
+                        </p>
+                      )}
                       <button
-                        disabled={busy || !(names[item.collection.id] ?? item.collection.title).trim()}
                         onClick={() =>
-                          void updateCollection(item.collection!, {
-                            title: (names[item.collection!.id] ?? item.collection!.title).trim(),
-                          })
+                          download(
+                            { ...item.package, title: item.collection?.title ?? item.package.title },
+                            `${item.collection?.title ?? item.package.title}.roboboy.json`
+                          )
                         }
                       >
-                        Rename
+                        Export collection
                       </button>
-                      {item.collection.archivedAt ? (
-                        <button
-                          disabled={busy}
-                          onClick={() => void updateCollection(item.collection!, { archivedAt: undefined })}
-                        >
-                          Restore collection
-                        </button>
-                      ) : confirmDelete === item.collection.id ? (
+                      {item.collection && !reviewing && (
                         <>
-                          <span>Archive this collection? Workspace references are preserved.</span>
+                          <label className="library-binding">
+                            Collection name
+                            <input
+                              aria-label="Collection name"
+                              value={names[item.collection.id] ?? item.collection.title}
+                              onChange={event =>
+                                setNames(previous => ({ ...previous, [item.collection!.id]: event.target.value }))
+                              }
+                            />
+                          </label>
                           <button
-                            disabled={busy}
-                            onClick={() => void updateCollection(item.collection!, { archivedAt: Date.now() })}
+                            disabled={busy || !(names[item.collection.id] ?? item.collection.title).trim()}
+                            onClick={() =>
+                              void updateCollection(item.collection!, {
+                                title: (names[item.collection!.id] ?? item.collection!.title).trim(),
+                              })
+                            }
                           >
-                            Confirm archive
+                            Rename
                           </button>
+                          {item.collection.archivedAt ? (
+                            <button
+                              disabled={busy}
+                              onClick={() => void updateCollection(item.collection!, { archivedAt: undefined })}
+                            >
+                              Restore collection
+                            </button>
+                          ) : confirmDelete === item.collection.id ? (
+                            <>
+                              <span>Archive this collection? Open layouts still work.</span>
+                              <button
+                                disabled={busy}
+                                onClick={() => void updateCollection(item.collection!, { archivedAt: Date.now() })}
+                              >
+                                Confirm archive
+                              </button>
+                            </>
+                          ) : (
+                            <button disabled={busy} onClick={() => setConfirmDelete(item.collection!.id)}>
+                              Archive collection
+                            </button>
+                          )}
+                          {updates(item.collection) && (
+                            <button
+                              onClick={() => {
+                                const origin = item.collection!.origin!;
+                                chooseSource(origin.sourceId);
+                                setSelected([origin.itemId]);
+                              }}
+                            >
+                              Review newer release
+                            </button>
+                          )}
                         </>
-                      ) : (
-                        <button disabled={busy} onClick={() => setConfirmDelete(item.collection!.id)}>
-                          Archive collection
-                        </button>
                       )}
-                      {updates(item.collection) && (
-                        <button
-                          onClick={() => {
-                            const origin = item.collection!.origin!;
-                            chooseSource(origin.sourceId);
-                            setSelected([origin.itemId]);
-                          }}
-                        >
-                          Review newer release
-                        </button>
-                      )}
-                    </>
+                    </details>
+                  )}
+                  {!reviewing && !item.collection && !item.saved && (
+                    <button
+                      className="library-primary"
+                      disabled={busy || !!storageError}
+                      onClick={() => void prepareImport([item.origin!.itemId])}
+                    >
+                      Import
+                    </button>
                   )}
                 </article>
               ))}
-              <p>
-                Robot compatibility has not been checked. External panels must be installed separately; opaque settings
-                and ROS approvals are excluded.
-              </p>
               {reviewing && (
                 <div className="library-review-actions">
                   <button

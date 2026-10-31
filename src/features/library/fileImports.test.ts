@@ -1,6 +1,6 @@
 import { describe, beforeEach, expect, it, vi } from 'vitest';
 import { importGamepadFile, loadGamepadLibrary } from '../customGamepad/gamepadStorage';
-import { importBehaviorTree } from '../behaviorTree/storage/treeStorage';
+import { importBehaviorTree, listBehaviorTrees } from '../behaviorTree/storage/treeStorage';
 import { serializePads, readPads } from '../customGamepad/portablePad';
 import { serializeTree, readTree } from '../behaviorTree/portableTree';
 
@@ -50,7 +50,7 @@ describe('reviewed file import integration', () => {
     expect(first.idMap.existing).not.toBe(second.idMap.existing);
     expect(loadGamepadLibrary().filter(item => !item.isDefault)).toHaveLength(2);
     expect(reviewer.reviewImport).toHaveBeenCalledWith(
-      expect.objectContaining({ title: 'Import Pads', action: 'Import copies' }),
+      expect.objectContaining({ title: 'Import Pads', action: 'Import' }),
       undefined
     );
   });
@@ -64,14 +64,15 @@ describe('reviewed file import integration', () => {
     expect((await importGamepadFile(file({ layouts: [pad] }))).errors.join(' ')).toContain('Unrecognized Pad storage');
     expect(localStorage.getItem('robo-boy-custom-gamepads')).toContain('future');
   });
-  it('opens BT copies only after review and never persists or executes them', async () => {
+  it('saves and opens BTs only after review so they remain available after reload', async () => {
     reviewer.reviewImport.mockResolvedValue(false);
     expect(await importBehaviorTree(file({ tree }))).toBeNull();
     reviewer.reviewImport.mockResolvedValue(true);
     const imported = await importBehaviorTree(file({ tree }));
     expect(imported?.id).not.toBe(tree.id);
     expect(imported?.name).toBe('Patrol');
-    expect(localStorage.length).toBe(0);
+    expect(listBehaviorTrees()).toHaveLength(1);
+    expect(listBehaviorTrees()[0].tree.id).toBe(imported?.id);
     expect(await importBehaviorTree(file({ version: 'future', tree }))).toBeNull();
     expect(reviewer.showImportError).toHaveBeenCalledWith(expect.stringContaining('Unsupported'), undefined);
     const controller = new AbortController();

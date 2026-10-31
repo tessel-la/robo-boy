@@ -19,7 +19,7 @@
   background: var(--background-color);
   opacity: 0.8;
 }
-.library-dialog button,
+.library-dialog button:not(:where(.management-dialog-header button)),
 .library-dialog input,
 .library-dialog select {
   font: inherit;
@@ -29,7 +29,7 @@
   border-radius: 7px;
   box-sizing: border-box;
 }
-.library-dialog button {
+.library-dialog button:not(:where(.management-dialog-header button)) {
   min-height: 44px;
   padding: 8px 12px;
   cursor: pointer;
@@ -52,6 +52,7 @@
   min-height: 40px;
   padding: 8px;
   width: 100%;
+  margin: 0;
 }
 .library-dialog input[type='checkbox'] {
   accent-color: var(--primary-color);
@@ -73,24 +74,9 @@
 }
 .library-layout {
   display: grid;
-  grid-template-columns: 170px minmax(230px, 1fr) minmax(280px, 1.2fr);
+  grid-template-columns: minmax(260px, 1fr) minmax(300px, 1.2fr);
   flex: 1;
   min-height: 0;
-}
-.library-layout > nav {
-  padding: 8px;
-  border-right: 1px solid var(--border-color);
-  overflow: auto;
-}
-.library-layout > nav button {
-  display: block;
-  width: 100%;
-  text-align: left;
-  margin-bottom: 6px;
-  overflow-wrap: anywhere;
-}
-.library-layout > nav .selected {
-  border-color: var(--primary-color);
 }
 .library-dialog small {
   display: block;
@@ -122,14 +108,6 @@
   display: grid;
   gap: 5px;
 }
-.library-source-actions {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-  flex-wrap: wrap;
-  margin-top: 8px;
-  font-size: 11px;
-}
 .library-check {
   display: flex;
   align-items: center;
@@ -155,6 +133,12 @@
   display: block;
   font-size: 11px;
   margin-top: 4px;
+}
+.library-row small {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 .library-row em {
   display: block;
@@ -226,32 +210,112 @@
   display: grid;
   gap: 5px;
 }
+.library-dialog *,
+.library-dialog *::before,
+.library-dialog *::after {
+  box-sizing: border-box;
+}
+.library-dialog label {
+  margin-bottom: 0;
+}
+.library-dialog summary {
+  cursor: pointer;
+  min-height: 44px;
+  padding: 12px 0;
+}
+.library-toolbar {
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+.library-toolbar nav {
+  display: flex;
+  gap: 6px;
+}
+.library-dialog [aria-pressed='true'] {
+  border-color: var(--primary-color);
+  color: var(--primary-color);
+}
+.library-source-picker {
+  display: flex;
+  align-items: end;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.library-source-picker label {
+  display: grid;
+  gap: 5px;
+  flex: 1;
+  min-width: 0;
+}
+.library-selection {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: space-between;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+.library-options {
+  margin-top: 12px;
+  color: var(--text-secondary);
+}
+.library-options button {
+  margin: 4px 6px 4px 0;
+}
+.library-options p {
+  overflow-wrap: anywhere;
+}
+.library-import-menu {
+  position: relative;
+}
+.library-import-menu summary {
+  border: 1px solid var(--border-color);
+  border-radius: 7px;
+  padding: 12px;
+}
+.library-import-menu > div {
+  position: absolute;
+  right: 0;
+  top: 100%;
+  z-index: 2;
+  display: grid;
+  gap: 4px;
+  min-width: 180px;
+  padding: 6px;
+  border: 1px solid var(--border-color);
+  border-radius: 7px;
+  background: var(--card-bg);
+}
+.library-import-menu button {
+  text-align: left;
+}
+.library-back {
+  display: none;
+}
 @media (max-width: 760px) {
   .library-layout {
     display: flex;
     flex-direction: column;
-    min-height: auto;
-  }
-  .library-layout > nav {
-    display: flex;
-    gap: 6px;
-    border-right: 0;
-    border-bottom: 1px solid var(--border-color);
-    overflow: auto;
-    flex-shrink: 0;
-  }
-  .library-layout > nav button {
-    width: auto;
-    min-width: 120px;
-    margin: 0;
+    min-height: 0;
   }
   .library-items,
   .library-preview {
-    overflow: visible;
+    overflow: auto;
   }
   .library-preview {
-    border-left: 0;
-    border-top: 1px solid var(--border-color);
+    display: none;
+    border: 0;
+  }
+  .library-has-preview .library-preview {
+    display: block;
+  }
+  .library-has-preview .library-items {
+    display: none;
+  }
+  .library-dialog .library-back {
+    display: inline-block;
+    margin-bottom: 12px;
   }
   .library-dialog {
     height: calc(100dvh - 16px);

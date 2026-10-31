@@ -1,4 +1,3 @@
-import { useLibrary } from '../features/library/LibraryProvider';
 import { getLibraryTree, type LibraryOpenRequest } from '../features/library/runtime';
 import {
   normalizeWorkspacePanel, normalizeSavedWorkspaceLayout, normalizeWorkspaceTileOrder,
@@ -979,7 +978,6 @@ const MainControlView: React.FC<MainControlViewProps> = ({
     document.addEventListener('visibilitychange', visibility);
     return () => document.removeEventListener('visibilitychange', visibility);
   }, [isActive, replaySession]);
-  const { openLibrary } = useLibrary();
   const libraryHandled = useRef<string>();
   const treeReaders = useRef(new Map<string, BehaviorTreeAssistantBridge>());
   const assistantRef = useRef<GlobalAssistantHandle>(null);
@@ -3220,7 +3218,6 @@ const MainControlView: React.FC<MainControlViewProps> = ({
                 </section>
 
                 <section className="workspace-pad-library-actions" aria-label="Pad library actions">
-                  <button type="button" className="workspace-pad-library-button" onClick={()=>{setWorkspacePadMenu(null);openLibrary('pad');}}>Browse Library</button>
                   <button
                     type="button"
                     className="workspace-pad-library-button"
@@ -3752,7 +3749,6 @@ const MainControlView: React.FC<MainControlViewProps> = ({
             )}
           </div>
         </form>
-        <button type="button" className="workspace-pad-library-button" onClick={()=>openLibrary('workspace')}>Browse Library</button>
         <div className="workspace-template-transfer-row">
           <button
             type="button"

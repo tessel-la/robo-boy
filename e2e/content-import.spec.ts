@@ -108,17 +108,17 @@ for (const theme of ['dark', 'light', 'solarized', 'cobalt'])
       await cancel.focus();
       await page.keyboard.press('Tab');
       expect(await dialog.evaluate(element => element.matches(':modal'))).toBe(true);
-      await expect(dialog.getByRole('button', { name: 'Import copies' })).toBeFocused();
+      await expect(dialog.getByRole('button', { name: 'Import' })).toBeFocused();
       await dialog.screenshot({ path: `/tmp/roboboy-content-import-${browserName}-${theme}-${width}.png` });
       await page.keyboard.press('Escape');
       await expect(dialog).toHaveCount(0);
       expect(await savedLayouts(page)).toHaveLength(0);
       await input.setInputFiles(upload(workspace));
-      await dialog.getByRole('button', { name: 'Import copies' }).click();
+      await dialog.getByRole('button', { name: 'Import' }).click();
       await expect.poll(() => savedLayouts(page)).toHaveLength(1);
       await layoutsMenu(page);
       await input.setInputFiles(upload(workspace));
-      await dialog.getByRole('button', { name: 'Import copies' }).click();
+      await dialog.getByRole('button', { name: 'Import' }).click();
       await expect.poll(() => savedLayouts(page)).toHaveLength(2);
       const layouts = await savedLayouts(page);
       expect(layouts[0].panels[0].id).not.toBe(layouts[1].panels[0].id);
@@ -152,7 +152,7 @@ test('reviews Pad and BT files in their existing menus without activating contro
   await padFile.setInputFiles(upload({ layouts: workspace.gamepads }));
   const review = page.getByRole('dialog', { name: 'Import Pads' });
   await expect(review).toContainText('Imported drive');
-  await review.getByRole('button', { name: 'Import copies' }).click();
+  await review.getByRole('button', { name: 'Import' }).click();
   await expect(page.getByLabel('Pad layout', { exact: true })).toHaveValue(selected);
   await expect(
     page.getByLabel('Pad layout', { exact: true }).getByRole('option', { name: 'Imported drive · Custom' })
@@ -186,9 +186,18 @@ test('reviews Pad and BT files in their existing menus without activating contro
   await btFile.setInputFiles(upload({ version: '1.0.0', tree }));
   const btReview = page.getByRole('dialog', { name: 'Import Behavior Tree' });
   await expect(btReview).toContainText('Unsaved editor changes will be replaced');
-  await btReview.getByRole('button', { name: 'Open copy' }).click();
+  await btReview.getByRole('button', { name: 'Import' }).click();
   await expect(page.locator('.bt-float-name')).toHaveText('Patrol template');
   await expect(page.getByRole('button', { name: 'Run', exact: true })).toBeVisible();
   expect(await getRosServiceCalls(page, '/import-danger')).toEqual([]);
-  expect(await page.evaluate(() => localStorage.getItem('robo-boy-behavior-trees'))).toBeNull();
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('robo-boy-behavior-trees') ?? '[]'))).toHaveLength(
+    1
+  );
+  await page.reload();
+  await page.getByRole('button', { name: 'Quick Connect 127.0.0.1', exact: true }).click();
+  await expect(page.getByLabel('Status: Connected')).toBeVisible();
+  await page.getByTestId('bt-menu-button').click();
+  await page.locator('.bt-menu-tree-row').filter({ hasText: 'Patrol template' }).click();
+  await expect(page.locator('.bt-float-name')).toHaveText('Patrol template');
+  expect(await getRosServiceCalls(page, '/import-danger')).toEqual([]);
 });

@@ -7,8 +7,8 @@ switching connection, or locking the BT editor cancels the pending operation.
 
 - **Pads:** import copies into the Pad library, then explicitly select or edit one. Import does not
   switch the controls already displayed in a workspace.
-- **Behavior Trees:** open a fresh copy in the editor after reviewing the replacement of unsaved editor
-  changes. Save it to keep it. Embedded subtrees remain snapshots; links to saved source trees and
+- **Behavior Trees:** save the imported tree and open it in the editor after reviewing the replacement of unsaved
+  editor changes. Find it later in **Saved Trees**. Embedded subtrees remain snapshots; links to saved source trees and
   execution/highlight state are removed. Import never starts execution.
 - **Workspaces:** add saved layouts without applying them. Layout IDs, panel IDs, geometry references,
   included Pad references and 3D storage slots are remapped together. Repeated imports are independent.
@@ -75,29 +75,30 @@ arbitrary text and ROS message payloads are never rewritten.
 ## Browsing, importing and sharing libraries
 
 Open **Library** in the connection menu next to **Workspace layouts** and **Manage panels**, or
-from the entry screen. Pad, BT and workspace menus also link to filtered Library views.
+from the entry screen. The existing Pad, BT and layout menus keep their focused file import actions.
 
-- **My library** includes your saved Pads, BTs and workspace layouts, plus imported collections.
-- **Official** includes offline starter collections and refreshes from
+- **Saved** lists each saved or imported layout, Pad and behavior tree by name. Select an item to open it.
+  Imported behavior trees also appear in the BT editor’s **Saved Trees** menu and node palette.
+- **Browse → Official** includes offline starter collections and refreshes from
   [Robo-Boy Catalog](https://github.com/tessel-la/robo-boy-catalog). Published content is grouped
   by simulator, with shared examples under `generic/`.
-- **Add catalog** accepts public HTTPS JSON catalogs, including GitHub raw/blob URLs. Downloads use
+- **Import → Online catalog…** accepts public HTTPS JSON catalogs, including GitHub raw/blob URLs. Downloads use
   no credentials or redirects, validate hashes over exact bytes, and validate every document body.
-- **Add folder** snapshots a robot repository/library folder. A manifest can group related documents;
+- **Import → Folder…** reads a robot repository/library folder. A manifest can group related documents;
   legacy exports are also discovered, with unambiguous adjacent Pad dependencies included.
-- **Import selected/all** reviews names/frames and commits the complete selection together. Import
+- **Import** on a preview reviews one collection; **Select multiple** and **Import all** handle batches.
+  Review offers optional topic/frame changes and commits the complete selection together. Import
   saves snapshots without opening panels or changing controls. Opening a document is a separate action.
 - Imported Pads are reusable templates; customize one to create an editable Pad. BTs open fresh editor
   copies. Workspaces open with new panel/layout IDs and preserve their Pad/BT/3D dependencies. Live
   control panels require a robot connection; entry-screen opening uses the existing local replay mode.
-- **Export collection** includes dependencies. **Export selected/all** creates a portable backup of
-  the listed collections. Import that JSON on another origin/device. Local collection names are
+- **Export collection** includes dependencies. **Saved options → Export all** creates a portable backup. Collection export, rename,
+  archive and restore are under **Details & collection**. Import that JSON on another origin/device. Local collection names are
   included when exporting. Online sharing uses your own repository/hosting; see the
   [library publishing guide](../library/README.md).
-- Refreshing a source checks for updates; **Review newer release** imports a new independent copy.
+- Refreshing a source checks for updates; **Review newer release** imports a new version alongside the saved one.
   Existing copies are not overwritten. Folder refresh asks you to select the folder again.
-- **Archive collection** hides it but preserves workspace references. Enable **Show archived
-  collections** to export or restore it. Removing a catalog does not remove imported copies.
+- **Archive collection** hides it but preserves workspace references. Enable **Saved options → Show archived collections** to export or restore it. Removing a catalog does not remove imported copies.
 
 Browser, Electron and Tauri use the same JSON catalog flow. Hosts must permit CORS; private
 repositories requiring credentials are outside this flow. The folder picker works with local clones.

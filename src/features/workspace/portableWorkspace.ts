@@ -178,14 +178,14 @@ export async function importWorkspaceFile(
         title: 'Import workspace layouts',
         items: [
           ...plan.layouts.map(layout => `${layout.title} · ${layout.panels.length} panels`),
-          ...plan.pads.map(pad => `${pad.name} · Pad copy`),
+          ...plan.pads.map(pad => `${pad.name} · Pad`),
         ],
         details: [
-          'Create independent saved layouts and panel settings. Your current workspace stays open. ROS approvals are excluded.',
+          'Save these layouts. Your current workspace stays open.',
           ...plan.warnings,
-          'Review ROS names before use. Robot compatibility has not been checked.',
+          'Check topics and frames before use.',
         ],
-        action: 'Import copies',
+        action: 'Import',
       },
       signal
     );
