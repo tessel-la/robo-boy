@@ -1,0 +1,51 @@
+.management-dialog-header {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 20px;
+  background: color-mix(in srgb, var(--background-secondary) 72%, var(--card-bg));
+  border-bottom: 1px solid var(--border-color);
+}
+.management-dialog-header > div {
+  min-width: 0;
+}
+.management-dialog-header > div > span {
+  color: var(--primary-color);
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+.management-dialog-header h2 {
+  margin: 2px 0 0;
+  font-size: 1.22rem;
+  line-height: 1.2;
+}
+.management-dialog-header > button {
+  width: 44px;
+  min-height: 44px;
+  flex: 0 0 44px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 0;
+  border-radius: 7px;
+  cursor: pointer;
+}
+.management-dialog-header > button:hover {
+  color: var(--text-color);
+  background: color-mix(in srgb, var(--text-color) 8%, transparent);
+}
+.management-dialog-header > button:focus-visible {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 2px;
+}
+@media (max-width: 720px) {
+  .management-dialog-header {
+    padding: 13px 15px;
+  }
+}

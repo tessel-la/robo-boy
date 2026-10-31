@@ -1,3 +1,4 @@
+import { openAppTool } from './helpers/navigation';
 import { McapWriter, TempBuffer } from '@mcap/core';
 import { expect, test, type Page } from '@playwright/test';
 import { installRosMock, publishRosMessage, waitForRosSubscription } from './helpers/rosMock';
@@ -161,7 +162,7 @@ test('uses recorded JointState and URDF data and clears future values on backwar
   }
   await writer.end();
   await page.goto('/');
-  await page.getByRole('button', { name: 'Open local recordings', exact: true }).click();
+  await openAppTool(page, 'Recordings');
   const replay = page.getByRole('region', { name: 'Record & Replay', exact: true });
   await replay
     .getByLabel('Open MCAP recording')

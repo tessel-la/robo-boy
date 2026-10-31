@@ -44,6 +44,7 @@ jobs:
             - 'infra/docker/Dockerfile.enterprise'
             - 'infra/docker/Dockerfile'
             - 'docker-compose.yml'
+            - 'library/**'
             - 'src/**'
             - 'electron/**'
             # src/panels/types.ts imports '../../panel-sdk' by relative path, so the type-only SDK
@@ -126,6 +127,10 @@ jobs:
     - name: Install dependencies
       if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.frontend == 'true' || needs.changes.outputs.e2e == 'true'
       run: npm ci
+
+    - name: Validate content library
+      if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.frontend == 'true' || needs.changes.outputs.e2e == 'true'
+      run: npm run check:content-library
 
     - name: Run linter
       if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.frontend == 'true' || needs.changes.outputs.e2e == 'true'

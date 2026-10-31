@@ -62,26 +62,30 @@ test.describe('Quick Connect Flow', () => {
     });
 });
 
-test('keeps the local recordings button neutral after connecting and disconnecting', async ({ page }) => {
+for (const width of [1280, 390]) test(`keeps Library and Recordings in the app menu at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
     await installRosMock(page);
     await page.goto('/');
-
-    const recordings = page.getByRole('button', { name: 'Open local recordings', exact: true });
-    await expect(page.locator('html')).toHaveAttribute('data-theme', /.+/);
+    await expect(page.locator('.entry-section').getByRole('button', { name: /Catalog|recordings/i })).toHaveCount(0);
+    await page.getByRole('button', { name: /Switch connections/ }).click();
+    await expect(page.getByRole('button', { name: 'Catalog', exact: true })).toBeVisible();
+    const recordings = page.getByRole('button', { name: 'Recordings', exact: true });
+    await expect(recordings).toBeVisible();
     const colors = () => recordings.evaluate(element => {
         const style = getComputedStyle(element);
         return { background: style.backgroundColor, border: style.borderColor, text: style.color };
     });
     const initialColors = await colors();
-
-    await page.getByTitle('Advanced Options').click();
-    await page.locator('#ros2Value').fill('127.0.0.1');
-    await page.getByRole('button', { name: 'Connect', exact: true }).click();
+    await page.keyboard.press('Escape');
+    await page.getByRole('button', { name: 'Quick Connect 127.0.0.1', exact: true }).click();
     await expect(page.getByLabel('Status: Connected')).toBeVisible();
-    await page.getByRole('button', { name: 'Disconnect' }).click();
-
-    await expect(recordings).toBeVisible();
+    await page.getByRole('button', { name: 'Disconnect', exact: true }).click();
+    await expect(page.locator('.entry-section')).toBeVisible();
+    await page.getByRole('button', { name: /Switch connections/ }).click();
     expect(await colors()).toEqual(initialColors);
+    await recordings.click();
+    await expect(page.getByRole('region', { name: 'Record & Replay', exact: true }).first()).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Local replay · no robot connection', exact: true })).toBeVisible();
 });
 
 test.describe('Visual Elements', () => {

@@ -1,9 +1,16 @@
+vi.mock('../features/library/ImportReview', () => ({ reviewImport: vi.fn().mockResolvedValue(true), showImportError: vi.fn() }));
 import React, { useEffect, useState } from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import MainControlView from './MainControlView';
+import { getLibraryPad, getLibraryWorkspaces, setLibrarySnapshot } from '../features/library/runtime';
+import { bundledReleases } from '../features/library/official';
+import { makeCollection } from '../features/library/store';
 import { getConnectionStorageKey } from '../runtime/connectionStorage';
 import { getVisualizationStateForKey, saveVisualizationStateForKey } from '../utils/visualizationState';
+
+const library = vi.hoisted(() => ({ workspaces: [] as Array<{ id: string; title: string }> }));
+vi.mock('../features/library/LibraryProvider', () => ({ useLibrary: () => library }));
 
 const connect = vi.fn();
 const disconnect = vi.fn();
@@ -342,20 +349,57 @@ const openWorkspaceLayouts = () => {
 };
 
 describe('MainControlView desktop workspace', () => {
+  it.each([undefined, 'robot'])('syncs catalog layout removal with the mounted menu in scope %s', storageScope => {
+    const key = getConnectionStorageKey(workspaceSavedLayoutsKey, storageScope);
+    const saved = { id: 'saved', title: 'Saved controls', panels: [], tileOrder: [], layout: { version: 2, root: null } };
+    localStorage.setItem(key, JSON.stringify([saved]));
+    renderMainControlView(storageScope);
+    openWorkspaceLayouts();
+    expect(screen.getByRole('button', { name: 'Load Saved controls' })).toBeVisible();
+    act(() => {
+      localStorage.setItem(key, '[]');
+      window.dispatchEvent(new Event('robo-boy-workspaces-changed'));
+    });
+    expect(screen.queryByRole('button', { name: 'Load Saved controls' })).toBeNull();
+    expect(localStorage.getItem(key)).toBe('[]');
+    act(() => {
+      localStorage.setItem(key, 'broken');
+      window.dispatchEvent(new Event('storage'));
+    });
+    expect(localStorage.getItem(key)).toBe('broken');
+  });
+
+  it('loads Library layouts from Workspace layouts without persisting templates as authored layouts', async () => {
+    setLibrarySnapshot([makeCollection(bundledReleases[0].package)]);
+    library.workspaces = getLibraryWorkspaces();
+    renderMainControlView();
+    openWorkspaceLayouts();
+    expect(screen.getByText('Imported')).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Delete Panda inspection' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Load Panda inspection' }));
+    await waitFor(() => expect(document.querySelectorAll('.workspace-card')).toHaveLength(3));
+    expect(JSON.parse(localStorage.getItem(workspaceSavedLayoutsKey) || '[]')).toEqual([]);
+    await waitFor(() => expect(JSON.parse(localStorage.getItem(workspacePanelsKey) || '[]')).toHaveLength(3));
+    const panels = JSON.parse(localStorage.getItem(workspacePanelsKey) || '[]');
+    expect(panels.find((panel: any) => panel.type === 'pad').layoutId).toMatch(/^library:/);
+    const scene = panels.find((panel: any) => panel.type === '3d');
+    expect(getVisualizationStateForKey(`roboboy_3d_visualization_state_${scene.id}`).fixedFrame).toBe('panda_link0');
+  });
+
   beforeEach(() => {
+    setLibrarySnapshot([]);
+    library.workspaces = [];
     vi.clearAllMocks();
     localStorage.clear();
     rosConnection.isConnected = true;
     rosConnection.connectionStatus = 'connected';
     rosConnection.connectionGeneration = undefined;
     loadGamepadLibrary.mockReturnValue([
-      { id: 'custom-drive', name: 'Drive Pad', layout: { id: 'custom-drive' }, isDefault: false },
+      { id: 'custom-drive', name: 'Drive Pad', layout: { id: 'custom-drive', name: 'Drive Pad' }, isDefault: false },
     ]);
-    getGamepadLayout.mockReturnValue({
-      id: 'custom-drive',
-      name: 'Drive Pad',
-      layout: { id: 'custom-drive', name: 'Drive Pad' },
-    });
+    getGamepadLayout.mockImplementation((id: string) =>
+      loadGamepadLibrary().find((item: any) => item.id === id || item.layout.id === id) ?? getLibraryPad(id)
+    );
     cloneGamepadTemplate.mockReturnValue({ id: 'template-copy', name: 'Template Copy' });
     deleteCustomGamepad.mockReturnValue(true);
     downloadGamepadLayout.mockReturnValue(true);
@@ -1220,6 +1264,33 @@ describe('MainControlView desktop workspace', () => {
     expect(screen.queryByLabelText('Mobile panels')).not.toBeInTheDocument();
   });
 
+  it('keeps removed imported Pads selected and exports their definitions for existing layouts', async () => {
+    const item = makeCollection(bundledReleases[0].package);
+    const id = `library:${item.id}:pad/joints`;
+    setLibrarySnapshot([{ ...item, removedDocumentIds: ['pad/joints'] }]);
+    localStorage.setItem(workspacePanelsKey, JSON.stringify([{ ...makePanel('pad', 'pad', 'Pad controls'), layoutId: id }]));
+    const createObjectURL = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:workspace');
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    renderMainControlView();
+    fireEvent.click(screen.getByRole('button', { name: 'Pad settings' }));
+    expect(screen.getByLabelText('Pad layout')).toHaveValue(id);
+    expect(screen.getByLabelText('Customize Joint readout')).toBeVisible();
+    fireEvent.click(screen.getByLabelText('Close pad settings'));
+    openWorkspaceLayouts();
+    fireEvent.click(screen.getByLabelText('Export layouts'));
+    const blob = createObjectURL.mock.calls[0][0] as Blob;
+    const raw = await new Promise<string>(resolve => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result));
+      reader.readAsText(blob);
+    });
+    const exported = JSON.parse(raw);
+    expect(exported.gamepads).toEqual([expect.objectContaining({ id, name: 'Joint readout' })]);
+    expect(exported.currentWorkspace.panels[0].layoutId).toBe(id);
+    click.mockRestore();
+    createObjectURL.mockRestore();
+  });
+
   it('exports a version 2 portable workspace bundle with referenced pads', async () => {
     localStorage.setItem(workspacePanelsKey, JSON.stringify([makePanel('panel-pad', 'pad', 'Pad controls')]));
     localStorage.setItem(workspaceTileOrderKey, JSON.stringify(['panel-pad']));
@@ -1531,9 +1602,13 @@ describe('MainControlView desktop workspace', () => {
     fireEvent.change(fileInput!, {
       target: { files: [new File([JSON.stringify(exported)], 'workspace.json', { type: 'application/json' })] },
     });
-    await waitFor(() =>
-      expect(JSON.parse(localStorage.getItem('roboboy_3d_visualization_state_panel-3d') ?? 'null')).toEqual(sceneSettings)
-    );
+    await waitFor(() => {
+      const layouts = JSON.parse(localStorage.getItem(workspaceSavedLayoutsKey) ?? '[]');
+      const panelId = layouts[0]?.panels[0]?.id;
+      expect(panelId).toBeDefined();
+      expect(panelId).not.toBe('panel-3d');
+      expect(JSON.parse(localStorage.getItem(`roboboy_3d_visualization_state_${panelId}`) ?? 'null')).toEqual(sceneSettings);
+    });
     click.mockRestore();
     createObjectURL.mockRestore();
   });
@@ -1693,12 +1768,12 @@ describe('MainControlView desktop workspace', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Pad settings' }));
     fireEvent.click(screen.getByLabelText('Edit Drive Pad'));
 
-    expect(screen.getByTestId('gamepad-editor')).toHaveTextContent('Drive Pad');
+    expect(await screen.findByTestId('gamepad-editor')).toHaveTextContent('Drive Pad');
     fireEvent.click(screen.getByText('Save pad'));
     expect(saveGamepadFromEditor).toHaveBeenCalled();
   });
 
-  it('imports and exports the pad selected in a workspace control', async () => {
+  it('imports Pad copies without switching the active workspace controls', async () => {
     localStorage.setItem(workspaceOpenKey, 'true');
     localStorage.setItem(workspacePanelsKey, JSON.stringify([makePanel('panel-pad', 'pad', 'Pad controls')]));
     localStorage.setItem(workspaceTileOrderKey, JSON.stringify(['panel-pad']));
@@ -1719,7 +1794,7 @@ describe('MainControlView desktop workspace', () => {
 
     await waitFor(() => {
       expect(importGamepadFile).toHaveBeenCalled();
-      expect(screen.getByTestId('custom-gamepad')).toHaveTextContent('custom-imported-drive');
+      expect(screen.getByTestId('custom-gamepad')).toHaveTextContent('custom-drive');
     });
   });
 
@@ -1830,7 +1905,7 @@ describe('MainControlView desktop workspace', () => {
     fireEvent.click(screen.getByLabelText('Customize Template Pad'));
 
     expect(cloneGamepadTemplate).toHaveBeenCalledWith('template-drive');
-    expect(screen.getByTestId('gamepad-editor')).toHaveTextContent('Template Copy');
+    expect(await screen.findByTestId('gamepad-editor')).toHaveTextContent('Template Copy');
     fireEvent.click(screen.getByText('Save pad'));
     expect(screen.getByTestId('custom-gamepad')).toHaveTextContent('saved-pad');
   });
@@ -2014,7 +2089,7 @@ describe('MainControlView desktop workspace', () => {
 
     fireEvent.click(screen.getByLabelText('Add Panel'));
     fireEvent.click(screen.getByText('Open template'));
-    expect(screen.getByTestId('gamepad-editor')).toHaveTextContent('Template Copy');
+    expect(await screen.findByTestId('gamepad-editor')).toHaveTextContent('Template Copy');
     fireEvent.click(screen.getByText('Save pad'));
     expect(saveGamepadFromEditor).toHaveBeenCalled();
 

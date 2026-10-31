@@ -1,3 +1,4 @@
+import { useLibrary } from '../features/library/LibraryProvider';
 import { type ReactNode, useEffect, useId, useRef, useState } from 'react';
 import type { ConnectionStatus } from '../runtime/connections';
 import './ConnectionTabs.css';
@@ -21,6 +22,7 @@ export interface ConnectionTabsProps {
   onAdd: () => void;
   onManageWorkspaceLayouts?: () => void;
   onManagePanels?: () => void;
+  onOpenRecordings?: () => void;
   workspaceLayoutLabel?: string;
   themeControl?: ReactNode;
   /** The running version and its updates, where the shell can update itself. */
@@ -60,10 +62,12 @@ export default function ConnectionTabs({
   onAdd,
   onManageWorkspaceLayouts,
   onManagePanels,
+  onOpenRecordings,
   workspaceLayoutLabel,
   themeControl,
   appUpdateControl,
 }: ConnectionTabsProps) {
+  const { openLibrary } = useLibrary();
   const [isSwitcherOpen, setIsSwitcherOpen] = useState(false);
   const navRef = useRef<HTMLElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -187,6 +191,18 @@ export default function ConnectionTabs({
               );
             })}
           </div>
+          <button
+            type="button"
+            className="connection-switcher-tool"
+            onClick={() => {
+              setIsSwitcherOpen(false);
+              openLibrary();
+            }}
+            aria-label="Catalog"
+          >
+            <span>Catalog</span>
+            <span>Layouts, Pads & behavior trees</span>
+          </button>
           {onManageWorkspaceLayouts && (
             <button
               type="button"
@@ -207,6 +223,20 @@ export default function ConnectionTabs({
             >
               <span>Manage panels</span>
               <span>Installations &amp; permissions</span>
+            </button>
+          )}
+          {onOpenRecordings && (
+            <button
+              type="button"
+              className="connection-switcher-tool"
+              aria-label="Recordings"
+              onClick={() => {
+                setIsSwitcherOpen(false);
+                onOpenRecordings();
+              }}
+            >
+              <span>Recordings</span>
+              <span>Open local recordings</span>
             </button>
           )}
           {themeControl}

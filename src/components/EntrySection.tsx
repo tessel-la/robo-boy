@@ -452,13 +452,6 @@ const EntrySection: React.FC<EntrySectionProps> = ({ onConnect, embedded = false
               Connect
             </button>
           </form>
-          <button
-            type="button"
-            className="advanced-toggle"
-            onClick={() => onConnect({ offline: true, ros2Option: 'ip', ros2Value: 'localhost' })}
-          >
-            Open local recordings
-          </button>
 
           {!hasEnterpriseRobots() && recentConnections.length > 0 && (
             <div className="recent-connections" aria-label="Recent connections">

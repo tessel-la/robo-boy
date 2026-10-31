@@ -1,5 +1,6 @@
+import { ManagementDialogHeader } from '../components/management/ManagementDialogHeader';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { FiChevronDown, FiPlus, FiTrash2, FiX } from 'react-icons/fi';
+import { FiChevronDown, FiPlus, FiTrash2 } from 'react-icons/fi';
 import { useRuntimeConfig } from '../runtime/runtimeConfig';
 import { createLocalPanelManagerBackend, remotePanelManagerBackend } from './managerBackend';
 import { OFFICIAL_PANEL_SOURCE } from './constants';
@@ -364,20 +365,8 @@ const PanelManagerDialog = ({
       onMouseDown={event => event.target === event.currentTarget && onClose()}
     >
       <section className="panel-manager-dialog" role="dialog" aria-modal="true" aria-labelledby="panel-manager-title">
-        <header>
-          <div>
-            <span className="panel-manager-kicker">Deployment control</span>
-            <h2 id="panel-manager-title">External panels</h2>
-          </div>
-          <button
-            type="button"
-            className="panel-manager-icon-button"
-            onClick={onClose}
-            aria-label="Close panel manager"
-          >
-            <FiX aria-hidden="true" />
-          </button>
-        </header>
+        <ManagementDialogHeader title="External panels" titleId="panel-manager-title" subtitle="Deployment control" closeLabel="Close panel manager" onClose={onClose}/>
+
 
         {!config ? (
           requiresToken === true ? (
