@@ -24,34 +24,21 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-it('registers surface projection with the viewer, combines status, shares its selected source and cleans up ownership', () => {
+it('shares its selected source, combines timing status and cleans up camera ownership', () => {
   const p = props();
-  const removeOverlay = vi.fn(),
-    resetProjection = vi.fn(),
+  const resetProjection = vi.fn(),
     onClient = vi.fn();
-  let overlay: { render: () => void; dispose: () => void };
-  Object.assign(p.viewer.current, {
-    resetProjection,
-    addOverlay: vi.fn(value => {
-      overlay = value;
-      return removeOverlay;
-    }),
-  });
+  Object.assign(p.viewer.current, { resetProjection });
   const view = render(
     <CameraImageViz
       {...p}
       onClient={onClient}
-      options={{ imageSource: 'webrtc', renderMode: 'surfaces', whepUrl: 'https://robot.example/whep' }}
+      options={{ imageSource: 'webrtc', renderMode: 'plane', whepUrl: 'https://robot.example/whep' }}
     />
   );
   expect(onClient).toHaveBeenCalledWith('camera', instances[0]);
-  overlay!.render();
-  expect(p.onStatus).toHaveBeenLastCalledWith('camera', expect.stringContaining('Select the URDF'));
   instances[0].config.onStatus('Waiting for TF');
-  expect(p.onStatus).toHaveBeenLastCalledWith(
-    'camera',
-    expect.stringMatching(/Latest TF.*Waiting for TF.*Select the URDF/)
-  );
+  expect(p.onStatus).toHaveBeenLastCalledWith('camera', expect.stringMatching(/Latest TF.*Waiting for TF/));
   const stopImages = vi.fn(),
     listener = vi.fn();
   vi.mocked(subscribeToProjectionImages).mockReturnValue(stopImages);
@@ -70,13 +57,12 @@ it('registers surface projection with the viewer, combines status, shares its se
     <CameraImageViz
       {...p}
       onClient={onClient}
-      options={{ imageSource: 'webrtc', renderMode: 'plane', whepUrl: 'https://robot.example/whep' }}
+      options={{ imageSource: 'webrtc', renderMode: 'plane', opacity: 0.5, whepUrl: 'https://robot.example/whep' }}
     />
   );
   expect(instances).toHaveLength(1);
   view.unmount();
   expect(resetProjection).toHaveBeenCalledWith('camera-owner');
-  expect(removeOverlay).toHaveBeenCalledOnce();
   expect(onClient).toHaveBeenLastCalledWith('camera', null);
   expect(instances[0].dispose).toHaveBeenCalledOnce();
 });

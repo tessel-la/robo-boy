@@ -112,6 +112,19 @@ const tf = (sec = 0, x = 10, child_frame_id = 'optical') => ({
   ],
 });
 
+it('renders a saved mesh-mode layer as a calibrated image plane', async () => {
+  const c = make({ options: JSON.parse('{"renderMode":"surfaces","cameraInfoTopic":"/cam/camera_info"}') });
+  history.ingest(tf(), true);
+  receive('/cam/camera_info', info(0));
+  receive('/cam/image_raw', image());
+  await flush();
+  expect(c.object.visible).toBe(true);
+  expect(c.plane.visible).toBe(true);
+  expect(c.depthPoints.visible).toBe(false);
+  expect(c.plane.material.map).toBeTruthy();
+  expect(c.getSnapshot().displayed?.frame.header).toEqual(header());
+});
+
 it('uses image-time TF and calibration, recovers with delayed data and preserves optical coordinates/UVs', async () => {
   const c = make();
   receive('/cam/image_raw', image());

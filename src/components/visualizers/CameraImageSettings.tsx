@@ -15,9 +15,7 @@ export default function CameraImageSettings({
   options,
   topics,
   onChange,
-  surfaceLayers = [],
 }: {
-  surfaceLayers?: { id: string; topic: string; type: string }[];
   id: string;
   topic: string;
   options?: CameraImageOptions;
@@ -154,7 +152,6 @@ export default function CameraImageSettings({
         }
       >
         <option value="plane">Image plane</option>
-        <option value="surfaces">Mesh surfaces</option>
         <option value="depth">Depth points (ROS)</option>
       </SelectField>
       {values.renderMode === 'depth' && (
@@ -180,80 +177,6 @@ export default function CameraImageSettings({
           <p className="panel-settings-status">
             Metric ROS depth, sampled to at most 100,000 points. Invalid pixels are omitted. Brightness uses a fixed
             0–10 m scale.
-          </p>
-        </>
-      )}
-      {values.renderMode === 'surfaces' && (
-        <>
-          <fieldset className="camera-surface-targets">
-            <legend>Receiving layers</legend>
-            {surfaceLayers.length ? (
-              surfaceLayers.map(layer => (
-                <ToggleRow
-                  key={layer.id}
-                  label={`${layer.type === 'urdf' ? 'URDF' : 'Mesh markers'} · ${layer.topic}`}
-                  ariaLabel={`Project onto ${layer.type} ${layer.topic}`}
-                  checked={values.surfaceTargets.includes(layer.id)}
-                  onChange={checked =>
-                    onChange(id, {
-                      surfaceTargets: checked
-                        ? [...values.surfaceTargets, layer.id]
-                        : values.surfaceTargets.filter(item => item !== layer.id),
-                    })
-                  }
-                />
-              ))
-            ) : (
-              <p className="panel-settings-status">Add a URDF or mesh-marker layer to receive the image.</p>
-            )}
-            {values.surfaceTargets
-              .filter(target => !surfaceLayers.some(layer => layer.id === target))
-              .map(target => (
-                <ToggleRow
-                  key={target}
-                  label={`Unavailable layer · ${target}`}
-                  checked
-                  onChange={() =>
-                    onChange(id, { surfaceTargets: values.surfaceTargets.filter(item => item !== target) })
-                  }
-                />
-              ))}
-          </fieldset>
-          <TextField
-            id={`camera-surface-links-${id}`}
-            label="Receiving links/frames (optional)"
-            value={values.surfaceLinks.join(', ')}
-            placeholder="All links; or base_link, arm_link"
-            onChange={text =>
-              onChange(id, {
-                surfaceLinks: text
-                  .split(',')
-                  .map(value => value.trim())
-                  .filter(Boolean),
-              })
-            }
-          />
-          <SelectField
-            id={`camera-surface-timing-${id}`}
-            label="Surface geometry timing"
-            ariaLabel={`Surface geometry timing for ${label}`}
-            value={values.surfaceTiming}
-            onChange={surfaceTiming => onChange(id, { surfaceTiming: surfaceTiming as 'image' | 'latest' })}
-          >
-            <option value="latest">Latest scene (not time-synchronized)</option>
-            <option value="image">TF at image acquisition time</option>
-          </SelectField>
-          <ScaleField
-            id={`surface-range-${id}`}
-            label="Maximum projection range (m)"
-            value={values.surfaceRange}
-            min={0.1}
-            max={1000}
-            precision={1}
-            onChange={surfaceRange => onChange(id, { surfaceRange })}
-          />
-          <p className="panel-settings-status">
-            Occlusion uses visible URDF/mesh geometry. Unmodelled obstacles cannot block the projection.
           </p>
         </>
       )}

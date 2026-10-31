@@ -561,13 +561,12 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({
             </Suspense>
           );
         } else if (viz.type === 'markerarray') {
-          return <MarkerArrayViz key={viz.id} layerId={viz.id} ros={ros} topic={viz.topic} viewer={ros3dViewer}
+          return <MarkerArrayViz key={viz.id} ros={ros} topic={viz.topic} viewer={ros3dViewer}
             provider={customTFProvider} ready={isProviderReady} opacity={(viz.options as MeshDisplayOptions)?.opacity} />;
         } else if (viz.type === 'urdf') { // Added URDF rendering
           return (
             <React.Fragment key={viz.id}>
               <UrdfViz
-                layerId={viz.id}
                 ros={ros}
                 isRosConnected={isRosConnected}
                 ros3dViewer={ros3dViewer}

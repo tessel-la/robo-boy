@@ -34,9 +34,7 @@ export default function LayerSettings({
   typeLabel,
   topics,
   onChange,
-  surfaceLayers = [],
 }: {
-  surfaceLayers?: { id: string; topic: string; type: string }[];
   viz: VisualizationConfig;
   typeLabel: string;
   topics: { name: string; type: string }[];
@@ -89,7 +87,6 @@ export default function LayerSettings({
           topic={viz.topic}
           options={viz.options as CameraImageOptions}
           topics={topics}
-          surfaceLayers={surfaceLayers}
           onChange={onChange}
         />
       );

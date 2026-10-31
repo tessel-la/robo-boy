@@ -57,7 +57,7 @@ export class MarkerArrayClient {
 
   constructor(private options: {
     ros: Ros; topic: string; tfClient: CustomTFProvider; rootObject: THREE.Object3D;
-    path: string; requestRender: () => void; loadMesh?: typeof loadMesh; opacity?: number; layerId?: string;
+    path: string; requestRender: () => void; loadMesh?: typeof loadMesh; opacity?: number;
   }) {
     this.meshOpacity.set(options.opacity);
     this.resourceManager = createRobotResourceManager(options.path);
@@ -111,8 +111,6 @@ export class MarkerArrayClient {
     local.quaternion.set(q.x, q.y, q.z, q.w);
     local.scale.set(scale.x, scale.y, scale.z);
     group.add(local);
-    group.userData.projectionFrame = marker.header.frame_id;
-    group.userData.projectionLayer = this.options.layerId;
     this.options.rootObject.add(group);
     const entry: Entry = { group, frame: marker.header.frame_id, signature, callback: () => {} };
     entry.callback = tf => {

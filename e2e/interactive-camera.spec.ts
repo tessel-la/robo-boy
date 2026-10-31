@@ -128,16 +128,14 @@ test('inspects a camera, freezes exact snapshots, captures through a service and
   expect(errors).toEqual([]);
 });
 
-test('projects onto URDF surfaces in WebGL, switches timing explicitly and retains settings', async ({ page }) => {
+test('keeps calibrated image projection and offers only image planes and depth points', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
   page.on('console', message => {
     if (message.type() === 'error') errors.push(message.text());
   });
   const panel = await setup(page);
-  await panel.getByLabel(`Projection mode for Camera image on ${topic}`).selectOption('surfaces');
-  await panel.getByLabel(`Project onto urdf ${description}`).check();
-  await panel.getByLabel(`Surface geometry timing for Camera image on ${topic}`).selectOption('image');
+  await expect(panel.getByLabel(`Projection mode for Camera image on ${topic}`)).toHaveValue('plane');
   await panel.getByLabel(`Inspect camera on ${topic}`).click();
   const inspector = panel.getByRole('region', { name: `Camera inspector for ${topic}` });
   await inspector.getByRole('button', { name: 'Look through camera', exact: true }).click();
@@ -153,118 +151,17 @@ test('projects onto URDF surfaces in WebGL, switches timing explicitly and retai
     return count;
   };
   await expect.poll(red).toBeGreaterThan(5000);
-  await panel.screenshot({ path: '/tmp/roboboy-camera-surfaces.png' });
   await panel.getByRole('button', { name: 'Settings', exact: true }).click();
   await panel.getByRole('tab', { name: /^Visualizations/ }).click();
   const mode = panel.getByLabel(`Projection mode for Camera image on ${topic}`);
   if (!(await mode.isVisible())) await openLayerSettings(panel, 'Camera image', topic);
-  await expect(mode).toHaveValue('surfaces');
-  await expect(panel.getByLabel(`Project onto urdf ${description}`)).toBeChecked();
-  await panel.getByLabel(`Surface geometry timing for Camera image on ${topic}`).selectOption('latest');
-  await expect(panel).toContainText('Surface projection uses latest scene geometry');
+  await expect(mode).toHaveValue('plane');
+  await expect(mode.locator('option')).toHaveText(['Image plane', 'Depth points (ROS)']);
   expect(errors.filter(error => !error.includes('favicon'))).toEqual([]);
 });
 
-test('surface projection stops at occluders from the projector viewpoint and leaves original materials untouched', async ({
-  page,
-}) => {
-  test.skip(
-    process.env.npm_lifecycle_event === 'e2e:stack',
-    'This isolated renderer fixture imports Vite source modules.'
-  );
-  await setup(page);
-  const errors: string[] = [];
-  page.on('pageerror', error => errors.push(error.message));
-  const point = await page.evaluate(async () => {
-    const viewerPath = '/src/utils/ros3d.ts',
-      projectionPath = '/src/utils/ros3d/visualizers/CameraSurface.ts';
-    const compiled = await (await fetch(projectionPath)).text();
-    const threePath = compiled.match(/import \* as THREE from ["']([^"']+)["']/)?.[1];
-    if (!threePath) throw new Error('Three.js module not loaded');
-    const THREE = await import(threePath);
-    const { Viewer } = await import(viewerPath);
-    const { CameraSurfaceProjection } = await import(projectionPath);
-    const host = document.createElement('div');
-    host.id = 'projection-proof';
-    Object.assign(host.style, { position: 'fixed', inset: '0', width: '500px', height: '500px', zIndex: '10000' });
-    document.body.append(host);
-    const viewer = new Viewer({ divID: host.id, width: 500, height: 500, antialias: false });
-    viewer.camera.position.set(4, 0, 1);
-    viewer.camera.up.set(0, 1, 0);
-    viewer.camera.lookAt(0, 0, 4);
-    const layer = new THREE.Group();
-    layer.userData.projectionLayer = 'wall';
-    viewer.scene.add(layer);
-    const original = new THREE.MeshBasicMaterial({ color: 'white' });
-    const wall = new THREE.Mesh(new THREE.BoxGeometry(6, 6, 0.1), original);
-    wall.position.z = 4;
-    layer.add(wall);
-    const other = new THREE.Group();
-    other.userData.projectionLayer = 'blocker';
-    viewer.scene.add(other);
-    const blocker = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 0.5), new THREE.MeshBasicMaterial({ color: 'white' }));
-    blocker.position.z = 2;
-    other.add(blocker);
-    const texture = new THREE.DataTexture(new Uint8Array([255, 0, 0, 255]), 1, 1);
-    texture.needsUpdate = true;
-    texture.colorSpace = THREE.SRGBColorSpace;
-    const snapshot = {
-      frame: { header: {} },
-      position: new THREE.Vector3(),
-      rotation: new THREE.Quaternion(),
-      fixedFrame: 'map',
-      corners: [
-        [-1, -1, 1],
-        [1, -1, 1],
-        [1, 1, 1],
-        [-1, 1, 1],
-      ],
-    };
-    const source = {
-      object: { visible: true },
-      plane: { material: { map: texture } },
-      getSnapshot: () => ({ displayed: snapshot }),
-    };
-    const projection = new CameraSurfaceProjection(viewer, source, {}, () => {});
-    projection.updateOptions({ renderMode: 'surfaces', surfaceTargets: ['wall'], surfaceTiming: 'latest' });
-    viewer.render();
-    const projected = new THREE.Vector3(0, 0, 3.949).project(viewer.camera);
-    (window as any).__surfaceProof = { viewer, projection, blocker, wall, original };
-    return { x: Math.round((projected.x + 1) * 250), y: Math.round((1 - projected.y) * 250) };
-  });
-  const canvas = page.locator('#projection-proof canvas');
-  const sample = async () => {
-    const { data } = await sharp(await canvas.screenshot())
-      .extract({ left: point.x - 2, top: point.y - 2, width: 5, height: 5 })
-      .removeAlpha()
-      .raw()
-      .toBuffer({ resolveWithObject: true });
-    return [data[0], data[1], data[2]];
-  };
-  await expect.poll(async () => (await sample())[1]).toBeGreaterThan(180);
-  await page.evaluate(() => {
-    const p = (window as any).__surfaceProof;
-    p.blocker.visible = false;
-    p.viewer.requestRender();
-  });
-  await expect.poll(async () => (await sample())[1]).toBeLessThan(30);
-  expect(
-    await page.evaluate(() => {
-      const p = (window as any).__surfaceProof;
-      return p.wall.material === p.original;
-    })
-  ).toBe(true);
-  await page.evaluate(() => {
-    const p = (window as any).__surfaceProof;
-    p.projection.dispose();
-    p.viewer.requestRender();
-  });
-  await expect.poll(async () => (await sample())[1]).toBeGreaterThan(180);
-  expect(errors).toEqual([]);
-});
-
 for (const theme of ['dark', 'light', 'solarized', 'custom-cobalt']) {
-  test(`camera inspector and surface settings follow ${theme} without narrow overflow`, async ({ page }, testInfo) => {
+  test(`camera inspector and image settings follow ${theme} without narrow overflow`, async ({ page }, testInfo) => {
     await page.addInitScript(theme => {
       localStorage.setItem('appTheme', theme);
       localStorage.setItem(
@@ -293,7 +190,7 @@ for (const theme of ['dark', 'light', 'solarized', 'custom-cobalt']) {
       element.style.width = '370px';
       element.style.maxWidth = '100%';
     });
-    await panel.getByLabel(`Projection mode for Camera image on ${topic}`).selectOption('surfaces');
+    await panel.getByLabel(`Projection mode for Camera image on ${topic}`).selectOption('plane');
     const settings = panel.locator('.settings-popup');
     expect(await settings.evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
     await panel.getByLabel(`Inspect camera on ${topic}`).click();

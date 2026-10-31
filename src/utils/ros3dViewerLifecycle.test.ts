@@ -133,26 +133,4 @@ describe('ROS3D viewer render lifecycle', () => {
     viewer.controls.dispose();
     viewer.stop();
   });
-
-  it('renders overlays after the scene, unregisters them, and forbids scheduling from overlay disposal', async () => {
-    const { Viewer } = await import('./ros3d');
-    const viewer = new Viewer({ divID: 'viewer', width: 640, height: 480, antialias: true });
-    const renderer = viewer.renderer as unknown as { render: ReturnType<typeof vi.fn> };
-    const overlay = { render: vi.fn(), dispose: vi.fn(() => viewer.requestRender()) };
-    const removed = { render: vi.fn(), dispose: vi.fn() };
-    viewer.addOverlay(overlay);
-    const remove = viewer.addOverlay(removed);
-    remove();
-    viewer.render();
-    expect(overlay.render).toHaveBeenCalledOnce();
-    expect(removed.render).not.toHaveBeenCalled();
-    expect(renderer.render.mock.invocationCallOrder[0]).toBeLessThan(overlay.render.mock.invocationCallOrder[0]);
-    scheduledFrames.clear();
-    viewer.stop();
-    viewer.requestRender();
-    viewer.stop();
-    expect(overlay.dispose).toHaveBeenCalledOnce();
-    expect(removed.dispose).not.toHaveBeenCalled();
-    expect(scheduledFrames).toHaveLength(0);
-  });
 });
