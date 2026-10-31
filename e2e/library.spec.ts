@@ -308,3 +308,69 @@ test('checks for catalog releases on reopen and imports an update only after rev
   await expect(dialog.getByText('Catalog updates available.', { exact: true })).toHaveCount(0);
   expect(await page.locator('.workspace-card').count()).toBe(0);
 });
+
+for (const width of [1280, 390]) {
+  test(`Import all keeps shared items unique and removes old copies at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await installRosMock(page);
+    await page.goto('/');
+    await page.getByRole('button', { name: 'Quick Connect 127.0.0.1', exact: true }).click();
+    await expect(page.getByLabel('Status: Connected')).toBeVisible();
+    await openAppTool(page, 'Catalog');
+    const dialog = page.getByRole('dialog', { name: 'Catalog', exact: true });
+    for (let attempt = 0; attempt < 3; attempt++) {
+      await dialog.getByRole('button', { name: 'Browse', exact: true }).click();
+      await dialog.getByRole('button', { name: 'Import all', exact: true }).click();
+      await dialog.getByRole('button', { name: 'Import 3 collections', exact: true }).click();
+      await expect(dialog.getByText(attempt ? 'Already imported.' : 'Imported successfully.', { exact: true })).toBeVisible();
+      await dialog.getByRole('button', { name: 'Saved', exact: true }).click();
+      await expect(dialog.locator('.library-row')).toHaveCount(7);
+      await expect(dialog.getByRole('button', { name: /^Joint readout/ })).toHaveCount(1);
+      await expect(dialog.getByRole('button', { name: /^Readiness example/ })).toHaveCount(1);
+    }
+    // A previous build may already have saved duplicate collections. Keep their IDs and references.
+    await page.evaluate(async () => {
+      const db = await new Promise<IDBDatabase>((resolve, reject) => {
+        const request = indexedDB.open('robo-boy-content-library', 1);
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+      await new Promise<void>((resolve, reject) => {
+        const tx = db.transaction('collections', 'readwrite');
+        const store = tx.objectStore('collections');
+        const request = store.getAll();
+        request.onsuccess = () => {
+          const original = request.result.find(item => item.package.id === 'la.tessel.panda.inspection');
+          store.add({ ...original, id: 'previous-duplicate-collection' });
+        };
+        tx.oncomplete = () => resolve();
+        tx.onabort = () => reject(tx.error);
+      });
+      db.close();
+      await new Promise<void>(resolve => {
+        window.addEventListener('robo-boy-library-ready', () => resolve(), { once: true });
+        window.dispatchEvent(new Event('robo-boy-library-changed'));
+      });
+    });
+    await expect(dialog.locator('.library-row')).toHaveCount(7);
+    await dialog.getByRole('button', { name: 'Remove Joint readout', exact: true }).click();
+    await dialog.getByRole('button', { name: 'Confirm remove Joint readout', exact: true }).click();
+    await expect(dialog.getByText('Removed.', { exact: true })).toBeVisible();
+    await expect(dialog.getByRole('button', { name: /^Joint readout/ })).toHaveCount(0);
+    await expect(dialog.locator('.library-row')).toHaveCount(6);
+    await page.reload();
+    await page.getByRole('button', { name: 'Quick Connect 127.0.0.1', exact: true }).click();
+    await expect(page.getByLabel('Status: Connected')).toBeVisible();
+    await openAppTool(page, 'Catalog');
+    await expect(dialog.locator('.library-row')).toHaveCount(6);
+    await dialog.getByRole('button', { name: /^Panda inspection/ }).click();
+    await dialog.getByRole('button', { name: 'Open layout', exact: true }).click();
+    await expect(page.locator('.workspace-card')).toHaveCount(width < 800 ? 2 : 3);
+    await expect(page.getByRole('heading', { name: 'Layout Not Found' })).toHaveCount(0);
+    await page.getByRole('button', { name: 'Pad settings', exact: true }).click();
+    const picker = page.getByLabel('Pad layout', { exact: true });
+    await expect(picker.getByRole('option', { name: 'Joint readout · Template', exact: true })).toHaveCount(1);
+    await expect(picker.getByRole('option', { selected: true })).toHaveText('Joint readout · Template');
+    expect(await getPublishedRosMessages(page, '/arm_1/servo_node/delta_twist_cmds')).toEqual([]);
+  });
+}

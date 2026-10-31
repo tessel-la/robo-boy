@@ -160,8 +160,9 @@ then open the content. Imported Pads appear in Pad settings, layouts in **Worksp
 and trees in the BT editor’s **Saved Trees** menu, including after reload.
 Export and collection management are under **Saved options** and **Details & collection**.
 Repeated imports of unchanged collections show **Already imported**. Different content may share a name;
-Saved also shows its collection and version. Use **×** beside a saved item to remove it. Imported items
-remain available to existing layouts; importing the collection again restores them. A locally authored
+Saved also shows its collection and version. Identical imported items shared by collections, including
+older duplicate imports, appear once in Saved and the normal pickers. Use **×** beside a saved item to remove
+all imported copies represented by that row. Imported items remain available to existing layouts; importing the collection again restores them. A locally authored
 Pad used by a saved or current layout must be removed from that layout before deleting it.
 
 Opening Catalog checks online sources for newer releases and new items. **Review updates** lets you

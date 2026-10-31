@@ -253,10 +253,24 @@ it('hydrates templates before workspace mounting and synchronizes same-window up
   expect(onUse).toHaveBeenCalledWith(expect.objectContaining({ kind: 'pad' }));
   await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   await writeLibrary({
-    collections: [makeCollection({ ...cloneContent(bundledReleases[0].package), title: 'Second robot' })],
+    collections: [
+      makeCollection({
+        ...cloneContent(bundledReleases[0].package),
+        title: 'Second robot',
+        documents: cloneContent(bundledReleases[0].package.documents).map(doc => ({
+          ...doc,
+          data:
+            doc.kind === 'pad'
+              ? { ...(doc.data as any), name: 'Second robot joints' }
+              : doc.kind === 'workspace'
+                ? { ...(doc.data as any), title: 'Second robot layout' }
+                : doc.data,
+        })),
+      }),
+    ],
   });
   click('Browse');
-  await screen.findByRole('button', { name: /Second robot/ });
+  await screen.findByRole('button', { name: /^Second robot joints/ });
   await waitFor(() => expect(screen.getByLabelText('Available layouts')).toHaveTextContent('2'));
 });
 
@@ -426,4 +440,50 @@ it('rejects malformed removal metadata without altering stored packages', async 
   click('Open Catalog');
   expect(await screen.findByRole('alert')).toHaveTextContent('Invalid removed catalog items');
   expect((await readLibrarySnapshot()).collections[0].package).toEqual(item.package);
+});
+
+it('shows shared imported items once and removes every matching copy together', async () => {
+  const collections = bundledReleases.map(release => makeCollection(cloneContent(release.package)));
+  // Include a copy imported before duplicate prevention existed.
+  collections.push(makeCollection(cloneContent(bundledReleases[0].package)));
+  await writeLibrary({ collections });
+  const view = dialog({ ...empty, collections });
+  expect(screen.getAllByRole('button', { name: /^Joint readout/ })).toHaveLength(1);
+  expect(screen.getAllByRole('button', { name: /^Readiness example/ })).toHaveLength(1);
+  expect(screen.getAllByRole('button', { name: /^Panda inspection/ })).toHaveLength(1);
+  click('Remove Joint readout');
+  click('Confirm remove Joint readout');
+  await screen.findByText('Removed.');
+  const data = await readLibrarySnapshot();
+  expect(data.collections).toHaveLength(4);
+  for (const item of data.collections.filter(item => item.package.id !== bundledReleases[2].package.id))
+    expect(item.removedDocumentIds).toEqual(['pad/joints']);
+  view.rerender(
+    <LibraryDialog initialFilter="all" data={data} refresh={refresh} storageError="" onClose={onClose} onUse={onUse} />
+  );
+  expect(screen.queryByRole('button', { name: /^Joint readout/ })).toBeNull();
+  expect(screen.getByRole('button', { name: /^Readiness example/ })).toBeVisible();
+  expect(onUse).not.toHaveBeenCalled();
+});
+it('exports all source collections even when their shared items appear once', async () => {
+  const collections = bundledReleases.map(release => makeCollection(cloneContent(release.package)));
+  let exported!: Blob;
+  vi.spyOn(URL, 'createObjectURL').mockImplementation(blob => {
+    exported = blob as Blob;
+    return 'blob:test';
+  });
+  vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+  dialog({ ...empty, collections });
+  expand(/Saved options/);
+  click('Export all');
+  const raw = await new Promise<string>(resolve => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.readAsText(exported);
+  });
+  expect(
+    JSON.parse(raw)
+      .collections.map((pack: any) => pack.id)
+      .sort()
+  ).toEqual(collections.map(item => item.package.id).sort());
 });

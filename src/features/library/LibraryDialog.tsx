@@ -19,6 +19,7 @@ import { readSavedContent, removeSavedContent, type SavedContent } from './saved
 import type { LibraryData, LibraryFilter } from './LibraryProvider';
 import type { ContentDocument } from './packages';
 import { checkCatalogSources } from './updates';
+import { groupLibraryDocuments, type LibraryDocumentEntry } from './documents';
 import './LibraryDialog.css';
 const documentName = (doc: ContentDocument) => {
   const data = doc.data as { name?: string; title?: string };
@@ -111,6 +112,10 @@ export default function LibraryDialog({ initialFilter, data, storageError, refre
     () => new Map([...bundledReleases, ...data.releases].map(item => [item.sha256, item])),
     [data.releases]
   );
+  const importedDocuments = useMemo(
+    () => groupLibraryDocuments(data.collections, showArchived),
+    [data.collections, showArchived]
+  );
   const rows = source
     ? source.catalog.items.map(item => ({
         id: item.id,
@@ -118,33 +123,37 @@ export default function LibraryDialog({ initialFilter, data, storageError, refre
         description: item.description,
         kinds: item.kinds ?? (item.kind === 'collection' ? [] : [item.kind]),
         catalog: item,
+        members: undefined as LibraryDocumentEntry[] | undefined,
         documentId: undefined as string | undefined,
         collection: undefined as LibraryCollection | undefined,
         saved: undefined as SavedContent | undefined,
       }))
     : [
-        ...data.collections
-          .filter(item => showArchived || !item.archivedAt)
-          .flatMap(item =>
-            item.package.documents
-              .filter(doc => !item.removedDocumentIds?.includes(doc.id))
-              .map(doc => ({
-                id: libraryDocumentId(item.id, doc.id),
-                title: documentName(doc),
-                description: `${item.title} · ${item.package.version}${item.archivedAt ? ' · Archived' : ''}`,
-                kinds: [doc.kind],
-                documentId: doc.id,
-                collection: item,
-                catalog: undefined as CatalogItem | undefined,
-                saved: undefined as SavedContent | undefined,
-              }))
-          ),
+        ...importedDocuments.map(({ collection, document, members }) => ({
+          id: libraryDocumentId(collection.id, document.id),
+          title: documentName(document),
+          description: [
+            ...new Set(
+              members.map(
+                ({ collection }) =>
+                  `${collection.title} · ${collection.package.version}${collection.archivedAt ? ' · Archived' : ''}`
+              )
+            ),
+          ].join(' · '),
+          kinds: [document.kind],
+          documentId: document.id,
+          collection,
+          members,
+          catalog: undefined as CatalogItem | undefined,
+          saved: undefined as SavedContent | undefined,
+        })),
         ...saved.items.map(item => ({
           id: item.id,
           title: item.title,
           description: 'Saved on this device',
           kinds: documentKinds(item.package),
           saved: item,
+          members: undefined as LibraryDocumentEntry[] | undefined,
           documentId: undefined as string | undefined,
           collection: undefined as LibraryCollection | undefined,
           catalog: undefined as CatalogItem | undefined,
@@ -355,10 +364,11 @@ export default function LibraryDialog({ initialFilter, data, storageError, refre
   const exported = () => {
     const chosen = [
       ...new Map(
-        (selected.length ? rows.filter(row => selected.includes(row.id)) : rows).map(row => [
-          row.collection?.id ?? row.id,
-          row,
-        ])
+        (selected.length ? rows.filter(row => selected.includes(row.id)) : rows)
+          .flatMap(row =>
+            row.members ? row.members.map(member => ({ ...row, collection: member.collection })) : [row]
+          )
+          .map(row => [row.collection?.id ?? row.id, row])
       ).values(),
     ];
     const packages = chosen
@@ -437,8 +447,29 @@ export default function LibraryDialog({ initialFilter, data, storageError, refre
     const row = rows.find(row => row.id === id);
     if (row?.collection && row.documentId) {
       setPreview([]);
-      void updateCollection(row.collection, {
-        removedDocumentIds: [...new Set([...(row.collection.removedDocumentIds ?? []), row.documentId])],
+      void run(async signal => {
+        const changes = new Map<string, LibraryCollection>();
+        for (const { collection, document } of row.members!) {
+          const current = changes.get(collection.id) ?? collection;
+          changes.set(collection.id, {
+            ...current,
+            removedDocumentIds: [...new Set([...(current.removedDocumentIds ?? []), document.id])],
+          });
+        }
+        await writeLibrary(
+          {
+            updateCollections: [...changes.values()].map(collection => ({
+              collection,
+              expectedRevision: collection.revision ?? 0,
+            })),
+          },
+          signal
+        );
+        await refresh();
+        if (signal.aborted) return;
+        setConfirmDelete(null);
+        setNotice('Removed.');
+        requestAnimationFrame(() => itemsPanel.current?.focus());
       });
     } else if (row?.saved) {
       void run(async () => {

@@ -2,14 +2,17 @@ import type { GamepadLibraryItem } from '../customGamepad/types';
 import type { BehaviorTree } from '../behaviorTree/types';
 import type { LibraryCollection } from './store';
 import type { ContentDocument } from './packages';
+import { groupLibraryDocuments } from './documents';
 const cloneContent = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 import { createUuid } from '../../utils/uuid';
 import { normalizeWorkspaceLayout, type WorkspaceLayoutNode } from '../../components/workspaceLayout';
 import type { SavedWorkspaceLayout, ExportedWorkspacePanel } from '../workspace/documents';
 let collections: LibraryCollection[] = [];
+let visibleDocuments: ReturnType<typeof groupLibraryDocuments> = [];
 export const libraryDocumentId = (collectionId: string, docId: string) => `library:${collectionId}:${docId}`;
 export function setLibrarySnapshot(next: LibraryCollection[]) {
   collections = next;
+  visibleDocuments = groupLibraryDocuments(next);
   window.dispatchEvent(new Event('robo-boy-gamepads-changed'));
   window.dispatchEvent(new Event('robo-boy-behavior-trees-changed'));
   window.dispatchEvent(new Event('robo-boy-library-ready'));
@@ -28,11 +31,9 @@ const libraryPad = (item: LibraryCollection, doc: ContentDocument): GamepadLibra
   };
 };
 export function getLibraryPads(): GamepadLibraryItem[] {
-  return collections.flatMap(item =>
-    item.package.documents
-      .filter(doc => doc.kind === 'pad' && isLibraryDocumentVisible(item, doc.id))
-      .map(doc => libraryPad(item, doc))
-  );
+  return visibleDocuments
+    .filter(entry => entry.document.kind === 'pad')
+    .map(entry => libraryPad(entry.collection, entry.document));
 }
 /** Removed templates remain resolvable for already saved/open layouts. */
 export function getLibraryPad(id: string): GamepadLibraryItem | null {
@@ -43,16 +44,12 @@ export function getLibraryPad(id: string): GamepadLibraryItem | null {
   return null;
 }
 export function getLibraryTrees(): BehaviorTree[] {
-  return collections
-    .filter(item => !item.archivedAt)
-    .flatMap(item =>
-      item.package.documents
-        .filter(doc => doc.kind === 'behaviorTree' && isLibraryDocumentVisible(item, doc.id))
-        .map(doc => ({
-          ...(cloneContent(doc.data) as BehaviorTree),
-          id: libraryDocumentId(item.id, doc.id),
-        }))
-    );
+  return visibleDocuments
+    .filter(entry => entry.document.kind === 'behaviorTree')
+    .map(entry => ({
+      ...(cloneContent(entry.document.data) as BehaviorTree),
+      id: libraryDocumentId(entry.collection.id, entry.document.id),
+    }));
 }
 export function getLibraryTree(id: string): BehaviorTree | null {
   for (const item of collections)
@@ -63,16 +60,12 @@ export function getLibraryTree(id: string): BehaviorTree | null {
 }
 /** Picker entries keep package-local references private until an explicit open. */
 export function getLibraryWorkspaces(): Array<{ id: string; title: string }> {
-  return collections
-    .filter(item => !item.archivedAt)
-    .flatMap(item =>
-      item.package.documents
-        .filter(doc => doc.kind === 'workspace' && isLibraryDocumentVisible(item, doc.id))
-        .map(doc => ({
-          id: libraryDocumentId(item.id, doc.id),
-          title: (doc.data as SavedWorkspaceLayout).title,
-        }))
-    );
+  return visibleDocuments
+    .filter(entry => entry.document.kind === 'workspace')
+    .map(entry => ({
+      id: libraryDocumentId(entry.collection.id, entry.document.id),
+      title: (entry.document.data as SavedWorkspaceLayout).title,
+    }));
 }
 export function openLibraryWorkspace(id: string): LibraryOpenRequest | null {
   for (const item of collections.filter(item => !item.archivedAt)) {

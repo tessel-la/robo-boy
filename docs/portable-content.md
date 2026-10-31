@@ -101,8 +101,10 @@ This menu is also available before connecting. The existing Pad, BT and layout m
   still requires review and confirmation. New releases hide the old version from pickers and preserve existing
   layout references. Offline checks retain saved content. Folder refresh asks you to select the folder again.
 - Reimporting unchanged content shows **Already imported**. Different collections can contain items with the
-  same name; Saved shows the collection and version. Existing duplicates are preserved for manual cleanup.
-- **×** beside a Saved item removes it after confirmation. Imported items disappear from pickers while
+  same name; Saved shows the collection and version. Identical imported documents appear once across
+  collections and older duplicate imports. Original IDs remain resolvable for existing layouts.
+- **×** beside a Saved item removes all identical imported copies represented by that row after confirmation.
+  Imported items disappear from pickers while
   existing layouts keep their dependencies. Reimporting their collection restores removed items. Authored
   items use their normal stores; deleting an authored Pad is blocked while saved/current layouts reference it.
 - **Archive collection** hides it but preserves workspace references. Enable **Saved options → Show archived collections** to export or restore it. Removing a catalog does not remove imported copies.
