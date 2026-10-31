@@ -816,13 +816,3 @@ input[type='number'].scale-field-number:disabled {
   outline: none;
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary-color, #32cd32) 14%, transparent);
 }
-
-.camera-surface-targets {
-  display: grid;
-  gap: 8px;
-  max-height: 160px;
-  overflow: auto;
-}
-.camera-surface-targets .settings-toggle-row {
-  overflow-wrap: anywhere;
-}

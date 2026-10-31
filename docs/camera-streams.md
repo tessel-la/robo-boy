@@ -14,6 +14,8 @@ This scales acquisition/decoding by unique stream profiles rather than panel cou
 
 Native MJPEG playback avoids the JavaScript multipart/bitmap/canvas path and can cost less main-thread time for one Camera. Shared playback trades that overhead for reusable frames and eliminating compatible duplicate image downloads/decodes. See [performance measurements](performance.md). High-resolution/many-camera performance must be measured on the target device; this change does not claim worker or GPU zero-copy decoding.
 
+Shared readers request `Accept: multipart/mixed`. The ROS image's streamer returns that readable multipart type; native image requests retain `multipart/x-mixed-replace` with identical JPEG bytes. WebKit (Safari and Tauri) rejects the latter through fetch even when native Camera playback succeeds. Rebuild the ROS image for shared Camera/3D streaming on WebKit. Older streamers remain compatible with browsers that can read their response type.
+
 Future in-app consumers can subscribe to the same frame events and leases. `webrtcStreams.ts` owns one WHEP peer/session per ROS connection identity and selected URL. Native Camera playback uses the shared MediaStream. A video/bitmap capture path exists only while 3D consumers need it; it follows the highest requested projection rate and shares bitmaps. A 3D-only API failure does not stop native Camera playback. The final consumer closes the peer and DELETEs its WHEP session. WebRTC supports plain standard WHEP streams without custom ROS metadata; arbitrary proprietary signaling requires an adapter. WebRTC capture-time synchronization is deferred. External sandboxed panels do not share these in-process bitmaps. The transport does not own TF, replay clocks, or consumer UI.
 
 ## ROS metadata and compatibility
@@ -38,6 +40,12 @@ Old/custom streamers without acquisition metadata play in Camera and support **L
 For MJPEG, selecting **Capture time** requires valid embedded acquisition metadata. Missing metadata is reported visibly; there is no automatic timing/transport fallback. ROS image messages use their standard headers. WebRTC uses Latest TF only in this increment and needs no metadata topic or stream-ID extension. Adding arbitrary metadata to a WebRTC publisher does not automatically enable capture-time matching. The non-WebRTC metadata producer and parser remain unchanged.
 
 Camera source/quality controls and 3D source/calibration/timing/rate controls are independent. Changing 3D rate does not change Camera's requested playback rate. Higher rates add bitmap/GPU work and can compete for device resources. 3D retains complete image/pose snapshots while waiting for TF, independently of the sampling rate. Refresh Camera to retry a failed WebRTC session; changing/removing a 3D source also releases its subscription. No silent ROS/HLS fallback is performed. Replay always bypasses live MJPEG and WHEP endpoints, including saved WebRTC choices. The existing external WebRTC panel is unchanged and does not share in-process sessions with built-in panels.
+
+## Metric depth
+
+Select ROS messages in Camera or Depth points (ROS) in a 3D Camera image layer. Both consumers share the exact depth topic’s decoder and metric frame, including during replay. 16UC1 is millimetres and 32FC1 is metres. compressedDepth PNG retains the full 16-bit payload and applies the transport’s inverse-depth quantization for 32FC1. PNG dimensions, chunk bounds/CRCs, decompressed size and quantization are validated before use; RVL is unsupported. MJPEG/WebRTC carry display pixels and cannot supply metric geometry.
+
+Camera shows a fixed 0–10 m preview plus a pointer/touch/keyboard pixel measurement. 3D uses the existing CameraInfo/TF rules and bounds geometry to 100,000 regularly sampled points, with configurable range and point size. Missing TF/calibration holds the last complete snapshot; malformed data clears it. Mono16 is still an intensity image. See the [user guide](user-guide.md) for controls and limits.
 
 ## Deployment and validation
 

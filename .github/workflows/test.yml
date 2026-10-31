@@ -73,6 +73,8 @@ jobs:
             - '.github/workflows/test.yml'
             - '.github/scripts/**'
           ros:
+            - 'infra/cloudini/**'
+            - 'scripts/test-cloudini-ros.py'
             - 'infra/docker/ros_entrypoint.sh'
             - 'infra/docker/Dockerfile.ros'
             - 'infra/ros/**'
@@ -353,7 +355,7 @@ jobs:
 
     - name: Install Playwright browsers
       if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.frontend == 'true' || needs.changes.outputs.e2e == 'true'
-      run: npx playwright install --with-deps chromium firefox
+      run: npx playwright install --with-deps chromium firefox webkit
 
     - name: Install external panel test artifacts
       if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.frontend == 'true' || needs.changes.outputs.e2e == 'true'
@@ -372,6 +374,10 @@ jobs:
         echo "status=${status}" >> "$GITHUB_OUTPUT"
         .github/scripts/write-log-summary.sh "E2E Tests" "${status}" playwright-output.log "xvfb-run --auto-servernum npm run e2e" 260
         exit 0
+
+    - name: Test compressed point clouds in web and packaged desktop
+      if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.frontend == 'true' || needs.changes.outputs.e2e == 'true'
+      run: npm run test:cloudini
 
     - name: Test enterprise login in web and packaged-app mode
       if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.frontend == 'true' || needs.changes.outputs.e2e == 'true'
@@ -427,3 +433,28 @@ jobs:
       run: |
         python -m pip install pyyaml tornado
         python -m unittest discover -s infra/ros -v
+
+    - name: Verify the pinned worker codec matches its source
+      if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.ros == 'true'
+      run: |
+        sh scripts/build-cloudini.sh
+        git diff --exit-code -- src/utils/cloudini/vendor
+
+    - name: Build and test point-cloud compression through the ROS gateway
+      if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.ros == 'true'
+      run: |
+        docker build -f infra/docker/Dockerfile.ros -t roboboy-cloudini:ci .
+        docker run --rm --network none --entrypoint bash \
+          -e ROS_DOMAIN_ID=157 -e ROS_LOCALHOST_ONLY=1 \
+          -e RMW_IMPLEMENTATION=rmw_fastrtps_cpp -e FASTDDS_BUILTIN_TRANSPORTS=UDPv4 \
+          -v "$PWD/scripts/test-cloudini-ros.py:/test.py:ro" roboboy-cloudini:ci \
+          -c 'source /opt/ros/jazzy/setup.bash && python3 /test.py'
+
+    - name: Test native and readable camera stream responses
+      if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.ros == 'true'
+      run: |
+        docker run --rm --network none --entrypoint bash \
+          -e ROS_DOMAIN_ID=158 -e ROS_LOCALHOST_ONLY=1 \
+          -e RMW_IMPLEMENTATION=rmw_fastrtps_cpp -e FASTDDS_BUILTIN_TRANSPORTS=UDPv4 \
+          -v "$PWD/scripts/test-camera-streamer.py:/test.py:ro" roboboy-cloudini:ci \
+          -c 'source /opt/ros/jazzy/setup.bash && source /opt/roboboy-video/share/web_video_server/local_setup.bash && python3 /test.py'

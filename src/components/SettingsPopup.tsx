@@ -146,7 +146,6 @@ const SettingsPopup: React.FC<SettingsPopupProps> = ({
             </button>
           )}
           <LayerSettings
-            surfaceLayers={activeVisualizations.filter(item => item.type === 'urdf' || item.type === 'markerarray')}
             viz={layer}
             typeLabel={TYPE_LABELS[layer.type]}
             topics={allTopics}

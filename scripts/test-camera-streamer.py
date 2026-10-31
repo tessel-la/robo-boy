@@ -33,24 +33,41 @@ def main():
                                '-p', 'address:=127.0.0.1', '-p', 'port:=18080'],
                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
     try:
-        response = None
+        # The HTTP listener can start before DDS discovers this publisher. Upstream
+        # closes streams opened for topics absent from its graph at subscription time.
         for _ in range(50):
             try:
-                response = urllib.request.urlopen('http://127.0.0.1:18080/stream?topic=/camera_fixture/image_raw&type=mjpeg&width=32&height=24', timeout=3)
-                break
+                with urllib.request.urlopen('http://127.0.0.1:18080/', timeout=3) as listing:
+                    if b'/camera_fixture/image_raw' in listing.read():
+                        break
             except OSError:
-                time.sleep(0.1)
-        assert response is not None, 'streamer did not start'
-        with response:
-            length = None
-            for _ in range(15):
-                line = response.readline(2048).decode('ascii').strip()
-                if line.lower().startswith('content-length:'):
-                    length = int(line.split(':', 1)[1])
-                if length and not line:
-                    break
-            assert length and length < 1000000
-            jpeg = response.read(length)
+                pass
+            time.sleep(0.1)
+        else:
+            raise AssertionError('streamer did not discover the image publisher')
+
+        def read_jpeg(accept=None):
+            request = urllib.request.Request(
+                'http://127.0.0.1:18080/stream?topic=/camera_fixture/image_raw&type=mjpeg&width=32&height=24',
+                headers={'Accept': accept} if accept else {})
+            with urllib.request.urlopen(request, timeout=3) as response:
+                expected = 'multipart/mixed' if accept == 'multipart/mixed' else 'multipart/x-mixed-replace'
+                assert response.headers.get_content_type() == expected
+                assert response.headers['Vary'] == 'Accept'
+                assert response.headers['Access-Control-Allow-Origin'] == '*'
+                length = None
+                for _ in range(15):
+                    line = response.readline(2048).decode('ascii').strip()
+                    if line.lower().startswith('content-length:'):
+                        length = int(line.split(':', 1)[1])
+                    if length and not line:
+                        break
+                assert length and length < 1000000
+                return response.read(length)
+        native = read_jpeg()
+        jpeg = read_jpeg('multipart/mixed')
+        assert jpeg == native, 'content negotiation must preserve JPEG bytes and metadata'
+        assert read_jpeg('image/*') == native, 'native image Accept must retain the original MIME type'
         assert jpeg[:4] == bytes([255, 216, 255, 239])
         size = struct.unpack_from('>H', jpeg, 4)[0]
         assert jpeg[6:14] == b'RBROS001'

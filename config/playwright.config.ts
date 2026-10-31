@@ -63,6 +63,11 @@ export default defineConfig({
                 headless: process.env.CI ? false : undefined,
             },
         },
+        {
+            name: 'webkit-camera',
+            testMatch: 'mjpeg-transport.spec.ts',
+            use: { ...devices['Desktop Safari'] },
+        },
     ],
 
     /* Run your local dev server before starting the tests */

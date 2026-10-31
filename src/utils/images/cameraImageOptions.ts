@@ -1,16 +1,14 @@
 export const DEFAULT_NEW_CAMERA_IMAGE_OPTIONS = { videoTiming: 'latest' as const };
 /** Streamer projection selects the image_transport base; explicit ROS consumers keep the exact topic. */
 export const cameraPanelTopic = (topic: string, source: 'ros' | 'stream' | 'webrtc') =>
-  source === 'stream' ? topic.replace(/\/compressed$/, '') : topic;
+  source === 'stream' ? topic.replace(/\/(?:compressed|compressedDepth)$/, '') : topic;
 import type { WebRtcOptions } from './webrtcStreams';
 import type { ImageGeometry } from './cameraCalibration';
 import { isCameraStreamQuality, type CameraStreamQuality } from '../cameraStreamQuality';
 export interface CameraImageOptions extends WebRtcOptions {
-  renderMode?: 'plane' | 'surfaces';
-  surfaceTargets?: string[];
-  surfaceLinks?: string[];
-  surfaceRange?: number;
-  surfaceTiming?: 'image' | 'latest';
+  renderMode?: 'plane' | 'depth';
+  depthMaxRange?: number;
+  depthPointSize?: number;
   capture?: CameraCaptureOptions;
   videoTiming?: 'capture' | 'latest';
   /** Zero follows the source rate. Affects video projection only, never Camera playback. */
@@ -37,7 +35,7 @@ export type CameraCaptureOptions = {
   outputTopic?: string;
   resultStampPath?: string;
   timeoutSec?: number;
-}
+};
 function projectionStreamQuality(value: unknown): Exclude<CameraStreamQuality, 'auto'> {
   return isCameraStreamQuality(value) && value !== 'auto' ? value : 'medium';
 }
@@ -45,13 +43,12 @@ export function normalizeCameraImageOptions(options: CameraImageOptions = {}, to
   const number = (value: unknown, fallback: number, min: number, max: number) =>
     typeof value === 'number' && Number.isFinite(value) ? Math.min(max, Math.max(min, value)) : fallback;
   return {
-    renderMode: options.renderMode === 'surfaces' ? 'surfaces' as const : 'plane' as const,
-    surfaceTargets: Array.isArray(options.surfaceTargets) ? [...new Set(options.surfaceTargets.filter((id): id is string => typeof id === 'string' && id.length <= 256))].slice(0, 64) : [],
-    surfaceLinks: Array.isArray(options.surfaceLinks) ? [...new Set(options.surfaceLinks.filter((id): id is string => typeof id === 'string' && id.length <= 512))].slice(0, 256) : [],
-    surfaceRange: number(options.surfaceRange, 20, 0.1, 1000),
-    surfaceTiming: options.surfaceTiming === 'image' ? 'image' as const : 'latest' as const,
+    // Removed mesh-surface settings from saved workspaces fall back to the image plane.
+    renderMode: options.renderMode === 'depth' ? ('depth' as const) : ('plane' as const),
+    depthMaxRange: number(options.depthMaxRange, 10, 0.1, 1000),
+    depthPointSize: number(options.depthPointSize, 2, 1, 10),
     imageSource:
-      options.imageSource === 'ros'
+      options.renderMode === 'depth' || options.imageSource === 'ros'
         ? ('ros' as const)
         : options.imageSource === 'webrtc'
           ? ('webrtc' as const)
@@ -77,7 +74,7 @@ export function normalizeCameraImageOptions(options: CameraImageOptions = {}, to
   };
 }
 export function cameraInfoTopicFor(imageTopic: string, topics: readonly { name: string; type: string }[]) {
-  const base = imageTopic.replace(/\/compressed$/, '').replace(/\/[^/]+$/, '');
+  const base = imageTopic.replace(/\/(?:compressed|compressedDepth)$/, '').replace(/\/[^/]+$/, '');
   const name = `${base}/camera_info`;
   return (
     topics.find(

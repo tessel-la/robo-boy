@@ -68,6 +68,9 @@ class MjpegStream {
           signal: abort.signal,
           cache: 'no-store',
           redirect: 'error',
+          // WebKit rejects x-mixed-replace in fetch, although it supports native <img> playback.
+          // Updated streamers negotiate readable multipart; older servers can keep their MIME type.
+          headers: { Accept: 'multipart/mixed' },
         });
         if (!response.ok) throw new Error(`Camera stream returned HTTP ${response.status}.`);
         if (!response.body) throw new Error('This browser cannot read camera streams.');

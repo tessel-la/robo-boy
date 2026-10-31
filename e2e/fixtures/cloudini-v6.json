@@ -1,0 +1,36 @@
+{
+  "format": "cloudini",
+  "header": {
+    "frame_id": "laser",
+    "stamp": {
+      "sec": 123,
+      "nanosec": 456
+    }
+  },
+  "width": 3,
+  "height": 1,
+  "point_step": 12,
+  "row_step": 36,
+  "is_bigendian": false,
+  "fields": [
+    {
+      "name": "x",
+      "offset": 0,
+      "datatype": 7,
+      "count": 1
+    },
+    {
+      "name": "y",
+      "offset": 4,
+      "datatype": 7,
+      "count": 1
+    },
+    {
+      "name": "z",
+      "offset": 8,
+      "datatype": 7,
+      "count": 1
+    }
+  ],
+  "compressed_data": "Q0xPVURJTklfVjA2CnZlcnNpb246IDYKd2lkdGg6IDMKaGVpZ2h0OiAxCnBvaW50X3N0ZXA6IDEyCmVuY29kaW5nX29wdDogTE9TU1kKY29tcHJlc3Npb25fb3B0OiBaU1RECmZpZWxkczoKICAtIG5hbWU6IHgKICAgIG9mZnNldDogMAogICAgdHlwZTogRkxPQVQzMgogICAgcmVzb2x1dGlvbjogMC4wMDEKICAtIG5hbWU6IHkKICAgIG9mZnNldDogNAogICAgdHlwZTogRkxPQVQzMgogICAgcmVzb2x1dGlvbjogMC4wMDEKICAtIG5hbWU6IHoKICAgIG9mZnNldDogOAogICAgdHlwZTogRkxPQVQzMgogICAgcmVzb2x1dGlvbjogMC4wMDEKACkAAAAotS/9IBcwAAABAwAABQUoAADHEfssACgAANkuuR8YOQAArjePlQHudQ=="
+}

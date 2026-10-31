@@ -54,26 +54,18 @@ it('switches to plain WebRTC with explicit latest TF timing', () => {
   expect(onChange).toHaveBeenCalledWith('camera', { imageSource: 'webrtc', videoTiming: 'latest' });
 });
 
-it('preserves image-plane defaults and requires explicit mesh target/timing choices', () => {
+it('offers image planes and depth points, migrating saved mesh projection to the image plane', () => {
+  const legacy = JSON.parse('{"renderMode":"surfaces","surfaceTargets":["robot"],"imageSource":"ros"}');
+  expect(normalizeCameraImageOptions(legacy)).toMatchObject({ renderMode: 'plane', imageSource: 'ros' });
   expect(normalizeCameraImageOptions({}).renderMode).toBe('plane');
-  expect(normalizeCameraImageOptions({ renderMode: 'surfaces' }).surfaceTargets).toEqual([]);
   const onChange = vi.fn();
-  render(
-    <CameraImageSettings
-      id="c"
-      topic="/image"
-      options={{ renderMode: 'surfaces' }}
-      topics={[]}
-      surfaceLayers={[{ id: 'robot', type: 'urdf', topic: '/description' }]}
-      onChange={onChange}
-    />
-  );
-  fireEvent.click(screen.getByLabelText('Project onto urdf /description'));
-  expect(onChange).toHaveBeenCalledWith('c', { surfaceTargets: ['robot'] });
-  fireEvent.change(screen.getByLabelText('Surface geometry timing for Camera image on /image'), {
-    target: { value: 'image' },
-  });
-  expect(onChange).toHaveBeenLastCalledWith('c', { surfaceTiming: 'image' });
+  render(<CameraImageSettings id="c" topic="/depth/image_raw" options={legacy} topics={[]} onChange={onChange} />);
+  const mode = screen.getByLabelText('Projection mode for Camera image on /depth/image_raw');
+  expect(mode).toHaveValue('plane');
+  expect([...mode.querySelectorAll('option')].map(option => option.value)).toEqual(['plane', 'depth']);
+  expect(screen.queryByText('Receiving layers')).not.toBeInTheDocument();
+  fireEvent.change(mode, { target: { value: 'depth' } });
+  expect(onChange).toHaveBeenCalledWith('c', { renderMode: 'depth', imageSource: 'ros' });
 });
 
 it('opens the same streamer camera from compressed-topic layers while preserving explicit ROS selections', async () => {
@@ -83,36 +75,31 @@ it('opens the same streamer camera from compressed-topic layers while preserving
   expect(cameraPanelTopic('/front/image_raw/compressed', 'webrtc')).toBe('/front/image_raw/compressed');
 });
 
-it('configures and removes explicit surface receivers, including unavailable saved layers', () => {
-  const onChange = vi.fn();
-  const props = { id: 'c', topic: '/image', topics: [], onChange };
-  const view = render(<CameraImageSettings {...props} options={{}} />);
-  fireEvent.change(screen.getByLabelText('Projection mode for Camera image on /image'), {
-    target: { value: 'surfaces' },
+it('persists depth mode with metric controls and enforces ROS even for saved video settings', () => {
+  expect(normalizeCameraImageOptions({ renderMode: 'depth', imageSource: 'webrtc' }).imageSource).toBe('ros');
+  expect(normalizeCameraImageOptions({ depthMaxRange: NaN, depthPointSize: Infinity })).toMatchObject({
+    depthMaxRange: 10,
+    depthPointSize: 2,
   });
-  expect(onChange).toHaveBeenLastCalledWith('c', { renderMode: 'surfaces' });
-  view.rerender(
-    <CameraImageSettings
-      {...props}
-      options={{ renderMode: 'surfaces', surfaceTargets: ['robot', 'missing'] }}
-      surfaceLayers={[
-        { id: 'robot', type: 'urdf', topic: '/description' },
-        { id: 'markers', type: 'markerarray', topic: '/markers' },
-      ]}
-    />
-  );
-  fireEvent.click(screen.getByLabelText('Project onto urdf /description'));
-  expect(onChange).toHaveBeenLastCalledWith('c', { surfaceTargets: ['missing'] });
-  fireEvent.click(screen.getByLabelText('Unavailable layer · missing'));
-  expect(onChange).toHaveBeenLastCalledWith('c', { surfaceTargets: ['robot'] });
-  fireEvent.click(screen.getByLabelText('Project onto markerarray /markers'));
-  expect(onChange).toHaveBeenLastCalledWith('c', { surfaceTargets: ['robot', 'missing', 'markers'] });
-  const links = screen.getByLabelText('Receiving links/frames (optional)');
-  fireEvent.change(links, { target: { value: ' base_link, , arm_link ' } });
-  fireEvent.blur(links);
-  expect(onChange).toHaveBeenLastCalledWith('c', { surfaceLinks: ['base_link', 'arm_link'] });
-  fireEvent.change(screen.getByRole('slider', { name: 'Maximum projection range (m)' }), { target: { value: '0.5' } });
-  expect(onChange).toHaveBeenLastCalledWith('c', { surfaceRange: expect.any(Number) });
-  view.rerender(<CameraImageSettings {...props} options={{ renderMode: 'surfaces' }} />);
-  expect(screen.getByText('Add a URDF or mesh-marker layer to receive the image.')).toBeInTheDocument();
+  const onChange = vi.fn();
+  const props = { id: 'c', topic: '/depth/image_rect', topics: [], onChange };
+  const view = render(<CameraImageSettings {...props} />);
+  fireEvent.change(screen.getByLabelText('Projection mode for Camera image on /depth/image_rect'), {
+    target: { value: 'depth' },
+  });
+  expect(onChange).toHaveBeenLastCalledWith('c', { renderMode: 'depth', imageSource: 'ros' });
+  view.rerender(<CameraImageSettings {...props} options={{ renderMode: 'depth' }} />);
+  expect(screen.getByRole('slider', { name: 'Maximum depth (m)' })).toBeVisible();
+  expect(screen.getByLabelText('Point size')).toBeVisible();
+  expect(screen.queryByLabelText('Image source for Camera image on /depth/image_rect')).not.toBeInTheDocument();
+});
+
+it('matches compressedDepth calibration without changing the exact ROS topic', async () => {
+  const { cameraInfoTopicFor, cameraPanelTopic } = await import('../../utils/images/cameraImageOptions');
+  expect(
+    cameraInfoTopicFor('/depth/image_rect/compressedDepth', [
+      { name: '/depth/camera_info', type: 'sensor_msgs/msg/CameraInfo' },
+    ])
+  ).toBe('/depth/camera_info');
+  expect(cameraPanelTopic('/depth/image_rect/compressedDepth', 'ros')).toBe('/depth/image_rect/compressedDepth');
 });

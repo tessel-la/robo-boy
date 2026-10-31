@@ -36,6 +36,7 @@ export async function createThirdPartyNotices(moduleIds) {
     'Robo-Boy — licenses and third-party notices',
     await readFile(path.join(root, 'LICENSE'), 'utf8'),
     await readFile(path.join(root, 'THIRD_PARTY_NOTICES.md'), 'utf8'),
+    await readFile(path.join(root, 'src/utils/cloudini/vendor/codec.LICENSE'), 'utf8'),
   ];
   for (const [name, { directory, manifest }] of [...packages].sort(([a], [b]) => a.localeCompare(b))) {
     const entries = await readdir(directory, { withFileTypes: true });

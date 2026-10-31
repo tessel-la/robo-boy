@@ -3,6 +3,8 @@ import { Topic, type Ros } from 'roslib';
 import type { CustomTFProvider } from '../../tfUtils';
 import { decodePointCloud, type PointCloudMessage } from '../../pointCloudDecoder';
 import { watchMessageTransform } from '../../stampedTransform';
+import { isCompressedPointCloud } from '../../cloudini/cloudiniMessage';
+import { subscribeCloudini } from '../../cloudini/cloudiniStreams';
 
 type Settings = {
   scaleX?: number;
@@ -22,6 +24,7 @@ type Settings = {
 type Options = {
   ros: Ros;
   topic: string;
+  messageType?: string;
   tfClient: CustomTFProvider;
   rootObject: THREE.Object3D;
   max_pts?: number;
@@ -40,6 +43,7 @@ export class PointCloud2 extends THREE.Object3D {
   public points!: { object: THREE.Points; geometry: THREE.BufferGeometry; material: THREE.Material; setup: boolean };
   public fixedFrame: string;
   private subscription: Topic | null = null;
+  private stopCompressed?: () => void;
   private stopTransform?: () => void;
   private header?: PointCloudMessage['header'];
   private settings: Settings;
@@ -57,16 +61,31 @@ export class PointCloud2 extends THREE.Object3D {
     this.initializePoints(options.material);
     this.visible = false;
     options.rootObject.add(this);
-    this.subscription = new Topic({
-      ros: options.ros,
-      name: options.topic,
-      messageType: 'sensor_msgs/PointCloud2',
-      compression: options.compression ?? 'none',
-      throttle_rate: options.throttle_rate ?? 100,
-      queue_length: 1,
-    });
-    this.subscription.subscribe(this.receive);
     options.onStatus?.('Waiting for point cloud messages.');
+    if (isCompressedPointCloud(options.messageType ?? '')) {
+      this.stopCompressed = subscribeCloudini(options.ros, options.topic, event => {
+        if (!this.active) return;
+        if (event.message) this.receive(event.message);
+        else if (event.error) {
+          this.stopTransform?.();
+          this.stopTransform = undefined;
+          this.visible = false;
+          this.points.geometry.setDrawRange(0, 0);
+          options.onStatus?.(event.error);
+          this.render();
+        }
+      });
+    } else {
+      this.subscription = new Topic({
+        ros: options.ros,
+        name: options.topic,
+        messageType: options.messageType ?? 'sensor_msgs/PointCloud2',
+        compression: options.compression ?? 'none',
+        throttle_rate: options.throttle_rate ?? 100,
+        queue_length: 1,
+      });
+      this.subscription.subscribe(this.receive);
+    }
   }
 
   private render = () => this.options.requestRender?.();
@@ -162,6 +181,8 @@ export class PointCloud2 extends THREE.Object3D {
     this.active = false;
     this.subscription?.unsubscribe();
     this.subscription = null;
+    this.stopCompressed?.();
+    this.stopCompressed = undefined;
     this.stopTransform?.();
     this.stopTransform = undefined;
     this.visible = false;

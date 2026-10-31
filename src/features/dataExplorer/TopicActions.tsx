@@ -4,6 +4,7 @@ import type { Resource } from './types';
 
 const VISUAL_TYPES: Record<string, string> = {
   PointCloud2: 'pointcloud',
+  CompressedPointCloud2: 'pointcloud',
   LaserScan: 'laserscan',
   CameraInfo: 'camerainfo',
   // PoseStamped is left out for now: its 3D arrow does not show the pose correctly yet.

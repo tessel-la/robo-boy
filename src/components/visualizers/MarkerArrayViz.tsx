@@ -12,7 +12,6 @@ export default function MarkerArrayViz({
   provider,
   ready,
   opacity = 1,
-  layerId,
 }: {
   ros: Ros | null;
   topic: string;
@@ -20,7 +19,6 @@ export default function MarkerArrayViz({
   provider: RefObject<CustomTFProvider | null>;
   ready: boolean;
   opacity?: number;
-  layerId?: string;
 }) {
   const { meshResourcesBaseUrl } = useRuntimeConfig();
   const clientRef = useRef<MarkerArrayClient | null>(null);
@@ -34,7 +32,6 @@ export default function MarkerArrayViz({
       rootObject: viewer.current.scene,
       tfClient: provider.current,
       opacity: opacityRef.current,
-      layerId,
       path: meshResourcesBaseUrl,
       requestRender: viewer.current.requestRender,
     });
@@ -43,7 +40,7 @@ export default function MarkerArrayViz({
       client.dispose();
       if (clientRef.current === client) clientRef.current = null;
     };
-  }, [ros, topic, viewer, provider, ready, meshResourcesBaseUrl, layerId]);
+  }, [ros, topic, viewer, provider, ready, meshResourcesBaseUrl]);
   useEffect(() => {
     clientRef.current?.setOpacity(opacity);
   }, [opacity]);

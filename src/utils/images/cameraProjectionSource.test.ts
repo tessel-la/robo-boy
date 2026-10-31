@@ -61,6 +61,20 @@ it('does not create a stream if removed while the source size probe is pending',
   expect(subscribeToImages).not.toHaveBeenCalled();
 });
 
+it.each(['compressed', 'compressedDepth'])('uses the raw streamer topic for %s images, like Camera', async suffix => {
+  vi.stubGlobal('createImageBitmap', vi.fn());
+  const stop = subscribeToProjectionImages({ ...config, topic: `${config.topic}/${suffix}` }, vi.fn());
+  await flush();
+  expect(probeCameraSourceSize).toHaveBeenCalledWith(config.baseUrl, config.topic);
+  expect(subscribeToMjpeg).toHaveBeenCalledWith(
+    config.ros,
+    expect.stringContaining('topic=/camera/image_raw&'),
+    config.baseUrl,
+    expect.any(Function)
+  );
+  stop();
+});
+
 it('reports invalid cached metadata and detaches without subscribing to ROS', async () => {
   vi.stubGlobal('createImageBitmap', vi.fn());
   const stopVideo = vi.fn(),

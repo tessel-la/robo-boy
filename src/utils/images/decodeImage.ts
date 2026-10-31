@@ -1,3 +1,4 @@
+import { depthPreview, isDepthEncoding, rawDepthFrame, type DepthFrame } from './depthFrames';
 import {
   checkImageDimensions,
   COMPRESSED_IMAGE_TYPES,
@@ -14,6 +15,8 @@ export interface DecodedImageFrame {
   /** Original acquisition header when projection explicitly uses a synthetic latest-TF header. */
   acquisitionHeader?: { frame_id?: string; stamp?: unknown };
   encoding: string;
+  /** Shared immutable metric measurements, independent of the display preview. */
+  depth?: DepthFrame;
   /** Full-frame source size before streamer resizing; cropping/rotation is unsupported. */
   sourceSize?: { width: number; height: number };
   projectionError?: string;
@@ -53,12 +56,23 @@ export async function decodeImageFrame(message: any, type: string): Promise<Deco
   if (!message || typeof message !== 'object') throw new Error('Image message is invalid.');
   const data = messageBytes(message.data);
   if (!COMPRESSED_IMAGE_TYPES.includes(type)) {
-    return { image: rawImageToRgba({ ...message, data }), header: message.header, encoding: message.encoding };
+    const depth = isDepthEncoding(message.encoding) ? rawDepthFrame({ ...message, data }) : undefined;
+    return {
+      image: depth ? depthPreview(depth) : rawImageToRgba({ ...message, data }),
+      depth,
+      header: message.header,
+      encoding: message.encoding,
+    };
   }
   const format = typeof message.format === 'string' ? message.format : '';
   if (format.length > 512 || /compresseddepth.*rvl/i.test(format))
     throw new Error('Compressed image format is unsupported.');
-  const payload = /compresseddepth/i.test(format) ? data.subarray(12) : data;
+  if (/compresseddepth/i.test(format)) {
+    const { decodeCompressedDepth } = await import('./compressedDepth');
+    const depth = await decodeCompressedDepth(data, format);
+    return { image: depthPreview(depth), depth, header: message.header, encoding: format };
+  }
+  const payload = data;
   const [width, height] = encodedDimensions(payload);
   checkImageDimensions(width, height);
   const image = await createImageBitmap(compressedImageBlob({ format, data }), {

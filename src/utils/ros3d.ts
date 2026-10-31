@@ -75,12 +75,6 @@ class Viewer {
   private stopped = false;
   private renderWidth = 0;
   private renderHeight = 0;
-  private overlays = new Set<{ render: () => void; dispose: () => void }>();
-  addOverlay(overlay: { render: () => void; dispose: () => void }) {
-    this.overlays.add(overlay);
-    return () => { this.overlays.delete(overlay); };
-  }
-
   constructor(options: {
     divID: string;
     width: number;
@@ -208,14 +202,11 @@ class Viewer {
   public render = (): void => {
     this.animationId = null;
     this.renderer.render(this.scene, this.camera);
-    this.overlays.forEach(overlay => overlay.render());
   };
 
   // Stop rendering
   stop(): void {
     this.stopped = true;
-    this.overlays.forEach(overlay => overlay.dispose());
-    this.overlays.clear();
     if (this.animationId !== null) {
       cancelAnimationFrame(this.animationId);
       this.animationId = null;
@@ -1355,7 +1346,6 @@ class UrdfClient extends THREE.Object3D {
 
                     if (!activeSubscriptionFrame) {
                         activeSubscriptionFrame = tfFrameName;
-                        linkObject.userData.projectionFrame = tfFrameName;
                         console.log(`[UrdfClient] Successful TF data for URDF link "${urdfLinkName}" from TF frame "${tfFrameName}"`);
                         candidateSubscriptions.forEach(subscription => {
                             if (subscription.frameId === tfFrameName) return;
