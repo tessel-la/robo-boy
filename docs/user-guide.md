@@ -149,14 +149,15 @@ Open the theme selector to choose a built-in theme or create a custom palette. C
 
 ## Local Data
 
-Robo-Boy has no cloud user account or server-side application database. Custom themes, gamepads, behavior trees, panel sizing, and visualization settings are stored in `localStorage`. Reusable Library collections and cached sources use IndexedDB. Data is isolated by browser, profile, and site origin. Persistent behavior-tree executions are transient ROS runtime sessions; they are not stored as user data and end if the ROS stack restarts.
+Robo-Boy has no cloud user account or server-side application database. Custom themes, gamepads, behavior trees, panel sizing, and visualization settings are stored in `localStorage`. Reusable Catalog collections and cached sources use IndexedDB. Data is isolated by browser, profile, and site origin. Persistent behavior-tree executions are transient ROS runtime sessions; they are not stored as user data and end if the ROS stack restarts.
 
 ### Importing reusable content
 
-Open **Library** in the connection switcher, next to **Workspace layouts** and **Manage panels**,
-or on the entry screen. **Saved** lists layouts, Pads and behavior trees by name; **Browse** shows
+Open **Catalog** in the top-left menu, next to **Workspace layouts** and **Manage panels**.
+The same menu is available before connecting and contains **Recordings** for local replay. **Saved** lists layouts, Pads and behavior trees by name; **Browse** shows
 Official and custom sources. **Import** offers a JSON file, folder or online catalog. Review, save,
-then open the content. Imported trees also appear in the BT editor’s **Saved Trees** menu.
+then open the content. Imported Pads appear in Pad settings, layouts in **Workspace layouts**,
+and trees in the BT editor’s **Saved Trees** menu, including after reload.
 Export and collection management are under **Saved options** and **Details & collection**.
 The existing Pad, BT and workspace import menus remain available.
 See [Portable content files](portable-content.md) for supported formats and sharing limits.

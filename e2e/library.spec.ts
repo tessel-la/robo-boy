@@ -1,3 +1,4 @@
+import { openAppTool } from './helpers/navigation';
 import { expect, test } from '@playwright/test';
 import { installRosMock, getPublishedRosMessages, getRosServiceCalls } from './helpers/rosMock';
 import { readFileSync } from 'node:fs';
@@ -40,17 +41,16 @@ for (const theme of ['dark', 'light', 'solarized', 'cobalt'])
       await page.getByRole('button', { name: 'Quick Connect 127.0.0.1', exact: true }).click();
       await expect(page.getByLabel('Status: Connected')).toBeVisible();
       await page.getByRole('button', { name: /Switch connections, current/ }).click();
-      await page.getByRole('button', { name: 'Library', exact: true }).click();
-      const dialog = page.getByRole('dialog', { name: 'Library', exact: true });
+      await page.getByRole('button', { name: 'Catalog', exact: true }).click();
+      const dialog = page.getByRole('dialog', { name: 'Catalog', exact: true });
       await expect(dialog).toBeVisible();
       await dialog.getByRole('button', { name: 'Browse', exact: true }).click();
       await dialog.getByRole('button', { name: 'Select multiple' }).click();
       await dialog.getByLabel('Select Panda inspection').check();
       await dialog.getByRole('button', { name: 'Import selected (1)', exact: true }).click();
-      await expect(dialog.getByText('Review import', { exact: true })).toBeVisible();
+      await expect(dialog.getByText('Import contents', { exact: true })).toBeVisible();
       expect(await dialog.locator('canvas,iframe').count()).toBe(0);
-      await dialog.locator('summary').filter({ hasText: 'Topics and frames' }).click();
-      await dialog.getByRole('textbox', { name: 'topic /joint_states', exact: true }).fill('/panda/joint_states');
+      await expect(dialog.getByRole('textbox')).toHaveCount(0);
       const bounds = (await dialog.boundingBox())!;
       expect(bounds.x).toBeGreaterThanOrEqual(0);
       expect(bounds.x + bounds.width).toBeLessThanOrEqual(width);
@@ -66,7 +66,7 @@ for (const theme of ['dark', 'light', 'solarized', 'cobalt'])
       await page.getByRole('button', { name: /Switch connections, current/ }).click();
       await expect(page.getByRole('button', { name: 'Workspace layouts', exact: true })).toBeVisible();
       await expect(page.getByRole('button', { name: 'Manage panels', exact: true })).toBeVisible();
-      await page.getByRole('button', { name: 'Library', exact: true }).click();
+      await page.getByRole('button', { name: 'Catalog', exact: true }).click();
       await expect(dialog.getByRole('button', { name: /^Panda inspection/ })).toBeVisible();
       await dialog.getByRole('button', { name: /^Panda inspection/ }).click();
       await expect(dialog.getByRole('button', { name: 'Open layout', exact: true })).toBeVisible();
@@ -103,8 +103,8 @@ test('custom HTTPS catalog persists offline with exact cached content and import
     })
   );
   await page.goto('/');
-  await page.getByRole('button', { name: 'Library', exact: true }).click();
-  const dialog = page.getByRole('dialog', { name: 'Library', exact: true });
+  await openAppTool(page, 'Catalog');
+  const dialog = page.getByRole('dialog', { name: 'Catalog', exact: true });
   await dialog
     .locator('summary')
     .filter({ hasText: /^Import$/ })
@@ -117,23 +117,23 @@ test('custom HTTPS catalog persists offline with exact cached content and import
   await expect(dialog.getByRole('heading', { name: 'Preview', exact: true })).toBeVisible();
   await page.reload();
   await page.route('https://library.example/**', route => route.abort());
-  await page.getByRole('button', { name: 'Library', exact: true }).click();
+  await openAppTool(page, 'Catalog');
   await dialog.getByRole('button', { name: 'Browse', exact: true }).click();
   await dialog.getByLabel('Source').selectOption({ label: 'Panda community' });
   await dialog.getByRole('button', { name: 'Import all', exact: true }).click();
-  await expect(dialog.getByText('Review import', { exact: true })).toBeVisible();
+  await expect(dialog.getByText('Import contents', { exact: true })).toBeVisible();
   await dialog.getByRole('button', { name: 'Import 1 collection', exact: true }).click();
   await expect(dialog).toContainText('Imported 1 collection');
   expect(await page.locator('.workspace-card').count()).toBe(0);
 });
 test('imports an entire robot repository folder with the verified catalog', async ({ page }) => {
   await page.goto('/');
-  await page.getByRole('button', { name: 'Library', exact: true }).click();
-  const dialog = page.getByRole('dialog', { name: 'Library', exact: true });
-  await dialog.getByLabel('Library folder').setInputFiles(resolve('library'));
+  await openAppTool(page, 'Catalog');
+  const dialog = page.getByRole('dialog', { name: 'Catalog', exact: true });
+  await dialog.getByLabel('Catalog folder').setInputFiles(resolve('library'));
   await expect(dialog).toContainText('Folder added');
   await dialog.getByRole('button', { name: 'Import all', exact: true }).click();
-  await expect(dialog.getByText('Review import', { exact: true })).toBeVisible();
+  await expect(dialog.getByText('Import contents', { exact: true })).toBeVisible();
   await dialog.getByRole('button', { name: `Import ${catalog.items.length} collections`, exact: true }).click();
   await expect(dialog).toContainText(`Imported ${catalog.items.length} collections`);
 });
@@ -144,13 +144,13 @@ test('imports and opens Genesis controls without publishing servo commands', asy
   await page.getByRole('button', { name: 'Quick Connect 127.0.0.1', exact: true }).click();
   await expect(page.getByLabel('Status: Connected')).toBeVisible();
   await page.getByRole('button', { name: /Switch connections, current/ }).click();
-  await page.getByRole('button', { name: 'Library', exact: true }).click();
-  const dialog = page.getByRole('dialog', { name: 'Library', exact: true });
+  await page.getByRole('button', { name: 'Catalog', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Catalog', exact: true });
   await dialog.getByRole('button', { name: 'Browse', exact: true }).click();
   await dialog.getByRole('button', { name: 'Select multiple' }).click();
   await dialog.getByLabel('Select Genesis control').check();
   await dialog.getByRole('button', { name: 'Import selected (1)', exact: true }).click();
-  await expect(dialog.getByText('Review import', { exact: true })).toBeVisible();
+  await expect(dialog.getByText('Import contents', { exact: true })).toBeVisible();
   await expect(dialog).toContainText('Move Genesis X Y');
   expect(await getPublishedRosMessages(page, '/arm_1/servo_node/delta_twist_cmds')).toEqual([]);
   await dialog.getByRole('button', { name: 'Import 1 collection', exact: true }).click();
@@ -163,7 +163,7 @@ test('imports and opens Genesis controls without publishing servo commands', asy
   await expect(page.getByText('Linear Z', { exact: true })).toBeVisible();
   expect(await getPublishedRosMessages(page, '/arm_1/servo_node/delta_twist_cmds')).toEqual([]);
   await page.getByRole('button', { name: /Switch connections, current/ }).click();
-  await page.getByRole('button', { name: 'Library', exact: true }).click();
+  await page.getByRole('button', { name: 'Catalog', exact: true }).click();
   await dialog.getByRole('button', { name: /^Move Genesis X Y/ }).click();
   await dialog.getByRole('button', { name: 'Open tree', exact: true }).click();
   await expect(dialog).toHaveCount(0);
@@ -182,3 +182,37 @@ test('imports and opens Genesis controls without publishing servo commands', asy
   await expect(page.locator('.bt-float-name')).toHaveText('Move Genesis X Y');
   expect(await getPublishedRosMessages(page, '/arm_1/servo_node/delta_twist_cmds')).toEqual([]);
 });
+
+for (const width of [1280, 390])
+  test(`finds imported Pads and layouts in their usual pickers after reload at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await installRosMock(page);
+    await page.goto('/');
+    await page.getByRole('button', { name: 'Quick Connect 127.0.0.1', exact: true }).click();
+    await expect(page.getByLabel('Status: Connected')).toBeVisible();
+    await openAppTool(page, 'Catalog');
+    const dialog = page.getByRole('dialog', { name: 'Catalog', exact: true });
+    await dialog.getByRole('button', { name: 'Browse', exact: true }).click();
+    await dialog.getByRole('button', { name: /^Panda inspection/ }).click();
+    await dialog.getByRole('button', { name: 'Import', exact: true }).click();
+    await dialog.getByRole('button', { name: 'Import 1 collection', exact: true }).click();
+    await expect(dialog).toContainText('Imported 1 collection');
+    await page.keyboard.press('Escape');
+    expect(await page.locator('.workspace-card').count()).toBe(0);
+    await page.reload();
+    await page.getByRole('button', { name: 'Quick Connect 127.0.0.1', exact: true }).click();
+    await expect(page.getByLabel('Status: Connected')).toBeVisible();
+    await openAppTool(page, 'Workspace layouts');
+    await expect(page.getByRole('button', { name: 'Load Panda inspection', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Delete Panda inspection', exact: true })).toHaveCount(0);
+    await page.getByRole('button', { name: 'Load Panda inspection', exact: true }).click();
+    await expect(page.locator('.workspace-card')).toHaveCount(width < 800 ? 2 : 3);
+    await page.getByRole('button', { name: 'Pad settings', exact: true }).click();
+    const picker = page.getByLabel('Pad layout', { exact: true });
+    await expect(picker.getByRole('option', { name: 'Joint readout · Template', exact: true })).toHaveCount(1);
+    const value = await picker.inputValue();
+    expect(value).toMatch(/^library:/);
+    await expect(picker.getByRole('option', { selected: true })).toHaveText('Joint readout · Template');
+    expect(await getPublishedRosMessages(page, '/cmd_vel')).toEqual([]);
+    expect(await getRosServiceCalls(page, '/import-danger')).toEqual([]);
+  });

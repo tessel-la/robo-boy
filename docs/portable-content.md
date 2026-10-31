@@ -31,7 +31,7 @@ Existing Pad `{ "version": "1.0.0", "layouts": [...] }`, BT
 workspace layouts remain readable. A missing wrapper version on older Pad/BT files is accepted.
 Exports keep those established wrappers. Unsupported future versions fail without writes.
 
-Library and the existing file importers also accept this package envelope:
+Catalog and the existing file importers also accept this package envelope:
 
 ```json
 {
@@ -65,20 +65,20 @@ workspace entry document; workspace bodies use the saved-layout shape. A package
 (`panel.layoutId`) names its **package document ID**, e.g. `pad/drive`. Every referenced Pad must be
 included. Document IDs are unique within the package; Pad body IDs must also be unique.
 
-Package schema version, document format version and release version are separate. Library supports
+Package schema version, document format version and release version are separate. Catalog supports
 mixed workspace/Pad/BT collections and optional `description`, `author`, `license`, `tags` and
 `compatibility: { "roboboy": ">=0.19.0-0 <1.0.0" }`. Unsupported or incompatible versions fail
 before writes. The narrow existing Pad/BT/workspace importers keep their established scope; use
-Library for mixed collections. Review can remap declared topic, service, action and frame fields;
-arbitrary text and ROS message payloads are never rewritten.
+Catalog for mixed collections. Import preserves topics, frames and ROS payloads exactly as supplied.
 
 ## Browsing, importing and sharing libraries
 
-Open **Library** in the connection menu next to **Workspace layouts** and **Manage panels**, or
-from the entry screen. The existing Pad, BT and layout menus keep their focused file import actions.
+Open **Catalog** in the top-left menu next to **Workspace layouts** and **Manage panels**.
+This menu is also available before connecting. The existing Pad, BT and layout menus keep their focused file import actions.
 
 - **Saved** lists each saved or imported layout, Pad and behavior tree by name. Select an item to open it.
-  Imported behavior trees also appear in the BT editor’s **Saved Trees** menu and node palette.
+  Imported Pads also appear in Pad settings, layouts in **Workspace layouts**, and trees in the
+  BT editor’s **Saved Trees** menu and node palette. These pickers update after import and reload.
 - **Browse → Official** includes offline starter collections and refreshes from
   [Robo-Boy Catalog](https://github.com/tessel-la/robo-boy-catalog). Published content is grouped
   by simulator, with shared examples under `generic/`.
@@ -87,11 +87,11 @@ from the entry screen. The existing Pad, BT and layout menus keep their focused 
 - **Import → Folder…** reads a robot repository/library folder. A manifest can group related documents;
   legacy exports are also discovered, with unambiguous adjacent Pad dependencies included.
 - **Import** on a preview reviews one collection; **Select multiple** and **Import all** handle batches.
-  Review offers optional topic/frame changes and commits the complete selection together. Import
+  The import summary lists names and document types, then saves the selection together. Import
   saves snapshots without opening panels or changing controls. Opening a document is a separate action.
 - Imported Pads are reusable templates; customize one to create an editable Pad. BTs open fresh editor
   copies. Workspaces open with new panel/layout IDs and preserve their Pad/BT/3D dependencies. Live
-  control panels require a robot connection; entry-screen opening uses the existing local replay mode.
+  control panels require a robot connection; opening without a connection uses the existing local replay mode.
 - **Export collection** includes dependencies. **Saved options → Export all** creates a portable backup. Collection export, rename,
   archive and restore are under **Details & collection**. Import that JSON on another origin/device. Local collection names are
   included when exporting. Online sharing uses your own repository/hosting; see the
@@ -117,7 +117,7 @@ live under `customGamepad`, `behaviorTree`, and `workspace`; BT structural valid
 the assistant from the BT domain. `MainControlView` remains the workspace coordinator.
 
 The existing feature stores remain authoritative for authored edits and existing file import menus.
-Library aggregates them without migration. Reusable collections, their package-local dependencies,
+Catalog aggregates them without migration. Reusable collections, their package-local dependencies,
 provenance, sources and exact downloaded releases live in the origin-local IndexedDB database
 `robo-boy-content-library`. A native readwrite transaction commits selected collections together;
 ID collisions, cancellation and write failures abort the batch. Metadata edits compare revisions
@@ -125,13 +125,13 @@ inside the transaction to reject stale changes from another window. Same-window 
 BroadcastChannel refresh other views. Archived snapshots remain resolvable, avoiding cross-window
 workspace-reference deletion races.
 
-App owns the Library lifecycle and hydrates templates before mounting a connection workspace.
+App owns the Catalog lifecycle and hydrates templates before mounting a connection workspace.
 The coordinator receives only explicit document-open requests. Domain codecs own body validation,
-3D normalization and BT execution-state removal. The existing external-panel manager and Library
+3D normalization and BT execution-state removal. The existing external-panel manager and Catalog
 share management header chrome and the SHA-256 implementation, while their apply/storage lifecycles
 stay separate: importing JSON does not install code, grant panel permissions or contact ROS.
 
 Existing localStorage file imports keep their guarded synchronous batch and rollback checks; those
-legacy writes are not crash-atomic or cross-tab transactions. Library import is transactional within
+legacy writes are not crash-atomic or cross-tab transactions. Catalog import is transactional within
 IndexedDB, while explicitly opening a workspace still uses the existing workspace localStorage stores.
 Browser storage is isolated by origin/profile; switching URL or desktop profile does not migrate it.

@@ -18,8 +18,8 @@ PNG compressed images, including compressed depth. Camera widgets inside pads st
 
 ## Replay
 
-Drop an `.mcap` file on the panel, or click to choose one. You can also start from **Open local recordings** on the
-connection screen when no robot is available.
+Drop an `.mcap` file on the panel, or click to choose one. You can also start from **Recordings** in the
+top-left menu, available before or after connecting. Local replay opens without a robot connection.
 
 - Play, pause, back/forward 10 seconds, scrub, loop, and speed (0.25× to 8×).
 - Moving forward keeps panel state, as live data would. Moving backward rebuilds Time Series, TF and 3D, because

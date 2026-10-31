@@ -266,11 +266,8 @@ export async function importGamepadFile(file: File, signal?: AbortSignal): Promi
     const accepted = await reviewImport(
       {
         title: 'Import Pads',
-        items: pads.map(pad => `${pad.name} · ${pad.components.length} components`),
-        details: [
-          'Save these Pads for later use.',
-          'Check topics and controls before use.',
-        ],
+        items: pads.map(pad => `${pad.name} · Pad`),
+        details: [],
         action: 'Import',
       },
       signal

@@ -180,10 +180,9 @@ export const importBehaviorTree = async (file: File, signal?: AbortSignal): Prom
     const accepted = await reviewImport(
       {
         title: 'Import Behavior Tree',
-        items: [`${tree.name} · ${tree.nodes.length} nodes`],
+        items: [`${tree.name} · Behavior tree`],
         details: [
-          'Save this tree and open it in the editor. Unsaved editor changes will be replaced.',
-          'Check topics and commands before running.',
+          'Unsaved editor changes will be replaced.',
         ],
         action: 'Import',
       },

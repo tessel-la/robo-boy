@@ -175,6 +175,8 @@ function WorkspaceApp() {
     return session.id;
   };
 
+  const openLocalRecordings = () => handleConnect({ offline: true, ros2Option: 'ip', ros2Value: 'localhost' });
+
   const handleSelectConnection = (id: string) => {
     if (!connectionSessions.some(session => session.id === id && !session.isClosing)) return;
     setActiveConnectionId(id);
@@ -306,6 +308,7 @@ function WorkspaceApp() {
                                 onSelect: handleSelectConnection,
                                 onClose: handleCloseConnection,
                                 onAdd: () => setIsAddingConnection(true),
+                                onOpenRecordings: openLocalRecordings,
                                 themeControl,
                                 appUpdateControl: <AppUpdateMenuItem />,
                               }}
@@ -326,6 +329,7 @@ function WorkspaceApp() {
                         onSelect={handleSelectConnection}
                         onClose={handleCloseConnection}
                         onAdd={() => setIsAddingConnection(true)}
+                        onOpenRecordings={openLocalRecordings}
                         themeControl={themeControl}
                         appUpdateControl={<AppUpdateMenuItem />}
                       />

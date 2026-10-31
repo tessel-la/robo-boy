@@ -2,15 +2,7 @@ import { ManagementDialogHeader } from '../../components/management/ManagementDi
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createUuid } from '../../utils/uuid';
 import { importError, MAX_CONTENT_BYTES, parseContentJson, readContentFile, record } from './json';
-import {
-  bindPackage,
-  documentKinds,
-  packageBindings,
-  readLibraryPackage,
-  validateLibraryPackage,
-  type Binding,
-  type LibraryPackage,
-} from './content';
+import { documentKinds, readLibraryPackage, validateLibraryPackage, type LibraryPackage } from './content';
 import { catalogUrl, fetchContent, readCatalog, readLibraryFolder, resolveRelease } from './catalog';
 import {
   writeLibrary,
@@ -33,7 +25,6 @@ const documentName = (doc: ContentDocument) => {
 interface Preview {
   package: LibraryPackage;
   origin?: LibraryCollection['origin'];
-  bindings: Binding[];
   collection?: LibraryCollection;
   saved?: SavedContent;
   documentId?: string;
@@ -192,7 +183,6 @@ export default function LibraryDialog({ initialFilter, data, storageError, refre
       setPreview([
         {
           package: row.collection.package,
-          bindings: packageBindings(row.collection.package),
           collection: row.collection,
           documentId: row.documentId,
         },
@@ -201,7 +191,7 @@ export default function LibraryDialog({ initialFilter, data, storageError, refre
       return;
     }
     if (row.saved) {
-      setPreview([{ package: row.saved.package, bindings: packageBindings(row.saved.package), saved: row.saved }]);
+      setPreview([{ package: row.saved.package, saved: row.saved }]);
       return;
     }
     setPreview([]);
@@ -214,7 +204,6 @@ export default function LibraryDialog({ initialFilter, data, storageError, refre
         setPreview([
           {
             package: release.package,
-            bindings: packageBindings(release.package),
             origin: {
               sourceId: source.id,
               itemId: row.catalog!.id,
@@ -240,7 +229,6 @@ export default function LibraryDialog({ initialFilter, data, storageError, refre
           downloaded.push(release);
           plans.push({
             package: release.package,
-            bindings: packageBindings(release.package),
             origin: {
               sourceId: source.id,
               itemId: row.catalog.id,
@@ -258,7 +246,7 @@ export default function LibraryDialog({ initialFilter, data, storageError, refre
     });
   const commitImport = () =>
     run(async signal => {
-      const collections = preview.map(item => makeCollection(bindPackage(item.package, item.bindings), item.origin));
+      const collections = preview.map(item => makeCollection(item.package, item.origin));
       await writeLibrary({ collections }, signal);
       await refresh();
       setSourceId('mine');
@@ -268,7 +256,6 @@ export default function LibraryDialog({ initialFilter, data, storageError, refre
         collections.map(collection => ({
           package: collection.package,
           collection,
-          bindings: packageBindings(collection.package),
         }))
       );
       setNotice(`Imported ${collections.length} collection${collections.length === 1 ? '' : 's'}. Ready to open.`);
@@ -279,17 +266,17 @@ export default function LibraryDialog({ initialFilter, data, storageError, refre
       const raw = parseContentJson(text);
       let packages: LibraryPackage[];
       if (raw && typeof raw === 'object' && 'libraryBackupVersion' in raw) {
-        const backup = record(raw, 'Library backup');
+        const backup = record(raw, 'Catalog backup');
         if (
           backup.libraryBackupVersion !== 1 ||
           !Array.isArray(backup.collections) ||
           !backup.collections.length ||
           backup.collections.length > 100
         )
-          throw new Error('Unsupported Library backup.');
+          throw new Error('Unsupported Catalog backup.');
         packages = backup.collections.map(validateLibraryPackage);
       } else packages = [readLibraryPackage(text, file.name.replace(/\.json$/i, ''))];
-      setPreview(packages.map(pack => ({ package: pack, bindings: packageBindings(pack) })));
+      setPreview(packages.map(pack => ({ package: pack })));
       setReviewing(true);
     });
   const readFolder = (files: File[]) =>
@@ -366,7 +353,7 @@ export default function LibraryDialog({ initialFilter, data, storageError, refre
     const packages = chosen
       .map(row => (row.collection ? { ...row.collection.package, title: row.collection.title } : row.saved?.package))
       .filter(Boolean);
-    if (packages.length) download({ libraryBackupVersion: 1, collections: packages }, 'roboboy-library.json');
+    if (packages.length) download({ libraryBackupVersion: 1, collections: packages }, 'roboboy-catalog.json');
   };
   const openDocument = (item: Preview, docId: string) => {
     const doc = item.package.documents.find(doc => doc.id === docId)!;
@@ -425,15 +412,15 @@ export default function LibraryDialog({ initialFilter, data, storageError, refre
       onPointerDown={event => event.stopPropagation()}
     >
       <ManagementDialogHeader
-        title="Library"
+        title="Catalog"
         titleId="library-title"
         subtitle="Layouts, Pads & behavior trees"
-        closeLabel="Close Library"
+        closeLabel="Close Catalog"
         onClose={onClose}
       />
 
       <div className="library-toolbar">
-        <nav aria-label="Library views">
+        <nav aria-label="Catalog views">
           <button aria-pressed={sourceId === 'mine'} onClick={() => chooseSource('mine')}>
             Saved
           </button>
@@ -479,7 +466,7 @@ export default function LibraryDialog({ initialFilter, data, storageError, refre
           type="file"
           accept=".json,application/json"
           hidden
-          aria-label="Library file"
+          aria-label="Catalog file"
           onChange={event => {
             const file = event.target.files?.[0];
             event.target.value = '';
@@ -491,7 +478,7 @@ export default function LibraryDialog({ initialFilter, data, storageError, refre
           type="file"
           multiple
           hidden
-          aria-label="Library folder"
+          aria-label="Catalog folder"
           {...({ webkitdirectory: '', directory: '' } as Record<string, string>)}
           onChange={event => {
             const files = Array.from(event.target.files ?? []);
@@ -528,7 +515,7 @@ export default function LibraryDialog({ initialFilter, data, storageError, refre
         {storageError && <button onClick={() => void refresh()}>Retry storage</button>}
       </div>
       <div className={`library-layout${preview.length || busy ? ' library-has-preview' : ''}`}>
-        <section ref={itemsPanel} tabIndex={-1} className="library-items" aria-label="Library content">
+        <section ref={itemsPanel} tabIndex={-1} className="library-items" aria-label="Catalog content">
           {source && (
             <div className="library-source-picker">
               <label>
@@ -624,7 +611,7 @@ export default function LibraryDialog({ initialFilter, data, storageError, refre
                       )
                       .join(' · ')}
                   </span>
-                  <small>{row.description}</small>
+                  {!source && <small>{row.description}</small>}
                   {row.collection && updates(row.collection) && <em>Update available</em>}
                 </button>
               </div>
@@ -703,8 +690,7 @@ export default function LibraryDialog({ initialFilter, data, storageError, refre
             <p>Choose an item to see details and open or import it.</p>
           ) : (
             <>
-              <h3>{reviewing ? 'Review import' : 'Preview'}</h3>
-              {reviewing && <p>Check topics and frames before use. Importing does not run controls.</p>}
+              <h3>{reviewing ? 'Import contents' : 'Preview'}</h3>
               {preview.map((item, index) => (
                 <article key={`${item.package.id}:${index}`}>
                   <h4>
@@ -712,7 +698,6 @@ export default function LibraryDialog({ initialFilter, data, storageError, refre
                       ? documentName(item.package.documents.find(doc => doc.id === item.documentId)!)
                       : (item.collection?.title ?? item.saved?.title ?? item.package.title)}
                   </h4>
-                  {!reviewing && !item.documentId && <p>{item.package.description}</p>}
                   {item.package.documents
                     .filter(doc => !item.documentId || doc.id === item.documentId)
                     .map(doc => (
@@ -720,11 +705,11 @@ export default function LibraryDialog({ initialFilter, data, storageError, refre
                         <span>
                           <strong>{documentName(doc)}</strong>
                           <small>
-                            {doc.kind === 'behaviorTree'
-                              ? `${(doc.data as any).nodes.length} nodes`
-                              : doc.kind === 'pad'
-                                ? `${(doc.data as any).components.length} components`
-                                : `${(doc.data as any).panels.length} panels`}
+                            {doc.kind === 'workspace'
+                              ? `Layout · ${(doc.data as any).panels.length} panels`
+                              : doc.kind === 'behaviorTree'
+                                ? 'Behavior tree'
+                                : 'Pad'}
                           </small>
                         </span>
                         {!reviewing && (item.collection || item.saved) && (
@@ -738,37 +723,10 @@ export default function LibraryDialog({ initialFilter, data, storageError, refre
                         )}
                       </div>
                     ))}
-                  {reviewing && item.bindings.length > 0 && (
-                    <details>
-                      <summary>Topics and frames ({item.bindings.length})</summary>
-                      {item.bindings.map((binding, bindingIndex) => (
-                        <label className="library-binding" key={`${binding.kind}:${binding.from}`}>
-                          {binding.kind}: {binding.from}
-                          <input
-                            aria-label={`${binding.kind} ${binding.from}`}
-                            value={binding.to}
-                            onChange={event =>
-                              setPreview(previous =>
-                                previous.map((entry, entryIndex) =>
-                                  entryIndex !== index
-                                    ? entry
-                                    : {
-                                        ...entry,
-                                        bindings: entry.bindings.map((value, valueIndex) =>
-                                          valueIndex !== bindingIndex ? value : { ...value, to: event.target.value }
-                                        ),
-                                      }
-                                )
-                              )
-                            }
-                          />
-                        </label>
-                      ))}
-                    </details>
-                  )}
                   {!reviewing && (
                     <details className="library-options">
                       <summary>Details{item.collection ? ' & collection' : ''}</summary>
+                      <p>{item.package.description}</p>
                       <p className="library-meta">
                         Version {item.package.version}
                         {item.origin

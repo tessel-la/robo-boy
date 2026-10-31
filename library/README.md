@@ -1,10 +1,11 @@
-# Robo-Boy content library
+# Robo-Boy Catalog
 
-Open **Library** in the connection switcher, next to **Workspace layouts** and **Manage panels**.
-The entry screen also has a Library button. Use **Saved** to find layouts, Pads and behavior trees by name. Use **Browse** to find Official
+Open **Catalog** in the top-left menu, next to **Workspace layouts**, **Manage panels** and **Recordings**.
+The menu remains available before connecting. Use **Saved** to find layouts, Pads and behavior trees by name. Use **Browse** to find Official
 content or another source. **Import** offers **File…**, **Folder…** and **Online catalog…**.
 Review before saving, then choose **Open layout**, **Add Pad** or **Open tree**. Imported trees
-also appear in the BT editor’s **Saved Trees** menu and node palette, including after reload.
+also appear in the BT editor’s **Saved Trees** menu and node palette. Imported Pads appear
+in Pad settings and imported layouts in **Workspace layouts**, including after reload.
 
 The bundled Panda and generic inspection collections provide a workspace, passive JointState readout
 Pad and a readiness condition BT. They are examples, not hardware-validated configurations. Review
@@ -20,7 +21,7 @@ the collection does not run the controls or BT; the BT is available separately t
 
 ## Publish a collection
 
-1. Export a collection from Library, or a workspace/Pad/BT from its existing menu. A workspace
+1. Export a collection from Catalog, or a workspace/Pad/BT from its existing menu. A workspace
    collection includes its referenced Pads, BT snapshots and 3D settings.
 2. Commit the JSON to your robot repository. Use a stable namespaced package `id`, SemVer `version`,
    `title`, `entryDocument` and `documents`; see `generic/panda-inspection/1.0.0.json` for a complete example.

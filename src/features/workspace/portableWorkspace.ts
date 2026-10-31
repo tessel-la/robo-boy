@@ -183,7 +183,6 @@ export async function importWorkspaceFile(
         details: [
           'Save these layouts. Your current workspace stays open.',
           ...plan.warnings,
-          'Check topics and frames before use.',
         ],
         action: 'Import',
       },

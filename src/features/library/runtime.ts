@@ -50,6 +50,28 @@ export function getLibraryTree(id: string): BehaviorTree | null {
         return cloneContent(doc.data) as BehaviorTree;
   return null;
 }
+/** Picker entries keep package-local references private until an explicit open. */
+export function getLibraryWorkspaces(): Array<{ id: string; title: string }> {
+  return collections
+    .filter(item => !item.archivedAt)
+    .flatMap(item =>
+      item.package.documents
+        .filter(doc => doc.kind === 'workspace')
+        .map(doc => ({
+          id: libraryDocumentId(item.id, doc.id),
+          title: (doc.data as SavedWorkspaceLayout).title,
+        }))
+    );
+}
+export function openLibraryWorkspace(id: string): LibraryOpenRequest | null {
+  for (const item of collections.filter(item => !item.archivedAt)) {
+    const doc = item.package.documents.find(
+      doc => doc.kind === 'workspace' && libraryDocumentId(item.id, doc.id) === id
+    );
+    if (doc) return openLibraryDocument(item, doc);
+  }
+  return null;
+}
 export interface LibraryOpenRequest {
   id: string;
   kind: 'pad' | 'behaviorTree' | 'workspace';

@@ -1,4 +1,5 @@
-import { getLibraryTree, type LibraryOpenRequest } from '../features/library/runtime';
+import { useLibrary } from '../features/library/LibraryProvider';
+import { getLibraryTree, openLibraryWorkspace, type LibraryOpenRequest } from '../features/library/runtime';
 import {
   normalizeWorkspacePanel, normalizeSavedWorkspaceLayout, normalizeWorkspaceTileOrder,
   withoutApprovedRosTopics, visualizationStorageKey,
@@ -978,6 +979,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({
     document.addEventListener('visibilitychange', visibility);
     return () => document.removeEventListener('visibilitychange', visibility);
   }, [isActive, replaySession]);
+  const { workspaces: libraryWorkspaces } = useLibrary();
   const libraryHandled = useRef<string>();
   const treeReaders = useRef(new Map<string, BehaviorTreeAssistantBridge>());
   const assistantRef = useRef<GlobalAssistantHandle>(null);
@@ -1827,10 +1829,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({
     if (!isActive || !libraryRequest || libraryHandled.current === libraryRequest.id) return;
     libraryHandled.current = libraryRequest.id;
     if (libraryRequest.kind === 'workspace' && libraryRequest.workspace) {
-      for (const scene of libraryRequest.visualizations ?? []) {
-        saveVisualizationStateForKey(visualizationStorageKey(scene.panelId, storageScope), scene.state);
-      }
-      handleLoadSavedWorkspaceLayout(libraryRequest.workspace);
+      applyLibraryWorkspace(libraryRequest);
     } else if (libraryRequest.kind === 'pad' && libraryRequest.padId) {
       handleAddWorkspacePanel('pad', undefined, undefined, { layoutId: libraryRequest.padId });
     } else if (libraryRequest.kind === 'behaviorTree' && libraryRequest.tree) {
@@ -2502,6 +2501,14 @@ const MainControlView: React.FC<MainControlViewProps> = ({
     setIsWorkspaceOpen(true);
     setIsWorkspaceTemplateMenuOpen(false);
     setIsWorkspaceAddMenuOpen(false);
+  };
+
+  const applyLibraryWorkspace = (request: LibraryOpenRequest) => {
+    if (!request.workspace) return;
+    for (const scene of request.visualizations ?? []) {
+      saveVisualizationStateForKey(visualizationStorageKey(scene.panelId, storageScope), scene.state);
+    }
+    handleLoadSavedWorkspaceLayout(request.workspace);
   };
 
   /**
@@ -3776,7 +3783,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({
             onChange={handleImportWorkspaceLayouts}
           />
         </div>
-        {savedWorkspaceLayouts.length > 0 ? (
+        {savedWorkspaceLayouts.length + libraryWorkspaces.length > 0 ? (
           <div className="workspace-template-list">
             {savedWorkspaceLayouts.map(layout => (
               <div
@@ -3807,6 +3814,15 @@ const MainControlView: React.FC<MainControlViewProps> = ({
                   aria-label={`Delete ${layout.title}`}
                 >
                   {icons.trash}
+                </button>
+              </div>
+            ))}
+            {libraryWorkspaces.map(layout => (
+              <div className="workspace-template-item" key={layout.id}>
+                <button type="button" className="workspace-template-load-row" title={`Load ${layout.title}`} aria-label={`Load ${layout.title}`}
+                  onClick={() => { const request = openLibraryWorkspace(layout.id); if (request) applyLibraryWorkspace(request); }}>
+                  <span className="workspace-template-title" title={layout.title}>{layout.title}</span>
+                  <span className="workspace-template-current">Imported</span>
                 </button>
               </div>
             ))}

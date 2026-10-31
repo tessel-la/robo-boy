@@ -44,16 +44,19 @@ afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
-it('reviews/imports all official collections atomically, maps names and opens only explicitly', async () => {
+it('shows names and types, imports atomically and opens only explicitly', async () => {
   dialog();
   browse();
   click('Import all');
-  await screen.findByText('Review import');
+  await screen.findByText('Import contents');
   expect(onUse).not.toHaveBeenCalled();
   expect((await readLibrarySnapshot()).collections).toHaveLength(0);
-  expand(/Topics and frames/);
-  const bindings = screen.getAllByRole('textbox', { name: 'topic /joint_states' });
-  fireEvent.change(bindings[0], { target: { value: '/panda/joints' } });
+  const summary = within(screen.getByRole('region', { name: 'Content preview' }));
+  expect(summary.getAllByText('Pad').length).toBeGreaterThan(0);
+  expect(summary.getAllByText('Behavior tree').length).toBeGreaterThan(0);
+  expect(summary.getAllByText(/Layout ·/).length).toBeGreaterThan(0);
+  expect(summary.queryByRole('textbox')).toBeNull();
+  expect(summary.queryByText(/topics and frames/i)).toBeNull();
   click(`Import ${bundledReleases.length} collections`);
   await screen.findByText(`Imported ${bundledReleases.length} collections.`, { exact: false });
   expect((await readLibrarySnapshot()).collections).toHaveLength(bundledReleases.length);
@@ -68,7 +71,7 @@ it('reviews/imports all official collections atomically, maps names and opens on
   fireEvent.click(screen.getAllByRole('button', { name: 'Open tree' })[0]);
   expect(onUse).toHaveBeenLastCalledWith(expect.objectContaining({ kind: 'behaviorTree' }));
 });
-it('filters/searches, cancels reviews and surfaces invalid remappings without partial imports', async () => {
+it('filters/searches and cancels import without saving anything', async () => {
   dialog();
   browse();
   fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'Panda' } });
@@ -77,17 +80,11 @@ it('filters/searches, cancels reviews and surfaces invalid remappings without pa
   click('Select multiple');
   fireEvent.click(screen.getByLabelText('Select Panda inspection'));
   click('Import selected (1)');
-  await screen.findByText('Review import');
+  await screen.findByText('Import contents');
   click('Cancel import');
-  expect(screen.queryByText('Review import')).toBeNull();
-  click('Import selected (1)');
-  await screen.findByText('Review import');
-  expand(/Topics and frames/);
-  fireEvent.change(screen.getByRole('textbox', { name: 'topic /joint_states' }), { target: { value: 'bad name' } });
-  click('Import 1 collection');
-  await screen.findByRole('alert');
+  expect(screen.queryByText('Import contents')).toBeNull();
   expect((await readLibrarySnapshot()).collections).toHaveLength(0);
-  click('Close Library');
+  click('Close Catalog');
   expect(onClose).toHaveBeenCalled();
 });
 it('refreshes Official from its current endpoint after an app update moves the catalog', async () => {
@@ -138,13 +135,13 @@ it('renames with revision protection, archives and restores while preserving ref
 it('imports files/backups with review and rejects invalid formats', async () => {
   dialog();
   const file = (value: unknown) => new File([JSON.stringify(value)], 'library.json');
-  fireEvent.change(screen.getByLabelText('Library file'), {
+  fireEvent.change(screen.getByLabelText('Catalog file'), {
     target: { files: [file({ libraryBackupVersion: 1, collections: [bundledReleases[0].package] })] },
   });
-  await screen.findByText('Review import');
+  await screen.findByText('Import contents');
   click('Import 1 collection');
   await screen.findByText(/Imported 1 collection/);
-  fireEvent.change(screen.getByLabelText('Library file'), { target: { files: [file({ schemaVersion: 99 })] } });
+  fireEvent.change(screen.getByLabelText('Catalog file'), { target: { files: [file({ schemaVersion: 99 })] } });
   await screen.findByRole('alert');
   expect((await readLibrarySnapshot()).collections).toHaveLength(1);
 });
@@ -178,7 +175,7 @@ it('adds and refreshes a custom catalog, caches verified content and preserves i
   await screen.findByText('Preview');
   expect((await readLibrarySnapshot()).releases).toHaveLength(1);
   click('Import all');
-  await screen.findByText('Review import');
+  await screen.findByText('Import contents');
   click('Import 1 collection');
   await screen.findByText(/Imported 1 collection/);
   browse(data.sources[0].id);
@@ -208,10 +205,11 @@ it('hydrates templates before workspace mounting and synchronizes same-window up
   const item = makeCollection(cloneContent(bundledReleases[0].package));
   await writeLibrary({ collections: [item] });
   function Launcher() {
-    const { openLibrary } = useLibrary();
+    const { openLibrary, workspaces } = useLibrary();
     return (
       <>
         <button onClick={() => openLibrary('pad')}>Browse</button>
+        <output aria-label="Available layouts">{workspaces.length}</output>
         <LibraryWorkspaceGate>
           <p>Workspace ready</p>
         </LibraryWorkspaceGate>
@@ -224,8 +222,9 @@ it('hydrates templates before workspace mounting and synchronizes same-window up
     </LibraryProvider>
   );
   await screen.findByText('Workspace ready');
+  expect(screen.getByLabelText('Available layouts')).toHaveTextContent('1');
   click('Browse');
-  await screen.findByRole('dialog', { name: 'Library' });
+  await screen.findByRole('dialog', { name: 'Catalog' });
   expect(screen.getByLabelText('Type')).toHaveValue('pad');
   click(/^Joint readout/);
   click('Add Pad');
@@ -236,6 +235,7 @@ it('hydrates templates before workspace mounting and synchronizes same-window up
   });
   click('Browse');
   await screen.findByRole('button', { name: /Second robot/ });
+  await waitFor(() => expect(screen.getByLabelText('Available layouts')).toHaveTextContent('2'));
 });
 
 it('clears an old preview and selection when search changes before importing', async () => {
@@ -246,7 +246,7 @@ it('clears an old preview and selection when search changes before importing', a
   fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'Genesis' } });
   expect(screen.queryByRole('heading', { name: 'Preview' })).toBeNull();
   click('Import all');
-  await screen.findByRole('heading', { name: 'Review import' });
+  await screen.findByRole('heading', { name: 'Import contents' });
   expect(within(screen.getByRole('region', { name: 'Content preview' })).getByText('Move Genesis X Y')).toBeVisible();
   expect(screen.queryByText('Readiness example')).toBeNull();
   expect((await readLibrarySnapshot()).collections).toHaveLength(0);

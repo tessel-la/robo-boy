@@ -22,6 +22,7 @@ export interface ConnectionTabsProps {
   onAdd: () => void;
   onManageWorkspaceLayouts?: () => void;
   onManagePanels?: () => void;
+  onOpenRecordings?: () => void;
   workspaceLayoutLabel?: string;
   themeControl?: ReactNode;
   /** The running version and its updates, where the shell can update itself. */
@@ -61,6 +62,7 @@ export default function ConnectionTabs({
   onAdd,
   onManageWorkspaceLayouts,
   onManagePanels,
+  onOpenRecordings,
   workspaceLayoutLabel,
   themeControl,
   appUpdateControl,
@@ -196,9 +198,9 @@ export default function ConnectionTabs({
               setIsSwitcherOpen(false);
               openLibrary();
             }}
-            aria-label="Library"
+            aria-label="Catalog"
           >
-            <span>Library</span>
+            <span>Catalog</span>
             <span>Layouts, Pads & behavior trees</span>
           </button>
           {onManageWorkspaceLayouts && (
@@ -221,6 +223,20 @@ export default function ConnectionTabs({
             >
               <span>Manage panels</span>
               <span>Installations &amp; permissions</span>
+            </button>
+          )}
+          {onOpenRecordings && (
+            <button
+              type="button"
+              className="connection-switcher-tool"
+              aria-label="Recordings"
+              onClick={() => {
+                setIsSwitcherOpen(false);
+                onOpenRecordings();
+              }}
+            >
+              <span>Recordings</span>
+              <span>Open local recordings</span>
             </button>
           )}
           {themeControl}

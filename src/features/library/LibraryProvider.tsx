@@ -9,15 +9,16 @@ import {
   type CachedRelease,
 } from './store';
 import { validateLibraryPackage } from './content';
-import { setLibrarySnapshot, type LibraryOpenRequest } from './runtime';
+import { getLibraryWorkspaces, setLibrarySnapshot, type LibraryOpenRequest } from './runtime';
 import type { ContentKind } from './packages';
 const LibraryDialog = lazy(() => import('./LibraryDialog'));
 export type LibraryFilter = ContentKind | 'all';
 interface LibraryContextValue {
   openLibrary: (filter?: LibraryFilter) => void;
   ready: boolean;
+  workspaces: ReturnType<typeof getLibraryWorkspaces>;
 }
-const Context = createContext<LibraryContextValue>({ openLibrary: () => {}, ready: true });
+const Context = createContext<LibraryContextValue>({ openLibrary: () => {}, ready: true, workspaces: [] });
 export const useLibrary = () => useContext(Context);
 export interface LibraryData {
   collections: LibraryCollection[];
@@ -75,10 +76,12 @@ export function LibraryProvider({
     };
   }, [refresh]);
   return (
-    <Context.Provider value={{ ready, openLibrary: (next = 'all') => setFilter(next) }}>
+    <Context.Provider
+      value={{ ready, workspaces: getLibraryWorkspaces(), openLibrary: (next = 'all') => setFilter(next) }}
+    >
       {children}
       {filter !== null && (
-        <Suspense fallback={<div role="status">Opening Library…</div>}>
+        <Suspense fallback={<div role="status">Opening Catalog…</div>}>
           <LibraryDialog
             initialFilter={filter}
             data={data}
@@ -96,5 +99,5 @@ export function LibraryProvider({
   );
 }
 export function LibraryWorkspaceGate({ children }: { children: React.ReactNode }) {
-  return useLibrary().ready ? <>{children}</> : <div role="status">Loading saved Library content…</div>;
+  return useLibrary().ready ? <>{children}</> : <div role="status">Loading saved catalog content…</div>;
 }

@@ -3,8 +3,14 @@ import React, { useEffect, useState } from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import MainControlView from './MainControlView';
+import { getLibraryWorkspaces, setLibrarySnapshot } from '../features/library/runtime';
+import { bundledReleases } from '../features/library/official';
+import { makeCollection } from '../features/library/store';
 import { getConnectionStorageKey } from '../runtime/connectionStorage';
 import { getVisualizationStateForKey, saveVisualizationStateForKey } from '../utils/visualizationState';
+
+const library = vi.hoisted(() => ({ workspaces: [] as Array<{ id: string; title: string }> }));
+vi.mock('../features/library/LibraryProvider', () => ({ useLibrary: () => library }));
 
 const connect = vi.fn();
 const disconnect = vi.fn();
@@ -343,7 +349,26 @@ const openWorkspaceLayouts = () => {
 };
 
 describe('MainControlView desktop workspace', () => {
+  it('loads Library layouts from Workspace layouts without persisting templates as authored layouts', async () => {
+    setLibrarySnapshot([makeCollection(bundledReleases[0].package)]);
+    library.workspaces = getLibraryWorkspaces();
+    renderMainControlView();
+    openWorkspaceLayouts();
+    expect(screen.getByText('Imported')).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Delete Panda inspection' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Load Panda inspection' }));
+    await waitFor(() => expect(document.querySelectorAll('.workspace-card')).toHaveLength(3));
+    expect(JSON.parse(localStorage.getItem(workspaceSavedLayoutsKey) || '[]')).toEqual([]);
+    await waitFor(() => expect(JSON.parse(localStorage.getItem(workspacePanelsKey) || '[]')).toHaveLength(3));
+    const panels = JSON.parse(localStorage.getItem(workspacePanelsKey) || '[]');
+    expect(panels.find((panel: any) => panel.type === 'pad').layoutId).toMatch(/^library:/);
+    const scene = panels.find((panel: any) => panel.type === '3d');
+    expect(getVisualizationStateForKey(`roboboy_3d_visualization_state_${scene.id}`).fixedFrame).toBe('panda_link0');
+  });
+
   beforeEach(() => {
+    setLibrarySnapshot([]);
+    library.workspaces = [];
     vi.clearAllMocks();
     localStorage.clear();
     rosConnection.isConnected = true;
