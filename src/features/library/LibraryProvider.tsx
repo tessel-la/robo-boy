@@ -41,7 +41,16 @@ export function LibraryProvider({
     const request = ++generation.current;
     try {
       const snapshot = await readLibrarySnapshot();
-      const validated = snapshot.collections.map(item => ({ ...item, package: validateLibraryPackage(item.package) }));
+      const validated = snapshot.collections.map(item => {
+        const pack = validateLibraryPackage(item.package);
+        if (
+          item.removedDocumentIds !== undefined &&
+          (!Array.isArray(item.removedDocumentIds) ||
+            item.removedDocumentIds.some(id => typeof id !== 'string' || !pack.documents.some(doc => doc.id === id)))
+        )
+          throw new Error('Invalid removed catalog items. Stored content was preserved.');
+        return { ...item, package: pack };
+      });
       const sources = snapshot.sources.map(item => ({ ...item, catalog: readCatalog(JSON.stringify(item.catalog)) }));
       // Cache is disposable; a damaged entry must not lock the collection store or prevent refresh.
       const releases = snapshot.releases.flatMap(item => {

@@ -159,5 +159,14 @@ Official and custom sources. **Import** offers a JSON file, folder or online cat
 then open the content. Imported Pads appear in Pad settings, layouts in **Workspace layouts**,
 and trees in the BT editor’s **Saved Trees** menu, including after reload.
 Export and collection management are under **Saved options** and **Details & collection**.
+Repeated imports of unchanged collections show **Already imported**. Different content may share a name;
+Saved also shows its collection and version. Use **×** beside a saved item to remove it. Imported items
+remain available to existing layouts; importing the collection again restores them. A locally authored
+Pad used by a saved or current layout must be removed from that layout before deleting it.
+
+Opening Catalog checks online sources for newer releases and new items. **Review updates** lets you
+choose what to import; updates never replace active controls automatically. Importing a newer release
+hides the older release from pickers while preserving existing layout references. Offline content remains
+available if a check fails. Folder sources require **Refresh** and selecting the folder again.
 The existing Pad, BT and workspace import menus remain available.
 See [Portable content files](portable-content.md) for supported formats and sharing limits.

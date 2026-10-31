@@ -14,6 +14,14 @@ export const officialSource: LibrarySource = {
   updatedAt: 0,
   catalog: catalogData as Catalog,
 };
+/** Cached relative paths are valid only for the endpoint that published them. */
+export const catalogSources = (saved: LibrarySource[]): LibrarySource[] => {
+  const official = saved.find(source => source.id === OFFICIAL_SOURCE_ID);
+  return [
+    official && official.url === officialSource.url ? official : officialSource,
+    ...saved.filter(source => source.id !== OFFICIAL_SOURCE_ID),
+  ];
+};
 export const bundledReleases: CachedRelease[] = [pandaSource, genericSource, genesisSource].map((source, index) =>
   checkedRelease(source, catalogData.items[index] as Catalog['items'][number])
 );

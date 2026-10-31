@@ -1,10 +1,11 @@
-import { loadGamepadLibrary } from '../customGamepad/gamepadStorage';
-import { listBehaviorTrees, loadBehaviorTree } from '../behaviorTree/storage/treeStorage';
+import { loadGamepadLibrary, getGamepadLayout, deleteCustomGamepad } from '../customGamepad/gamepadStorage';
+import { listBehaviorTrees, loadBehaviorTree, deleteBehaviorTree } from '../behaviorTree/storage/treeStorage';
 import { getLibraryTree } from './runtime';
 import { validateLibraryPackage, type LibraryPackage } from './content';
 import { getVisualizationStateForKey } from '../../utils/visualizationState';
 import {
   visualizationStorageKey,
+  normalizeSavedWorkspaceLayout,
   type SavedWorkspaceLayout,
   type ExportedWorkspacePanel,
 } from '../workspace/documents';
@@ -16,6 +17,7 @@ export interface SavedContent {
   padId?: string;
   treeId?: string;
   scope?: string;
+  workspace?: { key: string; id: string };
 }
 export function packageSavedWorkspace(layout: SavedWorkspaceLayout, scope?: string): LibraryPackage {
   const documents: ContentDocument[] = [];
@@ -24,7 +26,7 @@ export function packageSavedWorkspace(layout: SavedWorkspaceLayout, scope?: stri
   const panels = layout.panels.map(panel => {
     const result: ExportedWorkspacePanel = { ...panel, approvedRosTopics: undefined };
     if (panel.type === 'pad' && panel.layoutId) {
-      const item = loadGamepadLibrary().find(item => item.id === panel.layoutId || item.layout.id === panel.layoutId);
+      const item = getGamepadLayout(panel.layoutId);
       if (!item) throw new Error(`Missing Pad ${panel.layoutId}.`);
       let id = pads.get(panel.layoutId);
       if (!id) {
@@ -111,6 +113,7 @@ export function readSavedContent(): { items: SavedContent[]; warnings: string[] 
           id: `saved-workspace:${key}:${layout.id}`,
           title: layout.title,
           scope,
+          workspace: { key, id: layout.id },
           package: packageSavedWorkspace(layout, scope),
         }));
     } catch (error) {
@@ -118,4 +121,47 @@ export function readSavedContent(): { items: SavedContent[]; warnings: string[] 
     }
   }
   return { items, warnings };
+}
+
+/** Mutations use the authoring stores; imported templates are removed by collection metadata. */
+export function removeSavedContent(item: SavedContent): void {
+  if (item.workspace) {
+    const { key, id } = item.workspace;
+    if (!/^robo-boy-desktop-workspace-saved-layouts-v1(?::connection:.+)?$/.test(key))
+      throw new Error('Unknown layout storage.');
+    const raw = JSON.parse(localStorage.getItem(key) ?? '[]');
+    if (!Array.isArray(raw) || raw.some(layout => !normalizeSavedWorkspaceLayout(layout, false)))
+      throw new Error('Unrecognized saved layouts. Original data was preserved.');
+    localStorage.setItem(key, JSON.stringify(raw.filter(layout => layout.id !== id)));
+    window.dispatchEvent(new Event('robo-boy-workspaces-changed'));
+    return;
+  }
+  if (item.padId) {
+    // Saved and current layouts retain Pad IDs. Do not leave a dangling reference.
+    for (const key of Object.keys(localStorage).filter(key =>
+      /^robo-boy-(desktop-workspace-(saved-layouts|panels)|mobile-workspace-panels)-v1(?::connection:|$)/.test(key)
+    )) {
+      let value;
+      try {
+        value = JSON.parse(localStorage.getItem(key) ?? '[]');
+      } catch {
+        throw new Error('Could not check layouts using this Pad. Original data was preserved.');
+      }
+      if (!Array.isArray(value))
+        throw new Error('Could not check layouts using this Pad. Original data was preserved.');
+      const used = key.includes('saved-layouts')
+        ? value.find(
+            layout =>
+              !Array.isArray(layout.panels) ||
+              layout.panels.some((panel: { layoutId?: string }) => panel.layoutId === item.padId)
+          )
+        : value.some(panel => panel.layoutId === item.padId);
+      if (used)
+        throw new Error(
+          `Used by ${typeof used === 'object' && used.title ? used.title : 'a layout'}. Remove the Pad from that layout first.`
+        );
+    }
+    if (deleteCustomGamepad(item.padId)) return;
+  } else if (item.treeId && deleteBehaviorTree(item.treeId)) return;
+  throw new Error('Could not remove this item. Original data was preserved.');
 }

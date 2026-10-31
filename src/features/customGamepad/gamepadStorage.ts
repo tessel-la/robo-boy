@@ -1,4 +1,4 @@
-import { getLibraryPads } from '../library/runtime';
+import { getLibraryPad, getLibraryPads } from '../library/runtime';
 import { readContentFile, importError } from '../library/json';
 import { readPads, copyPads, serializePads } from './portablePad';
 import { CustomGamepadLayout, GamepadLibraryItem } from './types';
@@ -131,17 +131,15 @@ export function deleteCustomGamepad(layoutId: string): boolean {
  */
 export function getGamepadLayout(layoutId: string): GamepadLibraryItem | null {
   const library = loadGamepadLibrary();
-  return library.find(item => item.id === layoutId || item.layout.id === layoutId) || null;
+  return library.find(item => item.id === layoutId || item.layout.id === layoutId) || getLibraryPad(layoutId);
 }
 
 /**
  * Create an editable custom layout from a built-in template.
  */
 export function cloneGamepadTemplate(templateId: string): CustomGamepadLayout | null {
-  const template = loadGamepadLibrary().find(item => item.isDefault && (
-    item.id === templateId || item.layout.id === templateId
-  ));
-  if (!template) return null;
+  const template = getGamepadLayout(templateId);
+  if (!template?.isDefault) return null;
 
   const now = new Date().toISOString();
   const layout = JSON.parse(JSON.stringify(template.layout)) as CustomGamepadLayout;

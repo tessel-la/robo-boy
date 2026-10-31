@@ -1,3 +1,4 @@
+import { gt } from 'semver';
 import { ManagementDialogHeader } from '../../components/management/ManagementDialogHeader';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createUuid } from '../../utils/uuid';
@@ -12,11 +13,12 @@ import {
   type CatalogItem,
   type CachedRelease,
 } from './store';
-import { officialSource, bundledReleases, OFFICIAL_SOURCE_ID } from './official';
+import { catalogSources, bundledReleases, OFFICIAL_SOURCE_ID } from './official';
 import { libraryDocumentId, openLibraryDocument, type LibraryOpenRequest } from './runtime';
-import { readSavedContent, type SavedContent } from './savedContent';
+import { readSavedContent, removeSavedContent, type SavedContent } from './savedContent';
 import type { LibraryData, LibraryFilter } from './LibraryProvider';
 import type { ContentDocument } from './packages';
+import { checkCatalogSources } from './updates';
 import './LibraryDialog.css';
 const documentName = (doc: ContentDocument) => {
   const data = doc.data as { name?: string; title?: string };
@@ -60,6 +62,8 @@ export default function LibraryDialog({ initialFilter, data, storageError, refre
   const [names, setNames] = useState<Record<string, string>>({});
   const [showArchived, setShowArchived] = useState(false);
   const [saved, setSaved] = useState(() => readSavedContent());
+  const [updateCheckFailed, setUpdateCheckFailed] = useState(false);
+  const [newSources, setNewSources] = useState<string[]>([]);
   const [folderRefresh, setFolderRefresh] = useState<string>();
   useEffect(() => {
     if (preview.length && window.matchMedia?.('(max-width: 760px)').matches) previewPanel.current?.focus();
@@ -87,13 +91,21 @@ export default function LibraryDialog({ initialFilter, data, storageError, refre
       if (prior instanceof HTMLElement && prior.isConnected) prior.focus();
     };
   }, []);
-  const savedOfficial = data.sources.find(source => source.id === OFFICIAL_SOURCE_ID);
-  const sources = [
-    // A catalog's relative paths belong to its endpoint. Reset the source when
-    // an app update moves Official, retaining independent imported collections.
-    savedOfficial && savedOfficial.url === officialSource.url ? savedOfficial : officialSource,
-    ...data.sources.filter(source => source.id !== OFFICIAL_SOURCE_ID),
-  ];
+  useEffect(() => {
+    const check = new AbortController();
+    void checkCatalogSources(check.signal)
+      .then(async result => {
+        if (check.signal.aborted) return;
+        setUpdateCheckFailed(result.failed);
+        setNewSources(result.newSources);
+        await refresh();
+      })
+      .catch(() => {
+        if (!check.signal.aborted) setUpdateCheckFailed(true);
+      });
+    return () => check.abort();
+  }, [refresh]);
+  const sources = catalogSources(data.sources);
   const source = sourceId === 'mine' ? undefined : sources.find(source => source.id === sourceId);
   const releases = useMemo(
     () => new Map([...bundledReleases, ...data.releases].map(item => [item.sha256, item])),
@@ -114,16 +126,18 @@ export default function LibraryDialog({ initialFilter, data, storageError, refre
         ...data.collections
           .filter(item => showArchived || !item.archivedAt)
           .flatMap(item =>
-            item.package.documents.map(doc => ({
-              id: libraryDocumentId(item.id, doc.id),
-              title: documentName(doc),
-              description: item.archivedAt ? `${item.title} · Archived` : item.title,
-              kinds: [doc.kind],
-              documentId: doc.id,
-              collection: item,
-              catalog: undefined as CatalogItem | undefined,
-              saved: undefined as SavedContent | undefined,
-            }))
+            item.package.documents
+              .filter(doc => !item.removedDocumentIds?.includes(doc.id))
+              .map(doc => ({
+                id: libraryDocumentId(item.id, doc.id),
+                title: documentName(doc),
+                description: `${item.title} · ${item.package.version}${item.archivedAt ? ' · Archived' : ''}`,
+                kinds: [doc.kind],
+                documentId: doc.id,
+                collection: item,
+                catalog: undefined as CatalogItem | undefined,
+                saved: undefined as SavedContent | undefined,
+              }))
           ),
         ...saved.items.map(item => ({
           id: item.id,
@@ -247,14 +261,14 @@ export default function LibraryDialog({ initialFilter, data, storageError, refre
   const commitImport = () =>
     run(async signal => {
       const collections = preview.map(item => makeCollection(item.package, item.origin));
-      await writeLibrary({ collections }, signal);
+      const result = await writeLibrary({ importCollections: collections }, signal);
       await refresh();
       if (signal.aborted) return;
       setSelected([]);
       setSelecting(false);
       setReviewing(false);
       setPreview([]);
-      setNotice('Imported successfully.');
+      setNotice(result.imported ? 'Imported successfully.' : 'Already imported.');
       requestAnimationFrame(() => itemsPanel.current?.focus());
     });
   const readFile = (file: File) =>
@@ -375,7 +389,7 @@ export default function LibraryDialog({ initialFilter, data, storageError, refre
   };
   const updateCollection = (
     item: LibraryCollection,
-    changes: Partial<Pick<LibraryCollection, 'title' | 'archivedAt'>>
+    changes: Partial<Pick<LibraryCollection, 'title' | 'archivedAt' | 'removedDocumentIds'>>
   ) =>
     run(async signal => {
       const next = { ...item, ...changes, revision: (item.revision ?? 0) + 1 };
@@ -385,7 +399,13 @@ export default function LibraryDialog({ initialFilter, data, storageError, refre
         previous.map(entry => (entry.collection?.id === next.id ? { ...entry, collection: next } : entry))
       );
       setConfirmDelete(null);
-      setNotice(changes.archivedAt ? 'Collection archived. Open layouts still work.' : 'Saved.');
+      setNotice(
+        changes.removedDocumentIds
+          ? 'Removed.'
+          : changes.archivedAt
+            ? 'Collection archived. Open layouts still work.'
+            : 'Saved.'
+      );
     });
   const updates = (item: LibraryCollection) => {
     const origin = item.origin;
@@ -393,7 +413,42 @@ export default function LibraryDialog({ initialFilter, data, storageError, refre
     const latest = sources
       .find(source => source.id === origin.sourceId)
       ?.catalog.items.find(entry => entry.id === origin.itemId);
-    return latest && latest.sha256 !== origin.sha256 ? latest : undefined;
+    return latest &&
+      (gt(latest.version, origin.version) || (latest.version === origin.version && latest.sha256 !== origin.sha256))
+      ? latest
+      : undefined;
+  };
+  const pendingUpdates = data.collections.filter(
+    item =>
+      !item.archivedAt &&
+      item.package.documents.some(doc => !item.removedDocumentIds?.includes(doc.id)) &&
+      updates(item)
+  );
+  const reviewUpdates = () => {
+    const item = pendingUpdates[0];
+    if (!item?.origin) {
+      if (newSources[0]) chooseSource(newSources[0]);
+      return;
+    }
+    chooseSource(item.origin.sourceId);
+    setSelected([item.origin.itemId]);
+  };
+  const removeRow = (id: string) => {
+    const row = rows.find(row => row.id === id);
+    if (row?.collection && row.documentId) {
+      setPreview([]);
+      void updateCollection(row.collection, {
+        removedDocumentIds: [...new Set([...(row.collection.removedDocumentIds ?? []), row.documentId])],
+      });
+    } else if (row?.saved) {
+      void run(async () => {
+        removeSavedContent(row.saved!);
+        setSaved(readSavedContent());
+        setPreview([]);
+        setConfirmDelete(null);
+        setNotice('Removed.');
+      });
+    }
   };
   return (
     <dialog
@@ -508,6 +563,15 @@ export default function LibraryDialog({ initialFilter, data, storageError, refre
       <div className="library-messages" aria-live="polite">
         {busy && <p role="status">Working…</p>}
         {notice && <p role="status">{notice}</p>}
+        {(pendingUpdates.length > 0 || newSources.length > 0) && (
+          <div className="library-update-notice" role="status">
+            <span>{pendingUpdates.length ? 'Catalog updates available.' : 'New catalog items available.'}</span>
+            <button disabled={busy} onClick={reviewUpdates}>
+              Review updates
+            </button>
+          </div>
+        )}
+        {updateCheckFailed && <p>Couldn’t check for updates. Saved content is available.</p>}
         {(error || storageError) && <p role="alert">{error || storageError}</p>}
         {storageError && <button onClick={() => void refresh()}>Retry storage</button>}
       </div>
@@ -599,7 +663,7 @@ export default function LibraryDialog({ initialFilter, data, storageError, refre
                     }
                   />
                 )}
-                <button onClick={() => void selectRow(row.id)}>
+                <button className="library-item-button" disabled={busy} onClick={() => void selectRow(row.id)}>
                   <strong>{row.title}</strong>
                   <span>
                     {row.kinds
@@ -608,9 +672,34 @@ export default function LibraryDialog({ initialFilter, data, storageError, refre
                       )
                       .join(' · ')}
                   </span>
-                  {!source && <small>{row.description}</small>}
+                  <small>{source ? `Version ${row.catalog?.version}` : row.description}</small>
                   {row.collection && updates(row.collection) && <em>Update available</em>}
                 </button>
+                {!source &&
+                  (confirmDelete === row.id ? (
+                    <div className="library-remove-actions">
+                      <button
+                        disabled={busy}
+                        aria-label={`Confirm remove ${row.title}`}
+                        onClick={() => removeRow(row.id)}
+                      >
+                        Remove
+                      </button>
+                      <button disabled={busy} onClick={() => setConfirmDelete(null)}>
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      className="library-remove"
+                      disabled={busy || !!storageError}
+                      aria-label={`Remove ${row.title}`}
+                      title={`Remove ${row.title}`}
+                      onClick={() => setConfirmDelete(row.id)}
+                    >
+                      ×
+                    </button>
+                  ))}
               </div>
             ))}
             {!visible.length && <p>No matching items. Browse Official or import a file.</p>}

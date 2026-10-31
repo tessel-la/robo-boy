@@ -97,8 +97,14 @@ This menu is also available before connecting. The existing Pad, BT and layout m
   archive and restore are under **Details & collection**. Import that JSON on another origin/device. Local collection names are
   included when exporting. Online sharing uses your own repository/hosting; see the
   [library publishing guide](../library/README.md).
-- Refreshing a source checks for updates; **Review newer release** imports a new version alongside the saved one.
-  Existing copies are not overwritten. Folder refresh asks you to select the folder again.
+- Catalog checks online sources when opened. **Review updates** shows newer releases or new items; importing
+  still requires review and confirmation. New releases hide the old version from pickers and preserve existing
+  layout references. Offline checks retain saved content. Folder refresh asks you to select the folder again.
+- Reimporting unchanged content shows **Already imported**. Different collections can contain items with the
+  same name; Saved shows the collection and version. Existing duplicates are preserved for manual cleanup.
+- **×** beside a Saved item removes it after confirmation. Imported items disappear from pickers while
+  existing layouts keep their dependencies. Reimporting their collection restores removed items. Authored
+  items use their normal stores; deleting an authored Pad is blocked while saved/current layouts reference it.
 - **Archive collection** hides it but preserves workspace references. Enable **Saved options → Show archived collections** to export or restore it. Removing a catalog does not remove imported copies.
 
 Browser, Electron and Tauri use the same JSON catalog flow. Hosts must permit CORS; private
@@ -124,7 +130,10 @@ provenance, sources and exact downloaded releases live in the origin-local Index
 ID collisions, cancellation and write failures abort the batch. Metadata edits compare revisions
 inside the transaction to reject stale changes from another window. Same-window events and a
 BroadcastChannel refresh other views. Archived snapshots remain resolvable, avoiding cross-window
-workspace-reference deletion races.
+workspace-reference deletion races. Removed document IDs are collection metadata; packages remain intact.
+Repeat imports compare normalized complete packages within the same readwrite transaction, including concurrent
+imports. Online metadata refreshes compare the source snapshot before writing so a pending check cannot
+resurrect a removed source or overwrite a newer manual refresh.
 
 App owns the Catalog lifecycle and hydrates templates before mounting a connection workspace.
 The coordinator receives only explicit document-open requests. Domain codecs own body validation,

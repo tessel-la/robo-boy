@@ -912,6 +912,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({
   const [savedWorkspaceLayouts, setSavedWorkspaceLayouts] = useState<SavedWorkspaceLayout[]>(() =>
     loadSavedWorkspaceLayouts(storageScope)
   );
+  const savedLayoutsStorageValue = useRef<string | null>(null);
   const [activeWorkspaceLayoutId, setActiveWorkspaceLayoutId] = useState<string | null>(() =>
     loadActiveWorkspaceLayoutId(storageScope)
   );
@@ -1248,9 +1249,32 @@ const MainControlView: React.FC<MainControlViewProps> = ({
   }, [customWorkspaceSnapTemplates, storageScope]);
 
   useEffect(() => {
-    writeConnectionStorage(WORKSPACE_SAVED_LAYOUTS_KEY, JSON.stringify(savedWorkspaceLayouts), storageScope);
+    const raw = JSON.stringify(savedWorkspaceLayouts);
+    savedLayoutsStorageValue.current = raw;
+    writeConnectionStorage(WORKSPACE_SAVED_LAYOUTS_KEY, raw, storageScope);
     window.dispatchEvent(new Event('robo-boy-workspaces-changed'));
   }, [savedWorkspaceLayouts, storageScope]);
+
+  useEffect(() => {
+    const changed = () => {
+      const raw = readConnectionStorage(WORKSPACE_SAVED_LAYOUTS_KEY, storageScope);
+      if (raw === savedLayoutsStorageValue.current) return;
+      try {
+        const parsed = JSON.parse(raw ?? '[]');
+        if (!Array.isArray(parsed)) return;
+        const layouts = parsed.map(layout => normalizeSavedWorkspaceLayout(layout, false));
+        if (layouts.some(layout => layout === null)) return;
+        savedLayoutsStorageValue.current = raw;
+        setSavedWorkspaceLayouts(layouts as SavedWorkspaceLayout[]);
+      } catch { /* Leave unrecognized storage untouched. */ }
+    };
+    window.addEventListener('robo-boy-workspaces-changed', changed);
+    window.addEventListener('storage', changed);
+    return () => {
+      window.removeEventListener('robo-boy-workspaces-changed', changed);
+      window.removeEventListener('storage', changed);
+    };
+  }, [storageScope]);
 
   useEffect(() => {
     if (activeWorkspaceLayoutId) {
@@ -2420,7 +2444,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({
       return;
     }
 
-    const gamepad = gamepadLibrary.find(item => item.id === layoutId || item.layout.id === layoutId);
+    const gamepad = getGamepadLayout(layoutId);
     if (gamepad?.isDefault) {
       handleOpenTemplate(gamepad.id);
       return;
@@ -2738,9 +2762,12 @@ const MainControlView: React.FC<MainControlViewProps> = ({
         .filter(panel => panel.type === 'pad' && panel.layoutId)
         .map(panel => panel.layoutId as string)
     );
-    const gamepads = gamepadLibrary
-      .filter(item => referencedLayoutIds.has(item.id) || referencedLayoutIds.has(item.layout.id))
-      .map(item => item.layout);
+    const referencedPads = new Map<string, CustomGamepadLayout>();
+    for (const id of referencedLayoutIds) {
+      const item = getGamepadLayout(id);
+      if (item) referencedPads.set(item.layout.id, item.layout);
+    }
+    const gamepads = [...referencedPads.values()];
     const exportPanel = (panel: WorkspacePanel): ExportedWorkspacePanel => {
       const portable = withoutApprovedRosTopics(panel);
       if (panel.type === 'behaviorTree') {
@@ -3103,13 +3130,13 @@ const MainControlView: React.FC<MainControlViewProps> = ({
   );
 
   const renderWorkspacePadControls = (panel: WorkspacePanel) => {
-    const matchingGamepad = gamepadLibrary.find(
-      item => item.id === panel.layoutId || item.layout.id === panel.layoutId
-    );
+    const matchingGamepad = panel.layoutId ? getGamepadLayout(panel.layoutId) : undefined;
     const selectedGamepad =
       matchingGamepad ||
       (!panel.layoutId || RETIRED_BUILT_IN_PAD_IDS.has(panel.layoutId) ? gamepadLibrary[0] : undefined);
     const selectedLayoutId = selectedGamepad?.id || panel.layoutId || '';
+    const selectableGamepads = selectedGamepad && !gamepadLibrary.some(item => item.id === selectedGamepad.id)
+      ? [selectedGamepad, ...gamepadLibrary] : gamepadLibrary;
     const canExportSelectedPad = Boolean(selectedGamepad && !selectedGamepad.isDefault);
     const canDeleteSelectedPad = Boolean(selectedGamepad && !selectedGamepad.isDefault);
     const padTransferNotice = workspacePadTransferNotice[panel.id];
@@ -3148,7 +3175,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({
                   <label className="workspace-pad-settings-label" htmlFor={`workspace-pad-layout-${panel.id}`}>
                     Active layout
                   </label>
-                  {gamepadLibrary.length > 0 ? (
+                  {selectableGamepads.length > 0 ? (
                     <div className="workspace-pad-settings-select-wrap">
                       <select
                         id={`workspace-pad-layout-${panel.id}`}
@@ -3156,7 +3183,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({
                         value={selectedLayoutId}
                         onChange={event => handleWorkspacePadLayoutChange(panel.id, event.target.value)}
                       >
-                        {gamepadLibrary.map(item => (
+                        {selectableGamepads.map(item => (
                           <option key={item.id} value={item.id}>
                             {item.name} · {item.isDefault ? 'Template' : 'Custom'}
                           </option>

@@ -60,3 +60,14 @@ it('lists imported layouts and opens fresh panels with their Pad, BT, geometry a
   // Existing workspace references still resolve after archive.
   expect(getGamepadLayout(libraryDocumentId(item.id, 'pad/joints'))).not.toBeNull();
 });
+
+it('retains removed imported Pads for existing layouts and customization while hiding them from pickers', () => {
+  const item = makeCollection(bundledReleases[0].package);
+  const id = libraryDocumentId(item.id, 'pad/joints');
+  setLibrarySnapshot([{ ...item, removedDocumentIds: ['pad/joints'] }]);
+  expect(loadGamepadLibrary().some(pad => pad.id === id)).toBe(false);
+  expect(getGamepadLayout(id)?.name).toBe('Joint readout');
+  const copy = cloneGamepadTemplate(id)!;
+  expect(copy.name).toBe('Joint readout');
+  expect(copy.id).not.toBe(id);
+});

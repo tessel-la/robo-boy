@@ -25,6 +25,7 @@ const expand = (name: RegExp) =>
   screen.getAllByText(name, { selector: 'summary' }).forEach(element => fireEvent.click(element));
 beforeEach(async () => {
   vi.clearAllMocks();
+  vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('Offline')));
   localStorage.clear();
   Object.defineProperty(HTMLDialogElement.prototype, 'showModal', {
     configurable: true,
@@ -181,11 +182,12 @@ it('adds and refreshes a custom catalog, caches verified content and preserves i
   click('Add source');
   await waitFor(() => expect(refresh).toHaveBeenCalled());
   const data = await readLibrarySnapshot();
-  expect(data.sources[0].title).toBe('Community');
+  const community = data.sources.find(source => source.title === 'Community')!;
+  expect(community).toBeTruthy();
   view.rerender(
     <LibraryDialog initialFilter="all" data={data} refresh={refresh} storageError="" onClose={onClose} onUse={onUse} />
   );
-  browse(data.sources[0].id);
+  browse(community.id);
   click('Refresh');
   await screen.findByText('Catalog updated.');
   fetcher.mockResolvedValue({ ok: true, headers: new Headers(), body: null, text: async () => source });
@@ -196,10 +198,12 @@ it('adds and refreshes a custom catalog, caches verified content and preserves i
   await screen.findByText('Import contents');
   click('Import 1 collection');
   await screen.findByText('Imported successfully.');
-  browse(data.sources[0].id);
+  browse(community.id);
   expand(/Source details/);
   click('Remove source');
-  await waitFor(async () => expect((await readLibrarySnapshot()).sources).toHaveLength(0));
+  await waitFor(async () =>
+    expect((await readLibrarySnapshot()).sources.some(source => source.id === community.id)).toBe(false)
+  );
   expect((await readLibrarySnapshot()).collections).toHaveLength(1);
 });
 it('shows a usable storage error/retry and warns without mutating broken saved items', () => {
@@ -316,4 +320,110 @@ it('reports a failed import without switching views or activating content, then 
   await screen.findByText('Imported successfully.');
   expect((await readLibrarySnapshot()).collections).toHaveLength(bundledReleases.length);
   expect(screen.queryByRole('button', { name: 'Add Pad' })).toBeNull();
+});
+
+it('reports repeated file imports without adding duplicate collections', async () => {
+  dialog();
+  const file = new File([JSON.stringify(bundledReleases[0].package)], 'panda.json');
+  for (const status of ['Imported successfully.', 'Already imported.']) {
+    fireEvent.change(screen.getByLabelText('Catalog file'), { target: { files: [file] } });
+    await screen.findByText('Import contents');
+    click('Import 1 collection');
+    await screen.findByText(status);
+  }
+  expect((await readLibrarySnapshot()).collections).toHaveLength(1);
+  expect(onUse).not.toHaveBeenCalled();
+});
+it.each(['pad', 'behaviorTree', 'workspace'])(
+  'removes an imported %s with confirmation and preserves its package',
+  async kind => {
+    const item = makeCollection(cloneContent(bundledReleases[0].package));
+    await writeLibrary({ collections: [item] });
+    const view = dialog({ ...empty, collections: [item] });
+    const doc = item.package.documents.find(doc => doc.kind === kind)!;
+    const name = (doc.data as any).name ?? (doc.data as any).title;
+    click(`Remove ${name}`);
+    click('Cancel');
+    expect((await readLibrarySnapshot()).collections[0].removedDocumentIds).toBeUndefined();
+    click(`Remove ${name}`);
+    click(`Confirm remove ${name}`);
+    await screen.findByText('Removed.');
+    const data = await readLibrarySnapshot();
+    expect(data.collections[0].removedDocumentIds).toEqual([doc.id]);
+    expect(data.collections[0].package).toEqual(item.package);
+    view.rerender(
+      <LibraryDialog
+        initialFilter="all"
+        data={data}
+        refresh={refresh}
+        storageError=""
+        onClose={onClose}
+        onUse={onUse}
+      />
+    );
+    expect(screen.queryByRole('button', { name: `Remove ${name}` })).toBeNull();
+    expect(onUse).not.toHaveBeenCalled();
+  }
+);
+it('shows an available update after checking on open and requires review/import to apply it', async () => {
+  const item = makeCollection(cloneContent(bundledReleases[0].package), {
+    sourceId: officialSource.id,
+    itemId: officialSource.catalog.items[0].id,
+    version: '1.0.0',
+    sha256: bundledReleases[0].sha256,
+  });
+  await writeLibrary({ collections: [item] });
+  const latest = {
+    ...officialSource,
+    updatedAt: 1,
+    catalog: {
+      ...officialSource.catalog,
+      items: [{ ...officialSource.catalog.items[0], version: '1.1.0', sha256: 'c'.repeat(64) }],
+    },
+  };
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockResolvedValue({
+      ok: true,
+      headers: new Headers(),
+      body: null,
+      text: async () => JSON.stringify(latest.catalog),
+    })
+  );
+  const view = dialog({ ...empty, collections: [item] });
+  await waitFor(async () => expect((await readLibrarySnapshot()).sources).toHaveLength(1));
+  view.rerender(
+    <LibraryDialog
+      initialFilter="all"
+      data={await readLibrarySnapshot()}
+      refresh={refresh}
+      storageError=""
+      onClose={onClose}
+      onUse={onUse}
+    />
+  );
+  expect(screen.getByText('Catalog updates available.')).toBeVisible();
+  click('Review updates');
+  expect(screen.getByLabelText('Source')).toHaveValue(officialSource.id);
+  expect(screen.getByRole('button', { name: 'Import selected (1)' })).toBeVisible();
+  expect((await readLibrarySnapshot()).collections).toEqual([item]);
+  expect(onUse).not.toHaveBeenCalled();
+});
+
+it('rejects malformed removal metadata without altering stored packages', async () => {
+  const item = makeCollection(cloneContent(bundledReleases[0].package));
+  (item as any).removedDocumentIds = 'pad/joints';
+  await writeLibrary({ collections: [item] });
+  function Launcher() {
+    const { openLibrary } = useLibrary();
+    return <button onClick={() => openLibrary()}>Open Catalog</button>;
+  }
+  render(
+    <LibraryProvider onUse={onUse}>
+      <Launcher />
+    </LibraryProvider>
+  );
+  click('Open Catalog');
+  expect(await screen.findByRole('alert')).toHaveTextContent('Invalid removed catalog items');
+  expect((await readLibrarySnapshot()).collections[0].package).toEqual(item.package);
 });

@@ -9,6 +9,12 @@ const pandaSource = JSON.stringify({
   id: 'community.panda',
 });
 const catalog = JSON.parse(readFileSync(resolve('library/catalog.json'), 'utf8'));
+test.beforeEach(async ({ page }) => {
+  await page.route('https://raw.githubusercontent.com/tessel-la/robo-boy-catalog/main/catalog.json', route =>
+    route.fulfill({ contentType: 'application/json', body: JSON.stringify(catalog) })
+  );
+});
+
 for (const theme of ['dark', 'light', 'solarized', 'cobalt'])
   for (const width of [1280, 390]) {
     test(`Library review and independent workspace in ${theme} at ${width}px`, async ({ page, browserName }) => {
@@ -226,3 +232,79 @@ for (const width of [1280, 390])
     expect(await getPublishedRosMessages(page, '/cmd_vel')).toEqual([]);
     expect(await getRosServiceCalls(page, '/import-danger')).toEqual([]);
   });
+
+for (const width of [1280, 390]) {
+  test(`repeat imports and individual removal preserve existing layouts at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await installRosMock(page);
+    await page.goto('/');
+    await page.getByRole('button', { name: 'Quick Connect 127.0.0.1', exact: true }).click();
+    await expect(page.getByLabel('Status: Connected')).toBeVisible();
+    await openAppTool(page, 'Catalog');
+    const dialog = page.getByRole('dialog', { name: 'Catalog', exact: true });
+    for (const status of ['Imported successfully.', 'Already imported.']) {
+      await dialog.getByLabel('Catalog file').setInputFiles({ name: 'panda.json', mimeType: 'application/json', buffer: Buffer.from(readFileSync(resolve('library/generic/panda-inspection/1.0.0.json'))) });
+      await dialog.getByRole('button', { name: 'Import 1 collection', exact: true }).click();
+      await expect(dialog.getByText(status, { exact: true })).toBeVisible();
+    }
+    await expect(dialog.locator('.library-row')).toHaveCount(3);
+    await dialog.getByRole('button', { name: 'Remove Joint readout', exact: true }).click();
+    await expect(dialog.getByRole('button', { name: 'Confirm remove Joint readout', exact: true })).toBeVisible();
+    expect(await dialog.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+    await dialog.screenshot({ path: `/tmp/roboboy-catalog-remove-${width}.png` });
+    await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect(dialog.locator('.library-row')).toHaveCount(3);
+    for (const name of ['Joint readout', 'Readiness example']) {
+      await dialog.getByRole('button', { name: `Remove ${name}`, exact: true }).click();
+      await dialog.getByRole('button', { name: `Confirm remove ${name}`, exact: true }).click();
+      await expect(dialog.getByText('Removed.', { exact: true })).toBeVisible();
+      await expect(dialog.getByRole('button', { name: `Remove ${name}`, exact: true })).toHaveCount(0);
+    }
+    await page.reload();
+    await page.getByRole('button', { name: 'Quick Connect 127.0.0.1', exact: true }).click();
+    await expect(page.getByLabel('Status: Connected')).toBeVisible();
+    await openAppTool(page, 'Catalog');
+    await expect(dialog.locator('.library-row')).toHaveCount(1);
+    await dialog.getByRole('button', { name: /^Panda inspection/ }).click();
+    await dialog.getByRole('button', { name: 'Open layout', exact: true }).click();
+    await expect(dialog).toHaveCount(0);
+    await expect(page.locator('.workspace-card')).toHaveCount(width < 800 ? 2 : 3);
+    await expect(page.getByText(/No saved layout with id/)).toHaveCount(0);
+    if (width >= 800) await expect(page.locator('.bt-float-name')).toHaveText('Readiness example');
+    expect(await getPublishedRosMessages(page, '/cmd_vel')).toEqual([]);
+  });
+}
+
+test('checks for catalog releases on reopen and imports an update only after review', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 900 });
+  await page.goto('/');
+  await openAppTool(page, 'Catalog');
+  const dialog = page.getByRole('dialog', { name: 'Catalog', exact: true });
+  await dialog.getByRole('button', { name: 'Browse', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Select multiple', exact: true }).click();
+  await dialog.getByLabel('Select Panda inspection').check();
+  await dialog.getByRole('button', { name: 'Import selected (1)', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Import 1 collection', exact: true }).click();
+  await expect(dialog.getByText('Imported successfully.', { exact: true })).toBeVisible();
+  await dialog.getByRole('button', { name: 'Close Catalog', exact: true }).click();
+  const latestSource = JSON.stringify({ ...JSON.parse(readFileSync(resolve('library/generic/panda-inspection/1.0.0.json'), 'utf8')), version: '1.1.0' });
+  const latest = { ...catalog.items[0], version: '1.1.0', sha256: createHash('sha256').update(latestSource).digest('hex'), url: 'panda-1.1.0.json' };
+  await page.route('https://raw.githubusercontent.com/tessel-la/robo-boy-catalog/main/**', route => route.fulfill({
+    contentType: 'application/json',
+    body: route.request().url().endsWith('catalog.json') ? JSON.stringify({ ...catalog, items: [latest, ...catalog.items.slice(1)] }) : latestSource,
+  }));
+  await openAppTool(page, 'Catalog');
+  await expect(dialog.getByText('Catalog updates available.', { exact: true })).toBeVisible();
+  await expect(dialog.locator('.library-row')).toHaveCount(3);
+  await dialog.getByRole('button', { name: 'Review updates', exact: true }).click();
+  await expect(dialog.getByRole('button', { name: /^Panda inspection/ })).toContainText('Version 1.1.0');
+  await dialog.getByRole('button', { name: 'Import selected (1)', exact: true }).click();
+  await expect(dialog.getByText('Import contents', { exact: true })).toBeVisible();
+  await dialog.getByRole('button', { name: 'Import 1 collection', exact: true }).click();
+  await expect(dialog.getByText('Imported successfully.', { exact: true })).toBeVisible();
+  await dialog.getByRole('button', { name: 'Saved', exact: true }).click();
+  await expect(dialog.locator('.library-row')).toHaveCount(3);
+  await expect(dialog.getByRole('button', { name: /^Panda inspection/ })).toContainText('1.1.0');
+  await expect(dialog.getByText('Catalog updates available.', { exact: true })).toHaveCount(0);
+  expect(await page.locator('.workspace-card').count()).toBe(0);
+});

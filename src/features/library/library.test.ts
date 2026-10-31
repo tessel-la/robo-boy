@@ -12,7 +12,14 @@ import {
 import { bindPackage, cloneContent, packageBindings, readLibraryPackage, validateLibraryPackage } from './content';
 import { bundledReleases, officialSource } from './official';
 import { makeCollection, openLibraryDatabase, readLibrarySnapshot, writeLibrary } from './store';
-import { getLibraryPads, getLibraryTree, libraryDocumentId, openLibraryDocument, setLibrarySnapshot } from './runtime';
+import {
+  getLibraryPad,
+  getLibraryPads,
+  getLibraryTree,
+  libraryDocumentId,
+  openLibraryDocument,
+  setLibrarySnapshot,
+} from './runtime';
 import { packageSavedWorkspace, readSavedContent } from './savedContent';
 import type { SavedWorkspaceLayout } from '../workspace/documents';
 
@@ -309,7 +316,73 @@ describe('transactional snapshots', () => {
       updateCollections: [{ collection: { ...current, archivedAt: Date.now() }, expectedRevision: 1 }],
     });
     setLibrarySnapshot((await readLibrarySnapshot()).collections);
-    expect(getLibraryPads()).toHaveLength(1);
+    expect(getLibraryPads()).toHaveLength(0);
+    expect(getLibraryPad(libraryDocumentId(item.id, 'pad/joints'))).toBeTruthy();
     expect(getLibraryTree(libraryDocumentId(item.id, 'bt/readiness'))).toBeTruthy();
+  });
+});
+
+describe('repeat imports and item removal', () => {
+  it('deduplicates a batch and concurrent imports by complete contents, not names or object key order', async () => {
+    const pack = starter();
+    const { documents, ...envelope } = pack;
+    const reordered = { documents, ...envelope };
+    const results = await Promise.all([
+      writeLibrary({ importCollections: [makeCollection(pack), makeCollection(reordered)] }),
+      writeLibrary({ importCollections: [makeCollection(starter())] }),
+    ]);
+    expect(results.reduce((sum, result) => sum + result.imported, 0)).toBe(1);
+    expect(results.reduce((sum, result) => sum + result.skipped, 0)).toBe(2);
+    expect((await readLibrarySnapshot()).collections).toHaveLength(1);
+    const different = starter();
+    (different.documents[0].data as any).description = 'Different controls';
+    await writeLibrary({ importCollections: [makeCollection(different)] });
+    expect((await readLibrarySnapshot()).collections).toHaveLength(2);
+  });
+  it('hides a removed document from pickers, preserves dependencies and restores on explicit reimport', async () => {
+    const item = makeCollection(starter());
+    await writeLibrary({ importCollections: [item] });
+    await writeLibrary({
+      updateCollections: [{ collection: { ...item, removedDocumentIds: ['pad/joints'] }, expectedRevision: 0 }],
+    });
+    setLibrarySnapshot((await readLibrarySnapshot()).collections);
+    expect(getLibraryPads()).toHaveLength(0);
+    const id = libraryDocumentId(item.id, 'pad/joints');
+    expect(getLibraryPad(id)).toBeTruthy();
+    const request = openLibraryDocument(item, item.package.documents[2]);
+    expect(request.workspace!.panels.some(panel => panel.layoutId === id)).toBe(true);
+    expect(packageSavedWorkspace(request.workspace!).documents.some(doc => doc.kind === 'pad')).toBe(true);
+    expect(await writeLibrary({ importCollections: [makeCollection(starter())] })).toEqual({ imported: 1, skipped: 0 });
+    const snapshot = await readLibrarySnapshot();
+    expect(snapshot.collections).toHaveLength(1);
+    expect(snapshot.collections[0].id).toBe(item.id);
+    expect(snapshot.collections[0].removedDocumentIds).toBeUndefined();
+  });
+  it('imports updated releases explicitly and preserves the old IDs while hiding their picker entries', async () => {
+    const origin = { sourceId: 'official', itemId: 'panda', version: '1.0.0', sha256: 'a'.repeat(64) };
+    const item = makeCollection(starter(), origin);
+    await writeLibrary({ importCollections: [item] });
+    const next = makeCollection(
+      { ...starter(), version: '1.1.0' },
+      { ...origin, version: '1.1.0', sha256: 'b'.repeat(64) }
+    );
+    await writeLibrary({ importCollections: [next] });
+    const snapshot = await readLibrarySnapshot();
+    expect(snapshot.collections).toHaveLength(2);
+    expect(snapshot.collections.find(stored => stored.id === item.id)!.archivedAt).toBeTruthy();
+    setLibrarySnapshot(snapshot.collections);
+    expect(getLibraryPads().map(pad => pad.id)).toEqual([libraryDocumentId(next.id, 'pad/joints')]);
+    expect(getLibraryPad(libraryDocumentId(item.id, 'pad/joints'))).toBeTruthy();
+  });
+  it('rolls back the complete deduplicating import on a storage failure', async () => {
+    const bad = makeCollection(starter());
+    (bad as any).uncloneable = () => {};
+    // Use different content to ensure the failing record reaches the database.
+    bad.package.title = 'Fail';
+    await expect(
+      writeLibrary({ importCollections: [makeCollection(starter()), bad], sources: [officialSource] })
+    ).rejects.toBeTruthy();
+    expect((await readLibrarySnapshot()).collections).toHaveLength(0);
+    expect((await readLibrarySnapshot()).sources).toHaveLength(0);
   });
 });
