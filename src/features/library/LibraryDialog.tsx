@@ -249,16 +249,13 @@ export default function LibraryDialog({ initialFilter, data, storageError, refre
       const collections = preview.map(item => makeCollection(item.package, item.origin));
       await writeLibrary({ collections }, signal);
       await refresh();
-      setSourceId('mine');
+      if (signal.aborted) return;
       setSelected([]);
+      setSelecting(false);
       setReviewing(false);
-      setPreview(
-        collections.map(collection => ({
-          package: collection.package,
-          collection,
-        }))
-      );
-      setNotice(`Imported ${collections.length} collection${collections.length === 1 ? '' : 's'}. Ready to open.`);
+      setPreview([]);
+      setNotice('Imported successfully.');
+      requestAnimationFrame(() => itemsPanel.current?.focus());
     });
   const readFile = (file: File) =>
     run(async signal => {

@@ -44,8 +44,8 @@ afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
-it('shows names and types, imports atomically and opens only explicitly', async () => {
-  dialog();
+it('finishes import with a status on the same view and opens saved items only when selected', async () => {
+  const view = dialog();
   browse();
   click('Import all');
   await screen.findByText('Import contents');
@@ -58,17 +58,35 @@ it('shows names and types, imports atomically and opens only explicitly', async 
   expect(summary.queryByRole('textbox')).toBeNull();
   expect(summary.queryByText(/topics and frames/i)).toBeNull();
   click(`Import ${bundledReleases.length} collections`);
-  await screen.findByText(`Imported ${bundledReleases.length} collections.`, { exact: false });
+  await screen.findByText('Imported successfully.');
+  expect(screen.getByLabelText('Source')).toHaveValue(officialSource.id);
+  expect(screen.queryByRole('heading', { name: 'Preview' })).toBeNull();
+  expect(screen.queryByRole('button', { name: /^(Open layout|Open tree|Add Pad)$/ })).toBeNull();
+  expect(screen.getByRole('button', { name: 'Browse' })).toHaveAttribute('aria-pressed', 'true');
   expect((await readLibrarySnapshot()).collections).toHaveLength(bundledReleases.length);
   expect(onUse).not.toHaveBeenCalled();
-  const first = screen.getAllByRole('button', { name: 'Open layout' })[0];
+  view.rerender(
+    <LibraryDialog
+      initialFilter="all"
+      data={await readLibrarySnapshot()}
+      refresh={refresh}
+      storageError=""
+      onClose={onClose}
+      onUse={onUse}
+    />
+  );
+  click('Saved');
+  click(/^Panda inspection/);
+  const first = screen.getByRole('button', { name: 'Open layout' });
   fireEvent.click(first);
   expect(onUse).toHaveBeenCalledWith(
     expect.objectContaining({ kind: 'workspace', workspace: expect.objectContaining({ title: 'Panda inspection' }) })
   );
-  fireEvent.click(screen.getAllByRole('button', { name: 'Add Pad' })[0]);
+  fireEvent.click(screen.getAllByRole('button', { name: /^Joint readout/ })[0]);
+  click('Add Pad');
   expect(onUse).toHaveBeenLastCalledWith(expect.objectContaining({ kind: 'pad' }));
-  fireEvent.click(screen.getAllByRole('button', { name: 'Open tree' })[0]);
+  fireEvent.click(screen.getAllByRole('button', { name: /^Readiness example/ })[0]);
+  click('Open tree');
   expect(onUse).toHaveBeenLastCalledWith(expect.objectContaining({ kind: 'behaviorTree' }));
 });
 it('filters/searches and cancels import without saving anything', async () => {
@@ -140,7 +158,7 @@ it('imports files/backups with review and rejects invalid formats', async () => 
   });
   await screen.findByText('Import contents');
   click('Import 1 collection');
-  await screen.findByText(/Imported 1 collection/);
+  await screen.findByText('Imported successfully.');
   fireEvent.change(screen.getByLabelText('Catalog file'), { target: { files: [file({ schemaVersion: 99 })] } });
   await screen.findByRole('alert');
   expect((await readLibrarySnapshot()).collections).toHaveLength(1);
@@ -177,7 +195,7 @@ it('adds and refreshes a custom catalog, caches verified content and preserves i
   click('Import all');
   await screen.findByText('Import contents');
   click('Import 1 collection');
-  await screen.findByText(/Imported 1 collection/);
+  await screen.findByText('Imported successfully.');
   browse(data.sources[0].id);
   expand(/Source details/);
   click('Remove source');
@@ -277,4 +295,25 @@ it('exports each collection once when Saved lists its individual documents', asy
     reader.readAsText(exported);
   });
   expect(JSON.parse(text).collections).toEqual([item.package]);
+});
+
+it('reports a failed import without switching views or activating content, then allows retry', async () => {
+  dialog();
+  browse();
+  click('Import all');
+  await screen.findByText('Import contents');
+  const add = vi.spyOn(IDBObjectStore.prototype, 'add').mockImplementation(() => {
+    throw new Error('Storage is full.');
+  });
+  click(`Import ${bundledReleases.length} collections`);
+  expect(await screen.findByRole('alert')).toHaveTextContent('Storage is full.');
+  expect(screen.queryByText('Imported successfully.')).toBeNull();
+  expect(screen.getByLabelText('Source')).toHaveValue(officialSource.id);
+  expect((await readLibrarySnapshot()).collections).toHaveLength(0);
+  expect(onUse).not.toHaveBeenCalled();
+  add.mockRestore();
+  click(`Import ${bundledReleases.length} collections`);
+  await screen.findByText('Imported successfully.');
+  expect((await readLibrarySnapshot()).collections).toHaveLength(bundledReleases.length);
+  expect(screen.queryByRole('button', { name: 'Add Pad' })).toBeNull();
 });

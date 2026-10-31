@@ -88,7 +88,8 @@ This menu is also available before connecting. The existing Pad, BT and layout m
   legacy exports are also discovered, with unambiguous adjacent Pad dependencies included.
 - **Import** on a preview reviews one collection; **Select multiple** and **Import all** handle batches.
   The import summary lists names and document types, then saves the selection together. Import
-  saves snapshots without opening panels or changing controls. Opening a document is a separate action.
+  saves content without opening panels or changing controls, then shows **Imported successfully.**
+  The current view stays open. Find the imported items in **Saved** or their normal pickers.
 - Imported Pads are reusable templates; customize one to create an editable Pad. BTs open fresh editor
   copies. Workspaces open with new panel/layout IDs and preserve their Pad/BT/3D dependencies. Live
   control panels require a robot connection; opening without a connection uses the existing local replay mode.

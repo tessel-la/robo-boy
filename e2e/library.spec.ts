@@ -57,8 +57,14 @@ for (const theme of ['dark', 'light', 'solarized', 'cobalt'])
       expect(await dialog.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
       await dialog.screenshot({ path: `/tmp/roboboy-library-${browserName}-${theme}-${width}.png` });
       await dialog.getByRole('button', { name: 'Import 1 collection', exact: true }).click();
-      await expect(dialog).toContainText('Imported 1 collection');
+      await expect(dialog).toContainText('Imported successfully.');
       expect(await page.locator('.workspace-card').count()).toBe(0);
+      await expect(dialog.getByRole('button', { name: /^(Open layout|Open tree|Add Pad)$/ })).toHaveCount(0);
+      await expect(dialog.getByLabel('Source')).toHaveValue('roboboy-official-content');
+      await expect(dialog.getByRole('heading', { name: 'Preview', exact: true })).toHaveCount(0);
+      await dialog.screenshot({ path: `/tmp/roboboy-import-success-${browserName}-${theme}-${width}.png` });
+      await dialog.getByRole('button', { name: 'Saved', exact: true }).click();
+      await dialog.getByRole('button', { name: /^Panda inspection/ }).click();
       await dialog.getByRole('button', { name: 'Open layout', exact: true }).click();
       await expect(dialog).toHaveCount(0);
       await expect(page.locator('.workspace-card')).toHaveCount(width < 800 ? 2 : 3);
@@ -123,7 +129,7 @@ test('custom HTTPS catalog persists offline with exact cached content and import
   await dialog.getByRole('button', { name: 'Import all', exact: true }).click();
   await expect(dialog.getByText('Import contents', { exact: true })).toBeVisible();
   await dialog.getByRole('button', { name: 'Import 1 collection', exact: true }).click();
-  await expect(dialog).toContainText('Imported 1 collection');
+  await expect(dialog).toContainText('Imported successfully.');
   expect(await page.locator('.workspace-card').count()).toBe(0);
 });
 test('imports an entire robot repository folder with the verified catalog', async ({ page }) => {
@@ -135,7 +141,7 @@ test('imports an entire robot repository folder with the verified catalog', asyn
   await dialog.getByRole('button', { name: 'Import all', exact: true }).click();
   await expect(dialog.getByText('Import contents', { exact: true })).toBeVisible();
   await dialog.getByRole('button', { name: `Import ${catalog.items.length} collections`, exact: true }).click();
-  await expect(dialog).toContainText(`Imported ${catalog.items.length} collections`);
+  await expect(dialog).toContainText('Imported successfully.');
 });
 
 test('imports and opens Genesis controls without publishing servo commands', async ({ page }) => {
@@ -154,7 +160,10 @@ test('imports and opens Genesis controls without publishing servo commands', asy
   await expect(dialog).toContainText('Move Genesis X Y');
   expect(await getPublishedRosMessages(page, '/arm_1/servo_node/delta_twist_cmds')).toEqual([]);
   await dialog.getByRole('button', { name: 'Import 1 collection', exact: true }).click();
-  await expect(dialog).toContainText('Imported 1 collection');
+  await expect(dialog).toContainText('Imported successfully.');
+  await expect(dialog.getByRole('button', { name: 'Add Pad', exact: true })).toHaveCount(0);
+  await dialog.getByRole('button', { name: 'Saved', exact: true }).click();
+  await dialog.getByRole('button', { name: /^Genesis control/ }).click();
   await dialog.getByRole('button', { name: 'Open layout', exact: true }).click();
   await expect(dialog).toHaveCount(0);
   await expect(page.locator('.workspace-card')).toHaveCount(4);
@@ -174,12 +183,13 @@ test('imports and opens Genesis controls without publishing servo commands', asy
   await expect(page.getByLabel('Status: Connected')).toBeVisible();
   await page.getByLabel('Add workspace panel', { exact: true }).first().click();
   await page.getByRole('button', { name: 'Behavior tree', exact: true }).click();
-  await page.getByTestId('bt-menu-button').click();
+  const freshTree = page.locator('.workspace-card-behaviorTree').last();
+  await freshTree.getByTestId('bt-menu-button').click();
   const imported = page.locator('.bt-menu-tree-row').filter({ hasText: 'Move Genesis X Y' });
   await expect(imported).toContainText('Imported');
   await expect(imported.getByRole('button', { name: 'Delete tree' })).toHaveCount(0);
   await imported.click();
-  await expect(page.locator('.bt-float-name')).toHaveText('Move Genesis X Y');
+  await expect(freshTree.locator('.bt-float-name')).toHaveText('Move Genesis X Y');
   expect(await getPublishedRosMessages(page, '/arm_1/servo_node/delta_twist_cmds')).toEqual([]);
 });
 
@@ -196,7 +206,7 @@ for (const width of [1280, 390])
     await dialog.getByRole('button', { name: /^Panda inspection/ }).click();
     await dialog.getByRole('button', { name: 'Import', exact: true }).click();
     await dialog.getByRole('button', { name: 'Import 1 collection', exact: true }).click();
-    await expect(dialog).toContainText('Imported 1 collection');
+    await expect(dialog).toContainText('Imported successfully.');
     await page.keyboard.press('Escape');
     expect(await page.locator('.workspace-card').count()).toBe(0);
     await page.reload();
