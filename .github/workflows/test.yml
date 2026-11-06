@@ -309,7 +309,8 @@ jobs:
 
   e2e:
     name: E2E Tests
-    runs-on: ubuntu-latest
+    # Playwright 1.57 supports Ubuntu 24.04; ubuntu-latest now rolls onto 26.04.
+    runs-on: ubuntu-24.04
     needs: [changes, test]  # Run after unit tests pass
 
     steps:
