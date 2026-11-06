@@ -189,7 +189,7 @@ terminates the panel realm even if its cleanup fails.
 
 | Capability      | Host behavior in v2                                                                                      |
 | --------------- | -------------------------------------------------------------------------------------------------------- |
-| `ros`           | Supplies brokered discovery/subscribe/publish/service methods constrained by manifest patterns           |
+| `ros`           | Supplies brokered discovery, subscriptions, publishes, services, actions and explicit control requests   |
 | `storage`       | Supplies a versioned, instance-owned JSON store persisted with workspace state                           |
 | `network`       | Supplies credential-free brokered fetch and approved host endpoints; iframe CSP blocks direct HTTP calls |
 | `web-bluetooth` | Declares use of Web Bluetooth                                                                            |
@@ -515,6 +515,47 @@ To browse another inventory, add it to the sources configuration as a remote sou
 from a source is governed separately by that source's own `allowedOrigins`, and every redirect is checked against
 it before the next request is made, so an approved host cannot redirect the manager to one that was never approved.
 
+## ROS 2 Actions And Control Requests
+
+SDK package 2.3.0 adds these operations to Panel API 2.0.0. It needs the matching host runtime,
+including the sandbox, broker and installer. During coordinated development use the local SDK
+checkout; after release pin the SDK tarball and set `compatibility.roboboy` to require the first
+host release providing it. Existing 2.2.0 panels remain compatible.
+
+```json
+{
+  "capabilities": ["ros"],
+  "permissions": {
+    "ros": {
+      "actions": ["/robot/move_to_joints"],
+      "control": true
+    }
+  }
+}
+```
+
+From a user gesture in a visible, focused panel, `await context.ros.control.request()` returns
+`{ state: 'owned' | 'pending', message }`. A pending consent request does not grant control.
+The host uses its existing connection-wide lease, checks user activation independently, and never
+exposes the token. Keep the top-bar workflow for browsers without user-activation support.
+Never request on mount or retry a rejected robot command automatically.
+
+```ts
+const move = await context.ros.sendActionGoal(
+  { action: '/robot/move_to_joints', actionType: 'example_msgs/action/MoveToJoints', goal },
+  feedback => renderProgress(feedback)
+);
+// A Stop click may await context.ros.cancelActionGoal(move.goalId).
+const outcome = await move.result; // { status: 4 | 5 | 6, result: JSON object }
+```
+
+Only terminal status confirms completion. The promise rejects on transport/protocol failure;
+that is uncertainty, not evidence the robot stopped. Cancellation is limited to active goals
+created by this tile and retries until terminal status. Unmount requests cancellation, with host
+tracking retained until completion or connection loss. Offline goals are rejected and never
+replayed on reconnect. JSON payloads are capped at 1 MiB, and the shared ROS connection admits at
+most 16 outstanding panel goals. Gateway recovery fences and native stopping tools remain authoritative.
+
 ## Remote Inventories And Private Panels
 
 `scripts/install-panels.mjs` is the common installer for local repositories and published releases. It resolves every
@@ -680,8 +721,8 @@ staging, then publish the complete Robo-Boy build atomically.
 - Runtime entry points must be installed same-origin; arbitrary remote modules are rejected.
 - Optional manifest icons/previews are catalog metadata only in this slice.
 - Panel settings do not yet have a separate host UI; panels render their own settings inside their tile.
-- ROS is intentionally a JSON message broker. Binary ROS payloads, actions, and streaming service responses are not
-  in API v2.
+- ROS is intentionally a JSON message broker. Binary ROS payloads and streaming service responses are not
+  in API v2. SDK 2.3.0 adds permission-checked ROS 2 actions; see [action and control operations](#ros-2-actions-and-control-requests).
 - SHA-256 hashes detect artifact drift but do not establish publisher identity. Publisher signing, inventory
   review policy, rollback metadata, and revocation should precede installation from unreviewed catalogs.
 - A sandboxed panel cannot mutate the parent page, but CPU-heavy synchronous code can still consume main-thread

@@ -41,7 +41,30 @@ changes theme. Use variables such as `--background-color`, `--card-bg`, `--text-
 ROS operations use the host connection’s robot-wide control lease. Observers can subscribe and
 inspect, but topic publishes and robot service calls require the session to request
 control in Robo-Boy’s top bar. Do not acquire automatically or retry/queue rejected commands.
-Use absolute canonical names. The SDK currently exposes topic and service operations; tracked
-long-running robot work needs a core ROS action integration.
+Use absolute canonical names. SDK `2.3.0` adds tracked ROS 2 actions and explicit in-panel
+control requests. These require the matching host implementation, not only newer type definitions.
+Until that host and SDK tarball are released, use a coordinated local checkout; existing published
+SDK `2.2.0` panels and their manifest permissions continue to work unchanged.
 See [the concurrency contract](../docs/robot-control.md#panel-and-integration-contract) for
 handover, disconnects, and robot-side watchdog requirements.
+
+Declare `permissions.ros.actions` with the allowed action names and use
+`context.ros.sendActionGoal({ action, actionType, goal }, onFeedback)`. It returns a host-generated
+`goalId` and a `result` promise carrying `{ status, result }`. Status 4, 5 or 6 confirms a succeeded,
+canceled or aborted goal; check the action's result payload as well. `cancelActionGoal(goalId)` only
+accepts active goals created by that tile. It requests cancellation and retries until completion;
+await the original result to know the outcome. Errors and connection loss do not prove stopping.
+Unmount requests cancellation; host tracking continues until terminal status or transport closure.
+Goals are never queued while offline or replayed after reconnect. There are at most 16 outstanding
+panel goals per host ROS connection, and goal, feedback and result payloads are limited to 1 MiB JSON.
+
+Declare `permissions.ros.control: true` to call `context.ros.control.request()` synchronously from a
+click/key handler inside the focused, visible panel. The host checks browser user activation too.
+It requests the existing connection's lease or asks its current owner for consent, returning
+`{ state: 'owned' | 'pending', message }` without exposing lease tokens. A pending response does not
+authorize a command. Missing activation support requires the top-bar workflow instead. Never request
+on mount or a timer, adopt persistent work, or automatically replay a refused command when control arrives.
+
+Panel API remains `2.0.0`: the additions are backward compatible for existing panels. New panels
+must set their `compatibility.roboboy` minimum to the first released host containing these additions;
+the SDK package version alone cannot establish runtime compatibility.

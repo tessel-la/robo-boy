@@ -139,12 +139,17 @@ const isPanelPermissions = (
   if (capabilities.includes('ros')) {
     const ros = candidate.ros;
     if (!ros || typeof ros !== 'object' || Array.isArray(ros)) return false;
-    if (Object.keys(ros).some(key => !['discover', 'selectTopic', 'subscribe', 'publish', 'services'].includes(key)))
+    if (
+      Object.keys(ros).some(
+        key => !['discover', 'selectTopic', 'subscribe', 'publish', 'services', 'actions', 'control'].includes(key)
+      )
+    )
       return false;
     if (ros.discover !== undefined && typeof ros.discover !== 'boolean') return false;
     if (ros.selectTopic !== undefined && typeof ros.selectTopic !== 'boolean') return false;
+    if (ros.control !== undefined && typeof ros.control !== 'boolean') return false;
     if (
-      !['subscribe', 'publish', 'services'].every(key => {
+      !['subscribe', 'publish', 'services', 'actions'].every(key => {
         const resources = ros[key as keyof typeof ros];
         return resources === undefined || isUniqueStringArray(resources, item => ROS_RESOURCE_PATTERN.test(item));
       })

@@ -156,6 +156,12 @@ The host supplies a JSON message broker rather than the shared `ROSLIB.Ros` obje
 subscribe allowlist and each operation is checked again. Watch `context.connection`; its generation changes when the
 shared bridge changes, and release each returned subscription during reconfiguration or cleanup.
 
+SDK 2.3.0 additionally supports explicit action-name grants and tile-owned ROS 2 goals. Use
+`sendActionGoal` / `cancelActionGoal` and await terminal results; never call `/_action/` services
+or open another command socket. In-panel control requests need `permissions.ros.control: true`
+and a focused, visible user gesture. These APIs use the host connection's existing control lease;
+see the [SDK contract](../panel-sdk/README.md#shared-robot-control).
+
 ### Configuration and state
 
 Declare `storage` to receive the per-instance JSON store. It accepts finite, acyclic, plain JSON values up to 20

@@ -253,6 +253,21 @@ The `control-journal` named volume survives container replacement. A marker is f
 
 New panels can therefore use existing ROS operations without implementing a second lock. An integration exposing a new asynchronous command transport must add its lifetime tracking at the gateway/robot boundary before relying on handover safety.
 
+External panels built against SDK 2.3.0 can declare `permissions.ros.actions` and use
+`ros.sendActionGoal` / `ros.cancelActionGoal`. The broker uses this connection's `ControlSession`
+and the gateway's existing ROS 2 action protocol; it creates no separate socket or authority.
+Only terminal action status 4, 5 or 6 resolves the goal's result. Cancel acknowledgements do not
+resolve it. Cancellation is scoped to the originating tile and retries until completion, including
+after unmount. A transport failure rejects the panel promise with uncertain completion; gateway
+recovery fences remain in force. Reconnect never resends the goal.
+
+`permissions.ros.control: true` enables `ros.control.request()` from an explicit gesture in the
+focused, visible tile. Both sandbox and trusted broker check browser user activation. It shares
+the top bar's acquisition/owner-consent workflow, returns `owned` or `pending`, and exposes no
+token, release, adoption, forced transfer or policy toggle. The panel must not request control
+on load, queue rejected robot commands, or run a command merely because a pending consent was
+later granted. Browsers without user-activation support use the top bar.
+
 ## Deployment boundary and compatibility
 
 Rebuild the ROS stack with the frontend upgrade:

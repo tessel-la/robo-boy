@@ -401,7 +401,7 @@ const validateManifestShape = (manifest, label) => {
       }
       if (
         Object.keys(permissions.ros).some(
-          key => !['discover', 'selectTopic', 'subscribe', 'publish', 'services'].includes(key)
+          key => !['discover', 'selectTopic', 'subscribe', 'publish', 'services', 'actions', 'control'].includes(key)
         )
       ) {
         throw new InstallError(`${manifest.id} declares unknown ROS permissions.`);
@@ -412,9 +412,13 @@ const validateManifestShape = (manifest, label) => {
       if (permissions.ros.selectTopic !== undefined && typeof permissions.ros.selectTopic !== 'boolean') {
         throw new InstallError(`${manifest.id} has an invalid ROS topic-selection permission.`);
       }
+      if (permissions.ros.control !== undefined && typeof permissions.ros.control !== 'boolean') {
+        throw new InstallError(`${manifest.id} has an invalid ROS control permission.`);
+      }
       validateResourceList(permissions.ros.subscribe, 'subscribe');
       validateResourceList(permissions.ros.publish, 'publish');
       validateResourceList(permissions.ros.services, 'service');
+      validateResourceList(permissions.ros.actions, 'action');
     } else if (permissions.ros !== undefined) {
       throw new InstallError(`${manifest.id} declares ROS permissions without the ros capability.`);
     }

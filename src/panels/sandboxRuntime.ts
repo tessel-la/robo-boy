@@ -33,6 +33,14 @@ export const panelSandboxBootstrap = (parentOrigin: string) => {
     { resolve: (value: unknown) => void; reject: (error: Error) => void; abort?: () => void }
   >();
   const rosListeners = new Map<string, (message: Record<string, unknown>) => void>();
+  const actionGoals = new Map<
+    string,
+    {
+      resolve(value: { status: number; result: Record<string, unknown> }): void;
+      reject(error: Error): void;
+      feedback?: (value: Record<string, unknown>) => void;
+    }
+  >();
   let requestSequence = 0;
 
   const post = (message: unknown) => port?.postMessage(message);
@@ -46,7 +54,7 @@ export const panelSandboxBootstrap = (parentOrigin: string) => {
       return String(detail);
     }
   };
-  const rpc = (method: string, params?: unknown, signal?: AbortSignal) => {
+  const rpc = (method: string, params?: unknown, signal?: AbortSignal, beforePost?: (requestId: string) => void) => {
     const requestId = String(++requestSequence);
     return new Promise<unknown>((resolve, reject) => {
       if (signal?.aborted) {
@@ -71,6 +79,7 @@ export const panelSandboxBootstrap = (parentOrigin: string) => {
           reject(error);
         },
       });
+      beforePost?.(requestId);
       post({ type: 'request', requestId, method, params });
     });
   };
@@ -181,6 +190,42 @@ export const panelSandboxBootstrap = (parentOrigin: string) => {
             await rpc('ros.publish', options);
           },
           callService: (options: unknown) => rpc('ros.callService', options),
+          sendActionGoal: async (options: unknown, feedback?: (value: Record<string, unknown>) => void) => {
+            let resolve!: (value: { status: number; result: Record<string, unknown> }) => void;
+            let reject!: (error: Error) => void;
+            const result = new Promise<{ status: number; result: Record<string, unknown> }>((yes, no) => {
+              resolve = yes;
+              reject = no;
+            });
+            // A terminal result may precede the send RPC's reply. Register before posting and
+            // retain the promise even if the goal has already completed when the handle arrives.
+            void result.catch(() => {});
+            let actionRequestId = '';
+            try {
+              const handle = (await rpc('ros.sendActionGoal', options, undefined, requestId => {
+                actionRequestId = requestId;
+                actionGoals.set(requestId, { resolve, reject, feedback });
+              })) as { goalId: string };
+              return { goalId: handle.goalId, result };
+            } catch (error) {
+              actionGoals.delete(actionRequestId);
+              reject(error instanceof Error ? error : new Error(errorMessage(error)));
+              throw error;
+            }
+          },
+          cancelActionGoal: async (goalId: string) => {
+            await rpc('ros.cancelActionGoal', { goalId });
+          },
+          control: Object.freeze({
+            request: () => {
+              if (!navigator.userActivation?.isActive) {
+                return Promise.reject(
+                  new Error('Request robot control from a user gesture in this panel, or use the top bar.')
+                );
+              }
+              return rpc('ros.control.request');
+            },
+          }),
         }
       : null;
     const network = value.capabilities.includes('network')
@@ -280,6 +325,10 @@ export const panelSandboxBootstrap = (parentOrigin: string) => {
       pending.forEach(({ reject }) => reject(new Error('Panel sandbox was disposed.')));
       pending.clear();
       rosListeners.clear();
+      actionGoals.forEach(goal =>
+        goal.reject(new Error('Panel sandbox was disposed; robot completion is unconfirmed.'))
+      );
+      actionGoals.clear();
       themeListeners.clear();
     }
   };
@@ -297,6 +346,12 @@ export const panelSandboxBootstrap = (parentOrigin: string) => {
       try {
         if (message.type === 'initialize') await initialize(message.value);
         else if (message.type === 'connection') {
+          if (message.value.status !== 'connected' || message.value.generation !== connectionSnapshot.generation) {
+            actionGoals.forEach(goal =>
+              goal.reject(new Error('ROS connection changed; robot completion is unconfirmed.'))
+            );
+            actionGoals.clear();
+          }
           connectionSnapshot = message.value;
           connectionListeners.forEach(listener => listener(connectionSnapshot));
         } else if (message.type === 'viewport') {
@@ -313,6 +368,14 @@ export const panelSandboxBootstrap = (parentOrigin: string) => {
           else request.resolve(message.value);
         } else if (message.type === 'ros-message') {
           rosListeners.get(message.subscriptionId)?.(message.value);
+        } else if (message.type === 'ros-action-feedback') {
+          actionGoals.get(message.requestId)?.feedback?.(message.value);
+        } else if (message.type === 'ros-action-result') {
+          const goal = actionGoals.get(message.requestId);
+          if (!goal) return;
+          actionGoals.delete(message.requestId);
+          if (message.error) goal.reject(new Error(message.error));
+          else goal.resolve(message.value);
         } else if (message.type === 'dispose') await dispose();
       } catch (error) {
         post({ type: 'error', message: errorMessage(error) });

@@ -3,6 +3,8 @@ import { enterpriseFetch } from '../features/enterprise/session';
 import type { Ros, Service, Topic } from 'roslib';
 import type { PanelHostToSandboxMessage, PanelSandboxToHostMessage } from './sandboxProtocol';
 import { isJsonObject, type ResolvedPanelManifest, type RoboBoyJsonObject, type RoboBoyPanelRuntime } from './types';
+import type { PanelRosActions } from './rosActions';
+import type { requestPanelRobotControl } from './robotControl';
 
 const MAX_NETWORK_BYTES = 10 * 1024 * 1024;
 const MAX_ROS_JSON_BYTES = 1024 * 1024;
@@ -52,6 +54,9 @@ interface BrokerResources {
   services: Map<string, Service>;
   requests: Map<string, AbortController>;
   selectedTopics: Map<string, string>;
+  actions?: PanelRosActions;
+  controlRequest?: { controller: AbortController; promise: ReturnType<typeof requestPanelRobotControl> };
+  disposed: boolean;
 }
 
 const errorMessage = (error: unknown): string => (error instanceof Error ? error.message : String(error));
@@ -258,6 +263,10 @@ const handleRequest = async (
   // ROSLIB services/topics capture their Ros instance. Discard those objects
   // when the host replaces its connection, while keeping the sandbox alive.
   if (message.method.startsWith('ros.') && resources.ros !== options.ros) {
+    resources.actions?.dispose();
+    resources.actions = undefined;
+    resources.controlRequest?.controller.abort();
+    resources.controlRequest = undefined;
     resources.subscriptions.forEach(({ topic }) => topic.unsubscribe());
     resources.publishers.forEach(topic => {
       try {
@@ -273,6 +282,94 @@ const handleRequest = async (
   }
   const params = (message.params || {}) as Record<string, unknown>;
   const rosPermissions = options.manifest.permissions?.ros;
+  if (message.method === 'ros.control.request') {
+    if (!options.manifest.capabilities?.includes('ros') || rosPermissions?.control !== true) {
+      throw new Error('Panel is not permitted to request robot control.');
+    }
+    const { requestPanelRobotControl } = await import('./robotControl');
+    if (resources.disposed) throw new Error('Panel was disposed.');
+    const hostWindow = options.hostElement.ownerDocument.defaultView;
+    if (
+      !hostWindow?.navigator.userActivation?.isActive ||
+      options.hostElement.ownerDocument.visibilityState !== 'visible' ||
+      !options.hostElement.contains(options.hostElement.ownerDocument.activeElement)
+    ) {
+      throw new Error('Request robot control from a user gesture in this panel, or use the top bar.');
+    }
+    const ros = requireRos(options.ros);
+    if (!resources.controlRequest) {
+      const controller = new AbortController();
+      const promise = requestPanelRobotControl(ros, controller.signal);
+      resources.controlRequest = { controller, promise };
+    }
+    const request = resources.controlRequest;
+    try {
+      return await request.promise;
+    } finally {
+      if (resources.controlRequest === request) resources.controlRequest = undefined;
+    }
+  }
+  if (message.method === 'ros.sendActionGoal') {
+    if (!options.manifest.capabilities?.includes('ros')) throw new Error('Panel has no ROS capability.');
+    const ros = requireRos(options.ros);
+    const action = requireResourcePermission(rosPermissions?.actions, params.action, 'action');
+    if (!/^\/[A-Za-z_][A-Za-z0-9_]*(?:\/[A-Za-z_][A-Za-z0-9_]*)*$/.test(action)) {
+      throw new Error('ROS actions require absolute canonical names.');
+    }
+    if (
+      typeof params.actionType !== 'string' ||
+      !/^[A-Za-z_][A-Za-z0-9_]*\/action\/[A-Za-z_][A-Za-z0-9_]*$/.test(params.actionType)
+    ) {
+      throw new Error('ROS actionType must be a ROS 2 package/action/Type name.');
+    }
+    const goal = requireJsonPayload(params.goal, 'ROS action goal');
+    const [{ PanelRosActions }, { requirePanelRobotControl }] = await Promise.all([
+      import('./rosActions'),
+      import('./robotControl'),
+    ]);
+    if (resources.disposed || options.ros !== ros)
+      throw new Error('Panel connection changed before the goal was sent.');
+    requireRos(ros);
+    requirePanelRobotControl(ros);
+    if (resources.actions && !resources.actions.isCurrent(ros)) {
+      resources.actions.dispose();
+      resources.actions = undefined;
+    }
+    resources.actions ??= new PanelRosActions(ros);
+    const handle = resources.actions.send({ action, actionType: params.actionType, goal }, value => {
+      if (!resources.disposed)
+        port.postMessage({
+          type: 'ros-action-feedback',
+          requestId: message.requestId,
+          value,
+        } satisfies PanelHostToSandboxMessage);
+    });
+    void handle.result.then(
+      value => {
+        if (!resources.disposed)
+          port.postMessage({
+            type: 'ros-action-result',
+            requestId: message.requestId,
+            value,
+          } satisfies PanelHostToSandboxMessage);
+      },
+      error => {
+        if (!resources.disposed)
+          port.postMessage({
+            type: 'ros-action-result',
+            requestId: message.requestId,
+            error: errorMessage(error),
+          } satisfies PanelHostToSandboxMessage);
+      }
+    );
+    return { goalId: handle.goalId };
+  }
+  if (message.method === 'ros.cancelActionGoal') {
+    if (typeof params.goalId !== 'string' || !resources.actions) throw new Error('Unknown panel action goal.');
+    // The instance-owned client is the authority for cancellation scope, including after lease loss.
+    resources.actions.cancel(params.goalId);
+    return undefined;
+  }
   if (message.method === 'viewport.requestFullscreen') {
     if (!options.hostElement.requestFullscreen) throw new Error('Fullscreen is unavailable.');
     await options.hostElement.requestFullscreen();
@@ -473,8 +570,10 @@ export const connectPanelCapabilityBroker = (
     services: new Map(),
     requests: new Map(),
     selectedTopics: options.userSelectedRosTopics ?? new Map(),
+    disposed: false,
   };
   port.onmessage = event => {
+    if (resources.disposed) return;
     const message = event.data as PanelSandboxToHostMessage;
     if (
       !message ||
@@ -513,8 +612,12 @@ export const connectPanelCapabilityBroker = (
     onMessage(message);
     if (message.type === 'request') {
       void handleRequest(port, message, options, resources).then(
-        value => respond(port, message.requestId, value),
-        error => respond(port, message.requestId, undefined, error)
+        value => {
+          if (!resources.disposed) respond(port, message.requestId, value);
+        },
+        error => {
+          if (!resources.disposed) respond(port, message.requestId, undefined, error);
+        }
       );
     } else if (message.type === 'cancel') {
       resources.requests.get(message.requestId)?.abort();
@@ -522,6 +625,9 @@ export const connectPanelCapabilityBroker = (
   };
   port.start();
   return () => {
+    resources.disposed = true;
+    resources.actions?.dispose();
+    resources.controlRequest?.controller.abort();
     resources.requests.forEach(controller => controller.abort());
     resources.subscriptions.forEach(({ topic }) => topic.unsubscribe());
     resources.publishers.forEach(topic => {

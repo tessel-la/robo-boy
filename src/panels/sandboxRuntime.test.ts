@@ -91,6 +91,8 @@ describe('panel sandbox document', () => {
           'ros.getTopics': [{ name: '/joint_states', messageType: 'sensor_msgs/msg/JointState' }],
           'ros.selectTopic': { name: '/joint_states', messageType: 'sensor_msgs/msg/JointState' },
           'ros.subscribe': { subscriptionId: 'subscription-1' },
+          'ros.sendActionGoal': { goalId: `host-goal-${message.requestId}` },
+          'ros.control.request': { state: 'owned', message: 'Control granted' },
           'network.fetch': {
             status: 200,
             statusText: 'OK',
@@ -99,6 +101,22 @@ describe('panel sandbox document', () => {
             body: new TextEncoder().encode('{"stream":"ready"}').buffer,
           },
         };
+        if (message.method === 'ros.sendActionGoal' && message.params.goal?.finishEarly) {
+          queueMicrotask(() =>
+            port.onmessage?.({
+              data: { type: 'ros-action-feedback', requestId: message.requestId, value: { progress: 1 } },
+            })
+          );
+          queueMicrotask(() =>
+            port.onmessage?.({
+              data: {
+                type: 'ros-action-result',
+                requestId: message.requestId,
+                value: { status: 4, result: { success: true } },
+              },
+            })
+          );
+        }
         queueMicrotask(() =>
           port.onmessage?.({
             data:
@@ -240,6 +258,38 @@ describe('panel sandbox document', () => {
     await context.ros.publish({ topic: '/commands', message: { enabled: true } });
     await expect(context.ros.callService({ service: '/reset' })).rejects.toThrow('service unavailable');
 
+    const feedback = vi.fn();
+    const earlyGoal = await context.ros.sendActionGoal(
+      { action: '/move', actionType: 'example/action/Move', goal: { finishEarly: true } },
+      feedback
+    );
+    expect(earlyGoal.goalId).toMatch(/^host-goal-/);
+    expect(feedback).toHaveBeenCalledWith({ progress: 1 });
+    await expect(earlyGoal.result).resolves.toEqual({ status: 4, result: { success: true } });
+    const moving = await context.ros.sendActionGoal({ action: '/move', actionType: 'example/action/Move', goal: {} });
+    await context.ros.cancelActionGoal(moving.goalId);
+    expect(posted).toContainEqual(
+      expect.objectContaining({ method: 'ros.cancelActionGoal', params: { goalId: moving.goalId } })
+    );
+    const actionRequests = posted.filter(message => message.method === 'ros.sendActionGoal');
+    const movingId = actionRequests[actionRequests.length - 1].requestId;
+    await port.onmessage!({
+      data: { type: 'ros-action-result', requestId: movingId, error: 'completion unconfirmed' },
+    });
+    await expect(moving.result).rejects.toThrow('completion unconfirmed');
+    const beforeControl = posted.length;
+    await expect(context.ros.control.request()).rejects.toThrow('user gesture');
+    expect(posted).toHaveLength(beforeControl);
+    const activation = Object.getOwnPropertyDescriptor(navigator, 'userActivation');
+    Object.defineProperty(navigator, 'userActivation', { configurable: true, value: { isActive: true } });
+    await expect(context.ros.control.request()).resolves.toEqual({ state: 'owned', message: 'Control granted' });
+    if (activation) Object.defineProperty(navigator, 'userActivation', activation);
+    else Reflect.deleteProperty(navigator, 'userActivation');
+
+    const disconnected = await context.ros.sendActionGoal({ action: '/move', goal: {} });
+    await port.onmessage!({ data: { type: 'connection', value: { status: 'disconnected', generation: 3 } } });
+    await expect(disconnected.result).rejects.toThrow('completion is unconfirmed');
+
     expect(context.network.endpoints).toEqual({ camera: 'https://camera.test/whep' });
     const response = await context.network.fetch('https://camera.test/status');
     expect(response.ok).toBe(true);
@@ -268,7 +318,9 @@ describe('panel sandbox document', () => {
     expect(posted).toContainEqual({ type: 'error', message: 'iframe error' });
     expect(posted).toContainEqual({ type: 'error', message: 'rejected value' });
 
+    const disposedGoal = await context.ros.sendActionGoal({ action: '/move', goal: {} });
     await port.onmessage!({ data: { type: 'dispose' } });
+    await expect(disposedGoal.result).rejects.toThrow('completion is unconfirmed');
     expect(instance.unmount).toHaveBeenCalledOnce();
     expect(document.getElementById('panel-root')).toBeEmptyDOMElement();
   });
