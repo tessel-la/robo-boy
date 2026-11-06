@@ -89,31 +89,73 @@ describe('panel ROS 2 action lifetime', () => {
     actions.dispose();
   });
 
-  it('reports uncertain failures while retaining cancellation until actual completion', async () => {
+  it.each([
+    {},
+    { status: 0 },
+    { status: 0, roboboyWorkOutcome: 'unknown' },
+    { status: 0, roboboyWorkOutcome: 'not_started' },
+    { status: 2, action: options.action, roboboyWorkOutcome: 'not_started' },
+  ])('retains cancellation for an uncertain failure (%j) until actual completion', async extra => {
     vi.useFakeTimers();
-    const { ros, receive, close } = panelRosFixture();
+    const { ros, receive, close, send } = panelRosFixture();
     const actions = new PanelRosActions(ros);
     const goal = actions.send(options);
-    receive({ op: 'action_result', id: goal.goalId, result: false, values: 'rosbridge timeout' });
+    receive({ op: 'action_result', id: goal.goalId, result: false, values: 'rosbridge timeout', ...extra });
     await expect(goal.result).rejects.toThrow('rosbridge timeout');
     expect(vi.getTimerCount()).toBe(1);
+    expect(() => actions.cancel(goal.goalId)).not.toThrow();
+    actions.dispose();
+    const cancels = send.mock.calls.filter(([message]) => message.op === 'cancel_action_goal').length;
+    vi.advanceTimersByTime(2000);
+    expect(send.mock.calls.filter(([message]) => message.op === 'cancel_action_goal')).toHaveLength(cancels + 2);
     receive({ op: 'action_result', id: goal.goalId, status: 6, values: {} });
     expect(vi.getTimerCount()).toBe(0);
     close();
     actions.dispose();
   });
 
-  it('releases local tracking for gateway admission refusals without retrying the rejected goal', async () => {
+  it.each(['Control lease was revoked', 'Action server rejected the goal'])(
+    'releases confirmed never-started goals without cancellation (%s)',
+    async reason => {
+      vi.useFakeTimers();
+      const { ros, receive, send } = panelRosFixture();
+      const actions = new PanelRosActions(ros);
+      const goal = actions.send(options);
+      receive({
+        op: 'action_result',
+        id: goal.goalId,
+        action: options.action,
+        status: 0,
+        result: false,
+        values: reason,
+        roboboyWorkOutcome: 'not_started',
+      });
+      await expect(goal.result).rejects.toThrow(reason);
+      expect(vi.getTimerCount()).toBe(0);
+      vi.advanceTimersByTime(10000);
+      expect(send).toHaveBeenCalledTimes(1);
+      actions.dispose();
+    }
+  );
+
+  it('counts uncertain goals against the shared limit until completion', async () => {
     vi.useFakeTimers();
-    const { ros, receive, send } = panelRosFixture();
-    const actions = new PanelRosActions(ros);
-    const goal = actions.send(options);
-    receive({ op: 'action_result', id: goal.goalId, status: 0, result: false, values: 'Control lease was revoked' });
-    await expect(goal.result).rejects.toThrow('Control lease was revoked');
+    const { ros, receive, close } = panelRosFixture();
+    const first = new PanelRosActions(ros);
+    const second = new PanelRosActions(ros);
+    const goals = Array.from({ length: 16 }, () => first.send(options));
+    receive({ op: 'action_result', id: goals[0].goalId, status: 0, result: false, values: 'rosbridge timeout' });
+    await expect(goals[0].result).rejects.toThrow('rosbridge timeout');
+    expect(() => second.send(options)).toThrow('limit');
+    receive({ op: 'action_result', id: goals[0].goalId, status: 5, values: {} });
+    const replacement = second.send(options);
+    close();
+    await Promise.all(
+      [...goals.slice(1), replacement].map(goal => expect(goal.result).rejects.toThrow('connection lost'))
+    );
+    first.dispose();
+    second.dispose();
     expect(vi.getTimerCount()).toBe(0);
-    vi.advanceTimersByTime(10000);
-    expect(send).toHaveBeenCalledTimes(1);
-    actions.dispose();
   });
 
   it('limits outstanding goals across tiles on the same ROS connection', async () => {

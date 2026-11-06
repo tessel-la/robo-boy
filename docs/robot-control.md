@@ -261,6 +261,12 @@ resolve it. Cancellation is scoped to the originating tile and retries until com
 after unmount. A transport failure rejects the panel promise with uncertain completion; gateway
 recovery fences remain in force. Reconnect never resends the goal.
 
+A failed result with status 0 clears panel tracking only when the matching action carries
+`roboboyWorkOutcome: "not_started"`. The gateway adds this marker to admission refusals only
+when the request ID has no pending work; patched rosbridge adds it to confirmed pre-submission
+failures and goal rejections. Unmarked failures retain cancellation tracking and count toward
+the connection's outstanding-goal limit until terminal status or transport closure.
+
 `permissions.ros.control: true` enables `ros.control.request()` from an explicit gesture in the
 focused, visible tile. Both sandbox and trusted broker check browser user activation. It shares
 the top bar's acquisition/owner-consent workflow, returns `owned` or `pending`, and exposes no

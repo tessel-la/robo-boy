@@ -258,7 +258,7 @@ Agents must describe these as current limitations, not missing hidden APIs:
 - Runtime dependencies are not shared with the host.
 - SHA-256 detects artifact drift but does not establish publisher identity or revocation.
 - CPU-heavy synchronous panel code can still consume main-thread resources inside its iframe.
-- The v2 ROS broker supports JSON discovery, subscribe, publish, and services; actions and binary payloads are absent.
+- The v2 ROS broker supports JSON discovery, subscribe, publish, services, and ROS 2 actions; binary payloads are absent.
 
 ## Documentation Maintenance
 

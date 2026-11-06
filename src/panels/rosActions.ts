@@ -133,9 +133,9 @@ export class PanelRosActions {
         const error = new Error(
           typeof message.values === 'string' ? message.values : 'ROS action failed without confirmed completion.'
         );
-        if (status === 0) {
-          // The control gateway uses status 0 for an admission refusal. No goal was registered
-          // here; do not leave a cancellation timer for work the gateway never admitted.
+        if (status === 0 && message.action === goal.action && message.roboboyWorkOutcome === 'not_started') {
+          // Only an explicit gateway/rosbridge attestation proves this goal never started.
+          // A generic status 0 failure may arrive after submission and must stay tracked.
           this.finish(message.id, error);
           return;
         }
