@@ -1,5 +1,40 @@
 # Changelog
 
+## [0.20.0-alpha](https://github.com/tessel-la/robo-boy/compare/robo-boy-v0.19.0-alpha...robo-boy-v0.20.0-alpha) (2026-11-07)
+
+
+### Features
+
+* **3d:** add movable joint state telemetry overlay ([#245](https://github.com/tessel-la/robo-boy/issues/245)) ([02480b3](https://github.com/tessel-la/robo-boy/commit/02480b3db7cbd8f8de2ed36ee2d00511ac0f968d))
+* **3d:** add path and occupancy grid layers ([#237](https://github.com/tessel-la/robo-boy/issues/237)) ([0a04572](https://github.com/tessel-la/robo-boy/commit/0a0457289952ad2708cd9acb3f3ce0f508337d7b))
+* **3d:** display calibrated camera image planes ([#239](https://github.com/tessel-la/robo-boy/issues/239)) ([50511dc](https://github.com/tessel-la/robo-boy/commit/50511dcab471297bbff86ee674841b5a5b691e75))
+* **3d:** inspect cameras and project images onto mesh surfaces ([#248](https://github.com/tessel-la/robo-boy/issues/248)) ([98fec9e](https://github.com/tessel-la/robo-boy/commit/98fec9e95f153783ee55bf5a4c7ec98d0663c81d))
+* **3d:** render incremental Nav2 costmaps ([#246](https://github.com/tessel-la/robo-boy/issues/246)) ([8973845](https://github.com/tessel-la/robo-boy/commit/8973845786b6225a22256c7b8bb20e1d8e5583a0))
+* add compressed point-cloud streaming and depth camera views ([#251](https://github.com/tessel-la/robo-boy/issues/251)) ([e066c2f](https://github.com/tessel-la/robo-boy/commit/e066c2f40d93b8358ca4a7115e54e444fc2bad1d))
+* add reviewed ROS 2 parameter editing to Data Explorer ([#235](https://github.com/tessel-la/robo-boy/issues/235)) ([48ce462](https://github.com/tessel-la/robo-boy/commit/48ce46272ba35b38996203f1c09bb0b86476a469))
+* **assistant:** native agent runtime, scoped tools and autonomous authoring ([#225](https://github.com/tessel-la/robo-boy/issues/225)) ([7927f81](https://github.com/tessel-la/robo-boy/commit/7927f81cbe19b21d48906705b4920faf6abac04d))
+* **camera:** share timestamped MJPEG streams between Camera and 3D ([#240](https://github.com/tessel-la/robo-boy/issues/240)) ([a7619d2](https://github.com/tessel-la/robo-boy/commit/a7619d2e1605d331db2e8febbc36343d9837cddd))
+* **camera:** share WHEP sources and configure 3D projection rate ([#241](https://github.com/tessel-la/robo-boy/issues/241)) ([9df9af6](https://github.com/tessel-la/robo-boy/commit/9df9af6d5bfe7009dc08ef3ba294532ca1c2fc73))
+* custom login and branding ([#230](https://github.com/tessel-la/robo-boy/issues/230)) ([7506921](https://github.com/tessel-la/robo-boy/commit/7506921da5b5baa670d34768f6632a048109b779))
+* customize company login copy and improve connection history ([#232](https://github.com/tessel-la/robo-boy/issues/232)) ([89ef22d](https://github.com/tessel-la/robo-boy/commit/89ef22d07892e72780c61e8d0c9863c202788a43))
+* **plotting:** add xy plots and interval statistics ([#249](https://github.com/tessel-la/robo-boy/issues/249)) ([1371423](https://github.com/tessel-la/robo-boy/commit/1371423fa8501a5bddd721057ccecd4e3dbac983))
+* **sdk:** add panel actions and control requests ([#252](https://github.com/tessel-la/robo-boy/issues/252)) ([259c33f](https://github.com/tessel-la/robo-boy/commit/259c33f2bbdfa51af5c481c8639542851182f6d4))
+
+
+### Bug Fixes
+
+* **3d:** bring every layer's settings into the menu's design language ([#244](https://github.com/tessel-la/robo-boy/issues/244)) ([99a3053](https://github.com/tessel-la/robo-boy/commit/99a305352e24ad6ceb93411bbae9bceb672a62ed))
+* **3d:** correct spatial rendering, frame styling and web mesh loading ([#236](https://github.com/tessel-la/robo-boy/issues/236)) ([b8ca38f](https://github.com/tessel-la/robo-boy/commit/b8ca38fa422f3fb2fc702c9b0283e62079189d15))
+* **assistant:** align mobile mode and model control heights ([#242](https://github.com/tessel-la/robo-boy/issues/242)) ([d93a1c7](https://github.com/tessel-la/robo-boy/commit/d93a1c703bb5b8946de4ab1b9ad807c4006b6b19))
+* clean up unused code and patch vulnerable dependencies ([#233](https://github.com/tessel-la/robo-boy/issues/233)) ([612b8a0](https://github.com/tessel-la/robo-boy/commit/612b8a0102dca4b68af7ba393e1b466f501ca06e))
+* **control:** release stale owners and recover unstarted actions ([#243](https://github.com/tessel-la/robo-boy/issues/243)) ([a797ce1](https://github.com/tessel-la/robo-boy/commit/a797ce1d48b1fbb587919a0000d40e2e9ebec957))
+* keep separators while typing comma-separated pad settings ([#229](https://github.com/tessel-la/robo-boy/issues/229)) ([4945016](https://github.com/tessel-la/robo-boy/commit/49450164f3af9fed79dff99c784d3919867ce3e6))
+* retire the external time series panel ([#238](https://github.com/tessel-la/robo-boy/issues/238)) ([068183f](https://github.com/tessel-la/robo-boy/commit/068183fbadf5e2c421e2f2218adf75528f85a9c2))
+* round the app icon's corners on every platform ([#247](https://github.com/tessel-la/robo-boy/issues/247)) ([2077bc7](https://github.com/tessel-la/robo-boy/commit/2077bc781b1b8f1afda78a528db70a17a7ea8c38))
+* ship license notices and repair deployment audit findings ([#231](https://github.com/tessel-la/robo-boy/issues/231)) ([18199f8](https://github.com/tessel-la/robo-boy/commit/18199f869ea6db42ef2acb1362c062402508f9cf))
+* show one surprise message per login visit ([#234](https://github.com/tessel-la/robo-boy/issues/234)) ([534cb28](https://github.com/tessel-la/robo-boy/commit/534cb287d0c07645527b5b8592023ba75597d27f))
+* update follow-redirects to prevent credential leaks ([#254](https://github.com/tessel-la/robo-boy/issues/254)) ([652d6fc](https://github.com/tessel-la/robo-boy/commit/652d6fcfdf452632fe35f95b3061304cb791c990))
+
 ## [0.19.0-alpha](https://github.com/tessel-la/robo-boy/compare/robo-boy-v0.18.0-alpha...robo-boy-v0.19.0-alpha) (2026-10-14)
 
 
