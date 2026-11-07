@@ -3,6 +3,7 @@ import { FiChevronDown, FiPlus, FiTrash2, FiX } from 'react-icons/fi';
 import { useRuntimeConfig } from '../runtime/runtimeConfig';
 import { createLocalPanelManagerBackend, remotePanelManagerBackend } from './managerBackend';
 import { OFFICIAL_PANEL_SOURCE } from './constants';
+import { LEGACY_TIME_SERIES_ID } from './builtInPanels';
 import {
   type CatalogPanelSummary,
   type PanelInstallPreview,
@@ -90,6 +91,8 @@ const permissionSummary = (panel: RoboBoyPanelManifest): string[] => {
   if (ros?.subscribe?.length) summary.push(`subscribe ROS: ${ros.subscribe.join(', ')}`);
   if (ros?.publish?.length) summary.push(`publish ROS: ${ros.publish.join(', ')}`);
   if (ros?.services?.length) summary.push(`call ROS services: ${ros.services.join(', ')}`);
+  if (ros?.actions?.length) summary.push(`send ROS action goals: ${ros.actions.join(', ')}`);
+  if (ros?.control) summary.push('request robot control from a user gesture');
   if (network?.hostEndpoints?.length) summary.push(`host endpoints: ${network.hostEndpoints.join(', ')}`);
   if (network?.origins?.length) summary.push(`network origins: ${network.origins.join(', ')}`);
   for (const capability of panel.capabilities || []) {
@@ -228,7 +231,7 @@ const PanelManagerDialog = ({
     setCatalogError('');
     try {
       const result = await backend.listCatalog(currentToken, source);
-      setCatalog(result.panels);
+      setCatalog(result.panels.filter(panel => panel.id !== LEGACY_TIME_SERIES_ID));
     } catch (nextError) {
       setCatalogError(nextError instanceof Error ? nextError.message : String(nextError));
     } finally {
@@ -313,6 +316,10 @@ const PanelManagerDialog = ({
 
   const installCatalogPanel = (panelId: string) => {
     if (!config) return;
+    if (panelId === LEGACY_TIME_SERIES_ID) {
+      setNotice('Plotting is built into Robo-Boy. Add it from the panel menu.');
+      return;
+    }
     void requestPreview(withCatalogPanelSelected(config, installedIds, panelId), panelId);
   };
 

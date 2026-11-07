@@ -1,16 +1,18 @@
 # Data Explorer
 
 The Data Explorer panel inspects the ROS graph: topics, services, actions and nodes, who publishes and subscribes,
-how much traffic flows, what the messages contain, and whether the robot reports itself healthy. It has three views:
+how much traffic flows, what the messages contain, and whether the robot reports itself healthy. It has four views:
 
 - **Resources**: a searchable list with an inspector for the selected item.
 - **Graph**: who talks to whom.
 - **Health**: diagnostics, logs, events and your own topic rules.
+- **Parameters**: browse a live node's ROS 2 parameters and review explicit updates.
 
-It only observes. It never calls a robot service or sends an action goal. To act on something, use a Pad or a
-Behavior Tree.
+Resources, Graph and Health only observe. Parameters calls the node's standard read services; updates require
+staging, review and an explicit **Apply changes**, with the same robot-control policy as Pads and Behavior Trees.
+Other robot services and action goals still belong in a Pad or Behavior Tree.
 
-The toolbar holds the three views, the source (for example **● ROS host**), a download button and a refresh button:
+The toolbar holds the four views, the source (for example **● ROS host**), a download button and a refresh button:
 
 - **Download** saves one JSON file with the resources, measurements, diagnostics, rules, events and logs.
 - **Refresh** asks the ROS host for the graph again and re-sorts the rows by their current values.
@@ -111,6 +113,45 @@ systems draw the first 60 resources and say so.
   workspace.
 - The summary counts components that need attention and violated rules separately.
 - A topic's heart icon opens its rule here when it already has one.
+
+## Parameters
+
+Open **Parameters** in the Explorer toolbar and select a node, or use **View parameters** in a node's inspector.
+The list shows current values, ROS types and read-only flags. Select a parameter for its description, declared
+numeric ranges and steps, additional constraints, and proposed value. Strings are entered as plain text; arrays
+use JSON. Boolean values have a picker. The editor supports every populated ROS 2 parameter type; it preserves
+the current type of dynamically typed parameters. Unset parameters and integers outside JavaScript's exact
+integer range cannot be edited. Values are bounded to 64 KiB and arrays to 4,096 items.
+
+**Stage change** keeps an edit in this tile without sending it to the robot. Stage up to 32 changes per node;
+switching nodes or Explorer views keeps those drafts. **Review changes** shows the old and proposed values.
+**Apply changes** requires the existing robot-control permission and re-reads values and descriptors before sending.
+If a value, type, or constraint has changed, discard the affected draft and stage it again. The node's response is
+the final authority; a rejection displays its reason. Discarding changes affects drafts only.
+
+When the node offers `set_parameters_atomically`, its updates are submitted together. Otherwise the review warns
+that updates may partially succeed, and each rejection is reported. A change in available update mode requires
+another review. Reads and writes share the serialized ROS service queue. Updates are never retried automatically:
+after a timeout or disconnect an update may still finish, so check live values before trying again. Preflight is
+not a compare-and-set transaction against other ROS clients.
+
+Parameter events refresh the selected node, and **Refresh** reads it on demand. The view reads at most 512 parameters
+per node in batches of 32 and labels larger lists as partial. Reads stop while the view is hidden. Drafts are held
+only in memory and cleared when the connection changes or the tile closes; saved layouts retain the view and node,
+never values or pending edits. Duplicate node names disable updates because their service ownership is ambiguous.
+An MCAP source shows **Parameters were not recorded**, and does not silently read the live robot.
+
+The updated control gateway permits standard parameter reads for observers and verifies their actual service type
+through the private ROS host before forwarding. Native parameter writes still require control even when a deployment
+has broad observer-service patterns. The robot-side control policy's parameters can be inspected but cannot be
+changed from Robo-Boy. Update the ROS stack alongside the frontend to enable observer reads:
+
+```bash
+docker compose up -d --build ros-stack
+```
+
+The inspection companion remains read-only. Parameter services are called through the existing ROS connection;
+no additional backend process is required. Parameter YAML import/export and lifecycle controls are not included.
 
 ## Opening other panels
 
@@ -226,7 +267,7 @@ python3 -m unittest discover -s infra/ros -p test_inspection_runner.py
 These parts of the original design are deliberately left for later:
 
 - Recorded diagnostics restored at a seek point (after a seek, components reappear as they update).
-- Recording and replaying topology snapshots; service call tracing through service introspection; parameter browsing.
+- Recording and replaying topology snapshots; service call tracing through service introspection.
 - Graph namespace groups and collapse, and explicit one- or two-hop neighbourhood controls.
 - Namespace grouping and a health filter in the resource list, and optional live sorting.
 - Header-stamp age, message-loss counters, and rolling recorded rates computed in the replay worker.

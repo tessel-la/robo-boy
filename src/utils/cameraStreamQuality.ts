@@ -1,4 +1,5 @@
 import { buildCameraSnapshotUrl } from './cameraStreamUrl';
+import { enterpriseMediaUrl } from '../features/enterprise/session';
 
 /**
  * web_video_server encodes every source frame at full size by default: a 1080p camera is
@@ -107,7 +108,7 @@ export function probeCameraSourceSize(baseUrl: string, topic: string): Promise<F
       );
     image.onerror = () => finish(null);
     try {
-      image.src = buildCameraSnapshotUrl({ topic, baseUrl, quality: 20 });
+      image.src = enterpriseMediaUrl(buildCameraSnapshotUrl({ topic, baseUrl, quality: 20 }));
     } catch {
       finish(null);
     }

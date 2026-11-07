@@ -1,5 +1,10 @@
 import ROSLIB, { type Ros } from 'roslib';
-import { isRemoteBag, type BagInfo, type BagSource, type ReaderRequest, type ReaderResponse, type ReplayMessage } from './types';
+import { getTfHistory } from '../../utils/tfStream';
+import { enterpriseMediaUrl } from '../enterprise/session';
+import { isRemoteBag, type BagInfo, type BagSource, type ReaderRequest, type ReaderResponse, type ReplayMessage, type ReplayGridSource } from './types';
+
+// Keep the canonical source in session state; only worker messages carry a scoped read URL.
+const workerSource = (source: BagSource): BagSource => isRemoteBag(source) ? { ...source, url: enterpriseMediaUrl(source.url) } : source;
 
 type WireMessage = { op: string; id?: string; topic?: string; service?: string; args?: { topic?: string; type?: string } };
 type Emitter = { emit: (name: string, value: unknown) => void; removeAllListeners: () => void };
@@ -16,7 +21,7 @@ export interface ReplaySnapshot {
   buffering: boolean;
   error?: string;
 }
-const isTf = (topic: string) => topic === '/tf' || topic === '/tf_static';
+const isTf = (topic: string) => topic === '/tf' || topic === '/tf_static' || topic === '/roboboy/tf';
 type Transform = { child_frame_id: string };
 
 /** A ROSLIB-compatible read adapter with no socket and no publishing path. */
@@ -24,6 +29,20 @@ class ReplayRos extends ROSLIB.Ros {
   private subscriptions = new Map<string, string>();
   /** Last message per subscribed topic, so a panel that subscribes later starts from the cursor. */
   private latest = new Map<string, ReplayMessage>();
+  private grids = new Map<string, { source: ReplayGridSource; listeners: Set<(message: unknown) => void> }>();
+  get gridSources() { return [...this.grids.values()].map(entry => entry.source); }
+  get seeking() { return this.session.snapshot.phase === 'seeking'; }
+  registerGrid(topic: string, updatesTopic: string, listener: (message: unknown) => void) {
+    const key = JSON.stringify([topic, updatesTopic]);
+    let entry = this.grids.get(key);
+    if (!entry) this.grids.set(key, entry = { source: { key, topic, updatesTopic }, listeners: new Set() });
+    entry.listeners.add(listener);
+    this.session.refreshTopics();
+    return () => {
+      entry!.listeners.delete(listener);
+      if (!entry!.listeners.size) this.grids.delete(key);
+    };
+  }
   /** TF messages are deltas; their latest state is every child frame's last transform. */
   private frames = new Map<string, Map<string, Transform>>();
   constructor(private session: ReplaySession) {
@@ -33,7 +52,10 @@ class ReplayRos extends ROSLIB.Ros {
   emitEvent(name: string, value: unknown) { (this as unknown as Emitter).emit(name, value); }
   callOnConnection = (message: WireMessage) => {
     if (message.op === 'subscribe' && message.topic && message.id) {
+      const alreadySubscribed = [...this.subscriptions.values()].includes(message.topic);
       this.subscriptions.set(message.id, message.topic);
+      // A new shared TF subscription needs the recorded history, not just one latched sample.
+      if (isTf(message.topic) && !alreadySubscribed) { this.latest.delete(message.topic); this.frames.delete(message.topic); }
       const last = this.last(message.topic);
       if (last) queueMicrotask(() => { if (this.subscriptions.has(message.id!)) this.deliver(last); });
       else this.session.refreshTopics();
@@ -56,6 +78,14 @@ class ReplayRos extends ROSLIB.Ros {
   getTopicType(topic: string, callback: (type: string) => void) {
     callback(this.session.snapshot.info?.topics.find(t => t.name === topic)?.type ?? '');
   }
+  getTopicsForType(type: string, callback: (topics: string[]) => void) {
+    const normalize = (name: string) => name.replace('/msg/', '/');
+    let topics = this.session.snapshot.info?.topics
+      .filter(t => !t.error && normalize(t.type) === normalize(type)).map(t => t.name) ?? [];
+    // Recorded raw TF is more complete than the display relay; never prefer the relay over it.
+    if (normalize(type) === 'tf2_msgs/TFMessage' && topics.includes('/tf')) topics = topics.filter(t => t !== '/roboboy/tf');
+    callback(topics);
+  }
   get topics() { return [...new Set(this.subscriptions.values())]; }
   get unseenTopics() { return this.topics.filter(topic => !this.latest.has(topic)); }
   private last(topic: string): ReplayMessage | undefined {
@@ -71,6 +101,11 @@ class ReplayRos extends ROSLIB.Ros {
     for (const transform of (item.message.transforms ?? []) as Transform[]) frames.set(transform.child_frame_id, transform);
   }
   deliver(item: ReplayMessage) {
+    if (item.gridSnapshot) {
+      for (const listener of this.grids.get(item.gridSnapshot)?.listeners ?? []) listener(item.message);
+      return;
+    }
+    if (item.tfHistory) getTfHistory(this).ingest({ transforms: item.tfHistory }, item.topic === '/tf_static');
     this.remember(item);
     this.session.messageTime = Number(item.time / 1000n) / 1000;
     this.emitEvent(item.topic, item.message);
@@ -78,9 +113,18 @@ class ReplayRos extends ROSLIB.Ros {
   /** State at a new cursor. `onlyNew` answers late subscribers without repeating others' data. */
   hydrate(items: ReplayMessage[], onlyNew: boolean) {
     if (!onlyNew) { this.latest.clear(); this.frames.clear(); }
-    for (const item of items) if (!onlyNew || !this.latest.has(item.topic)) this.deliver(item);
+    for (const item of items) if (item.gridSnapshot || !onlyNew || !this.latest.has(item.topic)) this.deliver(item);
   }
-  dispose() { this.latest.clear(); this.frames.clear(); this.subscriptions.clear(); (this as unknown as Emitter).removeAllListeners(); }
+  dispose() { this.latest.clear(); this.frames.clear(); this.grids.clear(); this.subscriptions.clear(); (this as unknown as Emitter).removeAllListeners(); }
+}
+
+/** Explicit source identity: recorded views must never open a live camera transport. */
+export const isReplayRos = (ros: Ros): boolean => ros instanceof ReplayRos;
+
+export const isReplaySeeking = (ros: Ros): boolean => ros instanceof ReplayRos && ros.seeking;
+
+export function registerReplayGrid(ros: Ros, topic: string, updatesTopic: string, listener: (message: unknown) => void): () => void {
+  return ros instanceof ReplayRos ? ros.registerGrid(topic, updatesTopic, listener) : () => {};
 }
 
 export class ReplaySession {
@@ -122,7 +166,7 @@ export class ReplaySession {
       this.worker = this.createWorker();
       this.worker.onmessage = ({ data }: MessageEvent<ReaderResponse>) => this.receive(data);
       this.worker.onerror = event => { this.update({ phase: 'error', playing: false, error: event.message || 'The recording reader stopped unexpectedly.' }); };
-      this.post({ id: ++this.requestId, op: 'open', source });
+      this.post({ id: ++this.requestId, op: 'open', source: workerSource(source) });
     } catch (error) { this.update({ phase: 'error', error: String(error) }); }
   }
   /** Whether a failed recording can be opened again as it was: remote reads fail with the connection. */
@@ -175,12 +219,13 @@ export class ReplaySession {
     this.seeking = true; this.refreshing = onlyNew && !reset;
     this.update({ phase: 'seeking', position: this.pendingEnd });
     const topics = (this.refreshing ? this.adapter?.unseenTopics : this.adapter?.topics) ?? [];
+    const grids = this.adapter?.gridSources ?? [];
     if (reset) {
       this.adapter?.dispose();
       this.adapter = new ReplayRos(this);
       this.sourceChanged(this.adapter);
     }
-    this.post({ id: ++this.requestId, op: 'seek', time: this.toTime(this.pendingEnd), topics });
+    this.post({ id: ++this.requestId, op: 'seek', time: this.toTime(this.pendingEnd), topics, ...(grids.length ? { grids } : {}) });
     this.lastTick = performance.now();
   }
   private toTime(seconds: number) { return this.snapshot.info!.start + BigInt(Math.round(seconds * 1e9)); }
@@ -247,7 +292,7 @@ export class ReplaySession {
         if (data.done) finish();
         else worker.postMessage({ op: 'ack', id: data.id });
       };
-      worker.postMessage({ id: 1, op: 'open', source: bag } satisfies ReaderRequest);
+      worker.postMessage({ id: 1, op: 'open', source: workerSource(bag) } satisfies ReaderRequest);
     });
   }
   close() {

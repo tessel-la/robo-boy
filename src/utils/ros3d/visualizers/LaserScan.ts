@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { Ros } from 'roslib';
 import * as ROSLIB from 'roslib';
-import { CustomTFProvider, StoredTransform } from '../../tfUtils';
+import { CustomTFProvider } from '../../tfUtils';
 
 /**
  * LaserScan visualization class for ROS laser scan data.

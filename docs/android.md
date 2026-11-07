@@ -29,6 +29,9 @@ The Android Studio project is committed at `src-tauri/gen/android`. Do not run `
 cloning: that command is only for deliberately regenerating the native project after a Tauri
 upgrade and can replace its manifest and Gradle settings.
 
+`android:init` and `android:build` synchronize launcher resources from `src-tauri/icons/android/`,
+including the adaptive icon and its background. Keep that directory as the native icon source.
+
 ## Run On Your Android Phone
 
 1. On the phone, enable **Developer options** and **USB debugging**.

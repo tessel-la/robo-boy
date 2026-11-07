@@ -98,13 +98,30 @@ describe('recentConnections', () => {
       saveRecentConnection({ ros2Option: 'ip', ros2Value: `robot-${index}.local` }, index);
     }
 
-    expect(loadRecentConnections().map(connection => connection.host)).toEqual([
-      'robot-6.local',
-      'robot-5.local',
-      'robot-4.local',
-      'robot-3.local',
-      'robot-2.local',
-    ]);
+    const recent = loadRecentConnections();
+    expect(recent).toHaveLength(20);
+    expect(recent[0].host).toBe('robot-21.local');
+    expect(recent[recent.length - 1].host).toBe('robot-2.local');
+    expect(recent.some(connection => connection.host === 'robot-1.local')).toBe(false);
+  });
+
+  it('extends existing five-host history without losing older hosts or their ports', () => {
+    localStorage.setItem(
+      RECENT_CONNECTIONS_STORAGE_KEY,
+      JSON.stringify(
+        Array.from({ length: 5 }, (_, index) => ({
+          host: `robot-${index}.local`,
+          rosbridgePort: '19090',
+          lastConnectedAt: index,
+        }))
+      )
+    );
+    saveRecentConnection({ ros2Option: 'ip', ros2Value: 'new-robot.local' }, 10);
+    const recent = loadRecentConnections();
+    expect(recent).toHaveLength(6);
+    expect(recent[recent.length - 1]).toMatchObject({ host: 'robot-0.local', rosbridgePort: '19090' });
+    removeRecentConnection('robot-0.local');
+    expect(loadRecentConnections().some(connection => connection.host === 'robot-0.local')).toBe(false);
   });
 
   it('removes a stored host', () => {

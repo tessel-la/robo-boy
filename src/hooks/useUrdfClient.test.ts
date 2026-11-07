@@ -19,7 +19,8 @@ describe('useUrdfClient', () => {
 
         disposeMock = vi.fn();
         urdfClientMock = {
-            dispose: disposeMock
+            dispose: disposeMock,
+            setOpacity: vi.fn(),
         };
 
         (ROS3D.UrdfClient as any).mockImplementation(function () { return urdfClientMock; });
@@ -32,6 +33,13 @@ describe('useUrdfClient', () => {
             dependenciesReady: true,
             robotDescriptionTopic: '/robot_description'
         };
+    });
+
+    it('updates opacity without recreating the ROS client', () => {
+        const { rerender } = renderHook(value => useUrdfClient(value), { initialProps: { ...props, opacity: 1 } });
+        rerender({ ...props, opacity: 0.4 });
+        expect(ROS3D.UrdfClient).toHaveBeenCalledTimes(1);
+        expect(urdfClientMock.setOpacity).toHaveBeenLastCalledWith(0.4);
     });
 
     it('should initialize UrdfClient when connected and dependencies exist', () => {

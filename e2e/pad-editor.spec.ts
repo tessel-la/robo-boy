@@ -29,6 +29,24 @@ async function openPadEditor(page: Page) {
 
 const leftStick = (page: Page) => page.locator('.design-area .gamepad-component.joystick').first();
 
+test('runtime Pad fills its tile at desktop and mobile sizes', async ({ page }, testInfo) => {
+  await connect(page);
+  await addPadPanel(page);
+  for (const viewport of [{ width: 1280, height: 900 }, { width: 390, height: 844 }, { width: 844, height: 390 }]) {
+    await page.setViewportSize(viewport);
+    const body = page.locator('.workspace-pad-body').first();
+    const layout = body.locator('.custom-gamepad-layout');
+    await expect(layout).toBeVisible();
+    await expect.poll(async () => {
+      const outer = (await body.boundingBox())!;
+      const inner = (await layout.boundingBox())!;
+      return inner.width / outer.width;
+    }).toBeGreaterThan(0.85);
+    expect(await body.evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+    await page.screenshot({ path: testInfo.outputPath(`pad-${viewport.width}.png`) });
+  }
+});
+
 test('a selected component shows its frame, corner and edge handles and a toolbar in the app\'s own style', async ({ page }) => {
   await openPadEditor(page);
   await leftStick(page).click();

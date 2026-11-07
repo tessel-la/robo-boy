@@ -26,6 +26,10 @@ fi
 
 echo "--- Sourcing ROS ${ROS_DISTRO} ---"
 source "/opt/ros/${ROS_DISTRO}/setup.bash"
+# Local source installs without this overlay retain ordinary video playback.
+if [ -f /opt/roboboy-video/share/web_video_server/local_setup.bash ]; then
+    source /opt/roboboy-video/share/web_video_server/local_setup.bash
+fi
 
 echo "--- DDS middleware: ${RMW_IMPLEMENTATION} ---"
 echo "--- ROS service ports: rosbridge=${ROSBRIDGE_PORT}; web_video_server=${VIDEO_STREAM_PORT} ---"
@@ -98,6 +102,13 @@ fi
 echo "--- Launching ROS Components ---"
 
 # Read-only discovery and expiring, on-demand traffic probes.
+# Discover point clouds and compress only streams that a viewer subscribes to.
+(while true; do
+    /opt/roboboy-cloudini/bin/pointcloud-relay
+    echo "[pointcloud-relay] exited, restarting in 2s..."
+    sleep 2
+done) &
+
 (while true; do
     python3 /ros_ws/inspection_runner.py
     echo "[inspection_runner] exited, restarting in 2s..."
@@ -156,7 +167,7 @@ if [ "${ROBOBOY_EXTERNAL_CONTROL_LOCK:-false}" = "true" ]; then
 fi
 
 # Launch web_video_server
-ros2 run web_video_server web_video_server --ros-args -p address:=0.0.0.0 -p port:="${VIDEO_STREAM_PORT}" &
+ros2 run web_video_server web_video_server --ros-args -p address:="${ROBOBOY_SERVICE_BIND_ADDRESS:-0.0.0.0}" -p port:="${VIDEO_STREAM_PORT}" &
 
 echo "--- Waiting for processes to exit ---"
 wait -n

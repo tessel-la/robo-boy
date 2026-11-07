@@ -65,6 +65,7 @@ try {
   delete env.ELECTRON_RUN_AS_NODE;
   electron = await _electron.launch({ args: [main], env, timeout: 30000 });
   const page = await electron.firstWindow();
+  await page.waitForURL('app://robo-boy/index.html');
   assert.equal(await electron.evaluate(({ app }) => app.commandLine.hasSwitch('ignore-certificate-errors')), false);
   for (const target of [secure, secure.replace('127.0.0.1', 'robot.local')]) {
     assert.equal(await page.evaluate(url => fetch(url, { method: 'POST', body: 'robot' }).then(r => r.text()), target), 'robot');

@@ -1,4 +1,5 @@
 import { getDesktopBridge } from '../../runtime/desktopBridge';
+import { getEnterpriseSession } from '../enterprise/session';
 
 const SESSION_NAME_KEY = 'roboboy-control-session-name-v1';
 
@@ -12,7 +13,7 @@ function displayName(value: unknown): string | undefined {
   );
 }
 
-/** A chosen label wins over the native account name. Browsers have no OS identity API. */
+/** Prefer a chosen label, then the signed-in employee, then the native account name. */
 export async function defaultSessionName(): Promise<string | undefined> {
   try {
     const saved = displayName(localStorage.getItem(SESSION_NAME_KEY));
@@ -20,6 +21,8 @@ export async function defaultSessionName(): Promise<string | undefined> {
   } catch {
     /* Private browser storage may be unavailable. */
   }
+  const authenticatedName = displayName(getEnterpriseSession()?.user.name);
+  if (authenticatedName) return authenticatedName;
   try {
     const desktop = getDesktopBridge();
     if (desktop?.getUsername) return displayName(await desktop.getUsername());

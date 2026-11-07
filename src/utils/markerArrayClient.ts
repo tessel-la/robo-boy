@@ -5,6 +5,7 @@ import { MTLLoader } from 'three/examples/jsm/loaders/MTLLoader.js';
 import { ColladaLoader } from 'three/examples/jsm/loaders/ColladaLoader.js';
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
 import { CustomTFProvider } from './tfUtils';
+import { MeshOpacity } from './meshOpacity';
 import { createRobotResourceManager } from '../runtime/robotResources';
 
 type Marker = {
@@ -51,12 +52,14 @@ export class MarkerArrayClient {
   private topic: Topic;
   private models = new Map<string, Promise<THREE.Object3D>>();
   private disposed = false;
+  private meshOpacity = new MeshOpacity();
   private resourceManager: THREE.LoadingManager;
 
   constructor(private options: {
     ros: Ros; topic: string; tfClient: CustomTFProvider; rootObject: THREE.Object3D;
-    path: string; requestRender: () => void; loadMesh?: typeof loadMesh;
+    path: string; requestRender: () => void; loadMesh?: typeof loadMesh; opacity?: number;
   }) {
+    this.meshOpacity.set(options.opacity);
     this.resourceManager = createRobotResourceManager(options.path);
     this.topic = new ROSLIB.Topic({ ros: options.ros, name: options.topic,
       messageType: 'visualization_msgs/MarkerArray', compression: 'cbor', throttle_rate: 0, queue_length: 0 });
@@ -140,6 +143,7 @@ export class MarkerArrayClient {
         });
         child.material = Array.isArray(original) ? converted : converted[0];
       });
+      this.meshOpacity.apply(model);
       local.add(model);
       this.options.requestRender();
     }).catch(error => {
@@ -148,6 +152,13 @@ export class MarkerArrayClient {
       console.error('[MarkerArrayClient] Mesh loading failed:', error);
     });
     return entry;
+  }
+
+  setOpacity(opacity: number) {
+    if (this.disposed) return;
+    this.meshOpacity.set(opacity);
+    for (const entry of this.entries.values()) this.meshOpacity.apply(entry.group);
+    this.options.requestRender();
   }
 
   private remove(key: string) {

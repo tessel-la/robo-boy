@@ -33,6 +33,10 @@ export interface RoboBoyPanelRosPermissions {
   subscribe?: string[];
   publish?: string[];
   services?: string[];
+  /** ROS 2 action names this panel may start. Cancellation is limited to its own goals. */
+  actions?: string[];
+  /** Allow explicit, user-initiated requests for the host connection's robot control lease. */
+  control?: boolean;
 }
 
 export interface RoboBoyPanelNetworkPermissions {
@@ -202,6 +206,29 @@ export interface RoboBoyRosServiceOptions {
   request: RoboBoyJsonObject;
 }
 
+export interface RoboBoyRosActionOptions {
+  action: string;
+  actionType: string;
+  goal: RoboBoyJsonObject;
+}
+
+export interface RoboBoyRosActionResult {
+  /** Terminal ROS 2 goal status: 4 (succeeded), 5 (canceled), or 6 (aborted). */
+  status: 4 | 5 | 6;
+  result: RoboBoyJsonObject;
+}
+
+export interface RoboBoyRosActionGoal {
+  readonly goalId: string;
+  /** Rejects on transport/protocol failure, which does not prove the robot stopped. */
+  readonly result: Promise<RoboBoyRosActionResult>;
+}
+
+export interface RoboBoyRosControlRequestResult {
+  state: 'owned' | 'pending';
+  message: string;
+}
+
 export interface RoboBoyPanelRos {
   getTopics(): Promise<RoboBoyRosTopic[]>;
   /** Opens Robo-Boy's trusted topic picker and grants only the topic selected by the user. */
@@ -212,6 +239,17 @@ export interface RoboBoyPanelRos {
   ): Promise<RoboBoyRosSubscription>;
   publish(options: RoboBoyRosPublishOptions): Promise<void>;
   callService(options: RoboBoyRosServiceOptions): Promise<RoboBoyJsonObject>;
+  /** Sends once through the shared host connection; never queues or replays a rejected goal. */
+  sendActionGoal(
+    options: RoboBoyRosActionOptions,
+    onFeedback?: (feedback: RoboBoyJsonObject) => void
+  ): Promise<RoboBoyRosActionGoal>;
+  /** Requests cancellation; result remains pending until terminal status or transport failure. */
+  cancelActionGoal(goalId: string): Promise<void>;
+  readonly control: {
+    /** Call synchronously from a user gesture in the active panel. Never call on mount or a timer. */
+    request(): Promise<RoboBoyRosControlRequestResult>;
+  };
 }
 
 export interface RoboBoyPanelNetworkRequest {

@@ -40,6 +40,7 @@ declare module 'animejs' {
     }
 
     interface AnimeStatic {
+      remove: (targets: AnimeParams['targets']) => void;
       (params: AnimeParams): AnimeInstance;
       timeline: (params?: Omit<AnimeParams, 'targets'>) => AnimeTimelineInstance;
     }

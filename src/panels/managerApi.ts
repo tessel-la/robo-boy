@@ -1,4 +1,5 @@
 import type { RoboBoyPanelManifest } from './types';
+import { enterpriseFetch } from '../features/enterprise/session';
 
 export interface RemotePanelSourceConfig {
   type: 'remote';
@@ -47,7 +48,7 @@ export interface CatalogPanelSummary {
 
 /** Same-origin by construction: this API exists only in the web deployment that serves the app. */
 const managerRequest = async <T>(path: string, token: string, init?: RequestInit): Promise<T> => {
-  const response = await fetch(`/api/panels/${path}`, {
+  const response = await enterpriseFetch(`/api/panels/${path}`, {
     ...init,
     cache: 'no-store',
     headers: {
@@ -74,7 +75,7 @@ const managerRequest = async <T>(path: string, token: string, init?: RequestInit
 
 /** Unauthenticated by design: it reports whether anything else here needs a token. */
 export const fetchPanelManagerStatus = async (): Promise<{ authenticationRequired: boolean }> => {
-  const response = await fetch('/api/panels/status', { cache: 'no-store' });
+  const response = await enterpriseFetch('/api/panels/status', { cache: 'no-store' });
   if (!response.ok) throw new Error(`Panel manager returned HTTP ${response.status}.`);
   return (await response.json()) as { authenticationRequired: boolean };
 };

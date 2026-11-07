@@ -1,6 +1,8 @@
 import { type ReactNode, useEffect, useId, useRef, useState } from 'react';
 import type { ConnectionStatus } from '../runtime/connections';
 import './ConnectionTabs.css';
+import EnterpriseAccount from '../features/enterprise/EnterpriseAccount';
+import RoboBoyAttribution from './RoboBoyAttribution';
 
 export interface ConnectionTabItem {
   id: string;
@@ -134,6 +136,11 @@ export default function ConnectionTabs({
         <span className="connection-switcher-label">
           {isAdding ? 'New connection' : (activeTab?.label ?? 'Connections')}
         </span>
+        {tabs.length > 1 && (
+          <span className="connection-count" title={`${tabs.length} open connections`}>
+            {tabs.length}
+          </span>
+        )}
         <ChevronIcon isOpen={isSwitcherOpen} />
       </button>
 
@@ -204,10 +211,12 @@ export default function ConnectionTabs({
           )}
           {themeControl}
           {appUpdateControl}
+          <EnterpriseAccount />
           <button type="button" className="connection-switcher-add" onClick={openAnotherConnection}>
             <PlusIcon />
             <span>Open another connection</span>
           </button>
+          <RoboBoyAttribution className="connection-switcher-attribution" />
         </div>
       )}
     </nav>

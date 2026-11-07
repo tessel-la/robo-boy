@@ -1,6 +1,7 @@
 import TimeSeriesPanel from '../features/timeSeries/TimeSeriesPanel';
+import { flushSync } from 'react-dom';
 import DataExplorerPanel, { type ExplorerOpenRequest } from '../features/dataExplorer/DataExplorerPanel';
-import { recordValuesFor, timeSeriesValuesFor, visualizationStateFor } from '../features/dataExplorer/openTarget';
+import { cameraValuesFor, explorerValuesFor, recordValuesFor, timeSeriesValuesFor, visualizationStateFor } from '../features/dataExplorer/openTarget';
 import RecordReplayPanel from '../features/recordReplay/RecordReplayPanel';
 import { ReplaySession } from '../features/recordReplay/ReplaySession';
 import RecordedCameraView from '../features/recordReplay/RecordedCameraView';
@@ -44,6 +45,7 @@ import {
   importGamepadFile,
   importGamepadLayouts,
   loadGamepadLibrary,
+  GAMEPAD_STORAGE_EVENT,
 } from '../features/customGamepad/gamepadStorage';
 import { useCameraTopics } from '../hooks/useCameraTopics';
 import { applySavedGamepadToPanels, GamepadSaveMode } from '../features/customGamepad/gamepadPanelState';
@@ -69,7 +71,7 @@ import {
 } from '../panels/types';
 import { validatePanelState } from '../panels/storage';
 import { APP_VERSION } from '../features/appUpdate/releases';
-import { CAMERA_STREAM_PRESETS, CAMERA_STREAM_QUALITIES, isCameraStreamQuality, type CameraStreamQuality } from '../utils/cameraStreamQuality';
+import { CAMERA_STREAM_PRESETS, CAMERA_STREAM_QUALITIES, isCameraStreamQuality } from '../utils/cameraStreamQuality';
 import { isValidPanelId } from '../panels/registry';
 import { useInstalledPanels } from '../panels/useInstalledPanels';
 import TreePanelMenu from '../features/treePanel/components/TreePanelMenu';
@@ -1025,7 +1027,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({
   const [mobileSecondaryEverMounted, setMobileSecondaryEverMounted] = useState(isMobileSplitView);
   const [workspaceLayout, setWorkspaceLayout] = useState<WorkspaceLayoutState>(() => loadWorkspaceLayout(storageScope));
   const [workspaceTileOrder, setWorkspaceTileOrder] = useState<string[]>(() => loadWorkspaceTileOrder(storageScope));
-  const [customWorkspaceSnapTemplates, setCustomWorkspaceSnapTemplates] = useState<WorkspaceSnapTemplate[]>(() =>
+  const [customWorkspaceSnapTemplates] = useState<WorkspaceSnapTemplate[]>(() =>
     loadWorkspaceCustomTemplates(storageScope)
   );
   const [savedWorkspaceLayouts, setSavedWorkspaceLayouts] = useState<SavedWorkspaceLayout[]>(() =>
@@ -1105,6 +1107,9 @@ const MainControlView: React.FC<MainControlViewProps> = ({
   const handleRegisterAssistantBridge = useCallback((panelId: string, bridge: BehaviorTreeAssistantBridge | null) => {
     assistantRef.current?.registerBehaviorTreeBridge(panelId, bridge);
   }, []);
+  const handleRegisterPadDraftReader = useCallback((reader: (() => CustomGamepadLayout) | null) => {
+    assistantRef.current?.registerPadDraftReader(reader);
+  }, []);
   const handleRegisterPanelSettingsBridge = useCallback((panelId: string, bridge: PanelSettingsBridge | null) => {
     assistantRef.current?.registerPanelSettingsBridge(panelId, bridge);
   }, []);
@@ -1138,12 +1143,20 @@ const MainControlView: React.FC<MainControlViewProps> = ({
   // State to trigger refresh of custom gamepads in AddPanelMenu
   const [customGamepadRefreshKey, setCustomGamepadRefreshKey] = useState(0);
   const gamepadLibrary = useMemo(() => loadGamepadLibrary(), [customGamepadRefreshKey]);
+  useEffect(() => {
+    // Authoring saves and undo use the same storage boundary as the manual editor.
+    // Refresh catalogs only; running controls keep their operator-activated layout snapshot.
+    const refresh = () => setCustomGamepadRefreshKey(value => value + 1);
+    window.addEventListener(GAMEPAD_STORAGE_EVENT, refresh);
+    window.addEventListener('storage', refresh);
+    return () => {
+      window.removeEventListener(GAMEPAD_STORAGE_EVENT, refresh);
+      window.removeEventListener('storage', refresh);
+    };
+  }, []);
   // Ref for the Add Panel button (+)
   const addButtonRef = useRef<HTMLButtonElement>(null);
   // --- End New State ---
-
-  // Ref to prevent multiple connection attempts (kept for potential future use)
-  const _isConnecting = useRef(false);
 
   const viewPanelRef = useRef<HTMLDivElement>(null);
   const workspaceRef = useRef<HTMLDivElement>(null);
@@ -1289,7 +1302,6 @@ const MainControlView: React.FC<MainControlViewProps> = ({
   const isActiveWorkspaceLayoutDirty = Boolean(
     activeWorkspaceLayout && activeWorkspaceLayoutSignature !== currentWorkspaceLayoutSignature
   );
-  const getWorkspaceTileIndex = (_rowIndex: number, columnIndex: number) => columnIndex;
   const workspaceSnapTileCount = workspaceTiles.length + (workspaceDragKind === 'new' ? 1 : 0);
   const allWorkspaceSnapTemplates = useMemo(
     () => [...WORKSPACE_SNAP_TEMPLATES, ...customWorkspaceSnapTemplates],
@@ -1845,6 +1857,17 @@ const MainControlView: React.FC<MainControlViewProps> = ({
     options?: { cameraTopic?: string; layoutId?: string; title?: string; explorer?: ExplorerOpenRequest; originId?: string }
   ) => {
     setIsWorkspaceOpen(true);
+    if (options?.explorer && !isDesktopWorkspace) {
+      const target = mobileWorkspacePanels.find(panel => panel.id !== options.originId && panel.type === type)
+        ?? mobileWorkspacePanels.find(panel => panel.id !== options.originId);
+      if (target) {
+        const replacement = explorerReplacement(target, options.explorer);
+        setMobileWorkspacePanels(previous => previous.map(panel => panel.id === target.id ? replacement : panel));
+        setMobileSecondaryEverMounted(true); setIsMobileSplitView(true);
+        setActiveMobileWindowIndex(mobileWorkspacePanels.findIndex(panel => panel.id === target.id));
+        return target.id;
+      }
+    }
     if (workspaceReplacementPanelId && !options) {
       replaceWorkspacePanel(workspaceReplacementPanelId, type);
       setWorkspaceReplacementPanelId(null);
@@ -1854,6 +1877,12 @@ const MainControlView: React.FC<MainControlViewProps> = ({
       return;
     }
     const isWorkspaceFull = isWorkspaceStacked && workspacePanels.length >= 2;
+    const requestedCamera = options?.explorer?.cameraOptions && cameraValuesFor(undefined, options.explorer.cameraOptions);
+    if (type === 'camera' && requestedCamera) {
+      const matching = workspacePanels.find(panel => panel.type === 'camera' && panel.cameraTopic === options?.cameraTopic &&
+        ['imageSource', 'streamQuality', 'whepUrl'].every(key => panel.panelState?.values[key] === requestedCamera[key]));
+      if (matching) { setLastAddedWorkspacePanelId(matching.id); return matching.id; }
+    }
     // The Explorer reuses an open panel of the requested kind, adding to its settings. A camera
     // gets its own new tile while there is room, so the view already on screen is not switched.
     const explorerExisting = options?.explorer && explorerTargetIn(workspacePanels, type, options.originId);
@@ -1909,17 +1938,6 @@ const MainControlView: React.FC<MainControlViewProps> = ({
     setIsWorkspaceTemplateMenuOpen(false);
     setWorkspaceReplaceMenuStyle(null);
     return newPanel.id;
-  };
-
-  const handleReturnToSplitView = () => {
-    setIsWorkspaceOpen(false);
-    setIsWorkspaceAddMenuOpen(false);
-    setIsWorkspaceTemplateMenuOpen(false);
-    setIsWorkspaceDragActive(false);
-    setWorkspaceDragKind(null);
-    setWorkspaceSnapTarget(null);
-    setIsWorkspaceResizing(false);
-    setWorkspaceDropPlacement(null);
   };
 
   const handleWorkspaceDragStart = (event: React.DragEvent<HTMLButtonElement>, type: WorkspacePanelType) => {
@@ -2353,11 +2371,11 @@ const MainControlView: React.FC<MainControlViewProps> = ({
     setMobileWorkspacePanels(prev => prev.map(panel => (panel.id === panelId ? { ...panel, cameraTopic } : panel)));
   };
 
-  const handleWorkspaceCameraQualityChange = (panelId: string, streamQuality: CameraStreamQuality) => {
+  const handleWorkspaceCameraSettingsChange = (panelId: string, patch: NonNullable<WorkspacePanel['panelState']>['values']) => {
     const update = (previous: WorkspacePanel[]) =>
       previous.map(candidate =>
         candidate.id === panelId
-          ? { ...candidate, panelState: { schemaVersion: 1 as const, panelId: candidate.type, values: { ...(candidate.panelState?.values ?? {}), streamQuality } } }
+          ? { ...candidate, panelState: { schemaVersion: 1 as const, panelId: candidate.type, values: { ...(candidate.panelState?.values ?? {}), ...patch } } }
           : candidate
       );
     setWorkspacePanels(update);
@@ -2590,6 +2608,9 @@ const MainControlView: React.FC<MainControlViewProps> = ({
    * reported in the user's terms and shown in the chat.
    */
   const handleAssistantWorkspaceEdit = (operations: WorkspaceEditOperation[]): WorkspaceEditResult[] => {
+    // A save can precede this operation before React has committed its catalog refresh.
+    const availablePads = loadGamepadLibrary();
+    const findPad = (id: string) => availablePads.find(item => item.id === id || item.layout.id === id);
     const panelName = (type: string) => panelCatalogById.get(type)?.name || getWorkspaceTitle(type);
     const findPanel = (panelId: string) => {
       const bareId = panelId.replace(/^mobile:/, '');
@@ -2610,7 +2631,12 @@ const MainControlView: React.FC<MainControlViewProps> = ({
             results.push({ operation, ok: false, message: `No panel type "${operation.panelType}"; available: ${panelCatalog.map(panel => panel.id).join(', ')}.` });
             break;
           }
-          const padId = operation.padId && gamepadLibrary.some(item => item.id === operation.padId) ? operation.padId : undefined;
+          const requestedPad = type === 'pad' && operation.padId ? findPad(operation.padId) : undefined;
+          if (type === 'pad' && operation.padId && !requestedPad) {
+            results.push({ operation, ok: false, message: `No saved Pad with id "${operation.padId}".` });
+            break;
+          }
+          const padId = requestedPad?.id;
           if (isWorkspaceStacked && (workspaceTiles.length >= 2 || stackedReplacementPanelId)) {
             const target = (stackedReplacementPanelId
               ? workspacePanels.find(panel => panel.id === stackedReplacementPanelId)
@@ -2683,13 +2709,13 @@ const MainControlView: React.FC<MainControlViewProps> = ({
             results.push({ operation, ok: false, message: `"${operation.quality}" is not a stream quality; use ${CAMERA_STREAM_QUALITIES.join(', ')}.` });
             break;
           }
-          handleWorkspaceCameraQualityChange(panel.id, operation.quality);
+          handleWorkspaceCameraSettingsChange(panel.id, { streamQuality: operation.quality });
           results.push({ operation, ok: true, message: `${panel.title} now streams at ${CAMERA_STREAM_PRESETS[operation.quality].label} quality.` });
           break;
         }
         case 'setPanelPad': {
           const panel = findPanel(operation.panelId);
-          const pad = gamepadLibrary.find(item => item.id === operation.padId);
+          const pad = findPad(operation.padId);
           if (!panel || panel.type !== 'pad') {
             results.push({ operation, ok: false, message: `No Pad panel with id "${operation.panelId}".` });
             break;
@@ -3404,6 +3430,12 @@ const MainControlView: React.FC<MainControlViewProps> = ({
     const kept = previous?.type === target.type ? previous : undefined;
     // Remount so the panel reads its new settings; an open TF tree has nothing new to read.
     if (!(kept && request.panel === 'tfTree')) target.openedAt = Date.now();
+    if (request.panel === 'camera' && request.cameraOptions) {
+      target.panelState = { schemaVersion: 1, panelId: target.type,
+        values: cameraValuesFor(kept?.panelState?.values, request.cameraOptions) };
+    }
+    if (request.panel === 'dataExplorer') target.panelState = { schemaVersion: 1, panelId: target.type,
+      values: explorerValuesFor(kept?.panelState?.values, request) };
     if (request.panel === 'timeSeries')
       target.panelState = { schemaVersion: 1, panelId: target.type, values: timeSeriesValuesFor(kept?.panelState?.values, request) };
     if (request.panel === 'recordReplay')
@@ -3568,7 +3600,9 @@ const MainControlView: React.FC<MainControlViewProps> = ({
           streamQuality={
             isCameraStreamQuality(panel.panelState?.values.streamQuality) ? panel.panelState.values.streamQuality : undefined
           }
-          onStreamQualityChange={streamQuality => handleWorkspaceCameraQualityChange(panel.id, streamQuality)}
+          onStreamQualityChange={streamQuality => handleWorkspaceCameraSettingsChange(panel.id, { streamQuality })}
+          sourceOptions={panel.panelState?.values}
+          onSourceOptionsChange={patch => handleWorkspaceCameraSettingsChange(panel.id, { ...patch })}
         />
       );
     }
@@ -3581,6 +3615,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({
           storageKey={getConnectionStorageKey(`roboboy_3d_visualization_state_${panel.id}`, storageScope)}
           panelId={panel.id}
           onRegisterAssistantBridge={handleRegisterPanelSettingsBridge}
+          onOpen={request => handleAddWorkspacePanel(request.panel, undefined, undefined, { cameraTopic: request.topic, explorer: request, originId: panel.id })}
         />
       );
     }
@@ -4548,6 +4583,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({
           onClose={handleCloseCustomEditor}
           onSave={handleSaveCustomGamepad}
           initialLayout={editorSession.initialLayout}
+          onRegisterDraftReader={handleRegisterPadDraftReader}
           ros={ros}
         />
       )}
@@ -4565,7 +4601,13 @@ const MainControlView: React.FC<MainControlViewProps> = ({
         onReviewPadProposal={handleReviewAssistantPad}
         onOpenResource={handleOpenAssistantResource}
         canOpenResource={canOpenAssistantResource}
-        onApplyWorkspaceEdit={handleAssistantWorkspaceEdit}
+        onApplyWorkspaceEdit={operations => {
+          // Native tool completion is a read-after-write boundary. Flush the owning React
+          // commit so the next model step observes mounted panels, not stale state.
+          let results: WorkspaceEditResult[] = [];
+          flushSync(() => { results = handleAssistantWorkspaceEdit(operations); });
+          return results;
+        }}
         workspace={buildWorkspaceSnapshot({
           connectionStatus,
           panels: [

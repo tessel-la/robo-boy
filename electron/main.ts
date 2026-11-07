@@ -1,4 +1,5 @@
-import { app, BrowserWindow, ipcMain, net, protocol, shell, session } from 'electron';
+import { app, BrowserWindow, ipcMain, net, protocol, shell } from 'electron';
+import { hasAgentBackground, registerAgentBackground } from './agentBackground';
 import { readFile } from 'node:fs/promises';
 import { userInfo } from 'node:os';
 import path from 'node:path';
@@ -7,6 +8,9 @@ import { registerUpdater } from './updater';
 import { registerRobotResources, robotResourceScheme } from './robotResources';
 import { fetchEmbed, isEmbedHost, registerEmbedProxy } from './embedProxy';
 import { configureCertificates } from './certificates';
+import { configurePermissions } from './permissions';
+declare const __ROBOBOY_ENTERPRISE_LOGIN__: boolean;
+declare const __ROBOBOY_ENTERPRISE_ORIGIN__: string;
 import { registerPanelFetch } from './panelFetch';
 import { registerAssistantSubscriptions } from './assistant';
 
@@ -161,6 +165,7 @@ const createWindow = async (): Promise<BrowserWindow> => {
       webSecurity: true,
     },
   });
+  window.on('close', event => { if (hasAgentBackground(window)) { event.preventDefault(); window.hide(); } });
 
   // Showing only once the first frame is ready keeps the window from flashing its background
   // colour before React has mounted.
@@ -187,19 +192,6 @@ const createWindow = async (): Promise<BrowserWindow> => {
   return window;
 };
 
-/**
- * Answers the renderer's permission prompts.
- *
- * The camera and microphone belong to the operator's machine and the app never asks for them;
- * what it does ask for is the media *playback* a WebRTC stream needs. Granting only what the app
- * uses keeps a compromised panel from reaching hardware it was never given.
- */
-const configurePermissions = (): void => {
-  session.defaultSession.setPermissionRequestHandler((_webContents, permission, callback) => {
-    callback(permission === 'media' || permission === 'fullscreen');
-  });
-};
-
 const registerWindowControls = (): void => {
   const windowFor = (event: Electron.IpcMainInvokeEvent): BrowserWindow | null =>
     BrowserWindow.fromWebContents(event.sender);
@@ -209,7 +201,36 @@ const registerWindowControls = (): void => {
     const caller = new URL(event.senderFrame.url);
     const expected = new URL(devServerUrl ?? RENDERER_ORIGIN);
     if (caller.protocol !== expected.protocol || caller.host !== expected.host) return undefined;
-    try { return userInfo().username; } catch { return undefined; }
+    try {
+      return userInfo().username;
+    } catch {
+      return undefined;
+    }
+  });
+
+  ipcMain.handle('roboboy:enterprise-login', async (event, value: unknown) => {
+    const expected = new URL(devServerUrl ?? RENDERER_ORIGIN);
+    const caller = event.senderFrame ? new URL(event.senderFrame.url) : null;
+    if (
+      !windowFor(event) ||
+      event.senderFrame !== event.sender.mainFrame ||
+      caller?.protocol !== expected.protocol ||
+      caller?.host !== expected.host ||
+      typeof value !== 'string'
+    )
+      throw new Error('Sign-in caller rejected.');
+    const target = new URL(value);
+    const origin = typeof __ROBOBOY_ENTERPRISE_ORIGIN__ === 'undefined' ? '' : __ROBOBOY_ENTERPRISE_ORIGIN__;
+    if (
+      target.protocol !== 'https:' ||
+      (origin && target.origin !== origin) ||
+      target.username ||
+      target.password ||
+      target.pathname !== '/auth/login' ||
+      !/^[A-Za-z0-9_-]{43}$/.test(target.searchParams.get('native') ?? '')
+    )
+      throw new Error('Sign-in address rejected.');
+    await shell.openExternal(target.href);
   });
 
   ipcMain.handle('roboboy:window-minimize', event => windowFor(event)?.minimize());
@@ -247,13 +268,14 @@ if (!app.requestSingleInstanceLock()) {
   ]);
 
   void app.whenReady().then(async () => {
-    configureCertificates();
+    configureCertificates(typeof __ROBOBOY_ENTERPRISE_LOGIN__ !== 'undefined' && __ROBOBOY_ENTERPRISE_LOGIN__);
     serveRenderer(devServerUrl ? null : path.join(currentDir, '../renderer'));
-    configurePermissions();
+    configurePermissions(devServerUrl ?? RENDERER_ORIGIN);
     registerEmbedProxy();
     registerRobotResources(devServerUrl ? new URL(devServerUrl).origin : RENDERER_ORIGIN);
     registerPanelFetch();
     registerAssistantSubscriptions(devServerUrl ? new URL(devServerUrl).origin : RENDERER_ORIGIN);
+    registerAgentBackground(devServerUrl ? new URL(devServerUrl).origin : RENDERER_ORIGIN);
     registerWindowControls();
     registerUpdater();
 
@@ -263,6 +285,7 @@ if (!app.requestSingleInstanceLock()) {
     // macOS keeps an application running with no windows; clicking its dock icon opens one again.
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) void createWindow();
+      else BrowserWindow.getAllWindows()[0].show();
     });
   });
 

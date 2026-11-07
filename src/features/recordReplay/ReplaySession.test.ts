@@ -1,6 +1,8 @@
 import ROSLIB, { type Ros } from 'roslib';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ReplaySession } from './ReplaySession';
+import { getTfHistory, subscribeToTfStream } from '../../utils/tfStream';
+import { ReplaySession, registerReplayGrid } from './ReplaySession';
+import { setEnterpriseSession } from '../enterprise/session';
 import type { BagInfo, ReaderRequest, ReaderResponse, ReplayMessage } from './types';
 
 const START = 1_000n * 1_000_000_000n;
@@ -52,10 +54,51 @@ beforeEach(() => {
 });
 afterEach(() => {
   session.dispose();
+  setEnterpriseSession(null);
+  delete (window as any).roboBoyDesktop;
+  vi.unstubAllEnvs();
   vi.useRealTimers();
 });
 
 describe('ReplaySession', () => {
+  it('authenticates playback, retry and export workers without changing saved recording sources', async () => {
+    vi.stubEnv('VITE_ENTERPRISE_LOGIN', 'true');
+    vi.stubEnv('VITE_ENTERPRISE_SERVER_URL', 'https://robot.example');
+    (window as any).roboBoyDesktop = {};
+    const identity = {
+      user: { id: 'alice', name: 'Alice' },
+      expires: Date.now() + 60000,
+      token: 'a'.repeat(43),
+      media: 'b'.repeat(43),
+    };
+    setEnterpriseSession(identity);
+    const bag = { url: 'https://robot.example/recordings/files/run.mcap', name: 'run.mcap', size: 1024 };
+    session.open(bag);
+    expect(worker.last('open')).toMatchObject({
+      source: { ...bag, url: `https://robot.example/auth/media/${identity.media}/recordings/files/run.mcap` },
+    });
+    worker.reply({ id: worker.last('open').id, op: 'opened', info: INFO });
+    expect(
+      JSON.stringify(session.getSnapshot(), (_, value) => (typeof value === 'bigint' ? String(value) : value))
+    ).not.toContain(identity.media);
+    const range = session.readRange(0, 1, ['/a'], () => true);
+    expect(worker.last('open')).toMatchObject({
+      source: { url: `https://robot.example/auth/media/${identity.media}/recordings/files/run.mcap` },
+    });
+    worker.reply({ id: 1, op: 'opened', info: INFO });
+    worker.reply({ id: 2, op: 'messages', messages: [], done: true });
+    await range;
+    // A retry must resolve the current read credential from the original canonical source.
+    setEnterpriseSession({ ...identity, media: 'c'.repeat(43) });
+    session.open(bag);
+    worker.reply({ id: worker.last('open').id, op: 'error', error: 'Connection lost' });
+    session.retry();
+    expect(worker.last('open')).toMatchObject({
+      source: { url: `https://robot.example/auth/media/${'c'.repeat(43)}/recordings/files/run.mcap` },
+    });
+    expect(bag.url).toBe('https://robot.example/recordings/files/run.mcap');
+  });
+
   it('replays a recording on the ROS host and reconnects where it stopped', () => {
     const bag = { url: 'http://robot.local:9091/files/run_0.mcap', name: 'run_0.mcap', size: 4096 };
     session.open(bag);
@@ -202,6 +245,38 @@ describe('ReplaySession', () => {
     expect(late.received).toEqual([{ transforms: [{ child_frame_id: 'a', x: 3 }, { child_frame_id: 'b', x: 2 }] }]);
   });
 
+  it('hydrates sensor-time TF on seek and isolates history after a backward seek', async () => {
+    const ros = open();
+    const stop = subscribeToTfStream(ros, vi.fn());
+    await vi.advanceTimersByTimeAsync(50);
+    const tf = (sec: number, x: number) => ({ header: { frame_id: 'map', stamp: { sec, nanosec: 0 } },
+      child_frame_id: 'camera', transform: { translation: { x, y: 0, z: 0 }, rotation: { x: 0, y: 0, z: 0, w: 1 } } });
+    const reply = { ...message('/tf', 0, { transforms: [tf(3, 30)] }), tfHistory: [tf(3, 30), tf(1, 10)] };
+    worker.reply({ id: worker.last('seek').id, op: 'messages', messages: [reply], done: true });
+    const history = getTfHistory(ros);
+    expect(history.lookup('map', 'camera', 2_000_000_000n).transform?.translation.x).toBe(20);
+    // A later panel shares existing history and causes no transport subscriptions.
+    const stopLate = subscribeToTfStream(ros, vi.fn());
+    expect(getTfHistory(ros)).toBe(history);
+    session.seek(10);
+    worker.reply({ id: worker.last('seek').id, op: 'messages', messages: [], done: true });
+    session.seek(1);
+    const replacement = session.getSource().ros!;
+    expect(replacement).not.toBe(ros);
+    expect(getTfHistory(replacement).lookup('map', 'camera', 2_000_000_000n).transform).toBeNull();
+    stopLate(); stop();
+  });
+
+  it('discovers recorded TF locally and prefers raw TF to the display relay', () => {
+    session.open(file());
+    worker.reply({ id: worker.last('open').id, op: 'opened', info: { ...INFO,
+      topics: [...INFO.topics, { name: '/roboboy/tf', type: 'tf2_msgs/TFMessage', count: 5 }] } });
+    const callback = vi.fn();
+    const ros = session.getSource().ros as Ros & { getTopicsForType(type: string, callback: (topics: string[]) => void): void };
+    ros.getTopicsForType('tf2_msgs/TFMessage', callback);
+    expect(callback).toHaveBeenCalledWith(['/tf']);
+  });
+
   it('keeps panel state moving forward and rebuilds it moving backward', async () => {
     const ros = open();
     listen(ros, '/a');
@@ -281,4 +356,27 @@ describe('ReplaySession', () => {
     failing.open(file());
     expect(failing.getSnapshot()).toMatchObject({ phase: 'error', error: 'Error: no workers' });
   });
+});
+
+it('isolates reconstructed map snapshots from raw topics and carries pairs across backward seeks', async () => {
+  const ros = open(), snapshot = vi.fn(), other = vi.fn();
+  const key = JSON.stringify(['/map', '/map_updates']);
+  const release = registerReplayGrid(ros, '/map', '/map_updates', snapshot);
+  const map = listen(ros, '/map'), updates = listen(ros, '/map_updates');
+  await vi.advanceTimersByTimeAsync(50);
+  expect(worker.last('seek')).toMatchObject({ grids: [{key,topic:'/map',updatesTopic:'/map_updates'}] });
+  worker.reply({id:worker.last('seek').id,op:'messages',messages:[
+    message('/map',0,{data:[0,0]}),
+    {...message('/map',2,{data:[10,20]}),gridSnapshot:key},
+  ],done:true});
+  expect(map.received).toEqual([{data:[0,0]}]);
+  expect(snapshot).toHaveBeenLastCalledWith({data:[10,20]});
+  const lateRelease = registerReplayGrid(ros, '/map', '/other_updates', other);
+  await vi.advanceTimersByTimeAsync(50);
+  expect(worker.last('seek')).toMatchObject({grids:expect.arrayContaining([{key,topic:'/map',updatesTopic:'/map_updates'}])});
+  worker.reply({id:worker.last('seek').id,op:'messages',messages:[],done:true});
+  session.seek(10);worker.reply({id:worker.last('seek').id,op:'messages',messages:[],done:true});
+  session.seek(1);
+  expect(worker.last('seek')).toMatchObject({grids:expect.arrayContaining([{key,topic:'/map',updatesTopic:'/map_updates'}])});
+  lateRelease();release();map.topic.unsubscribe();updates.topic.unsubscribe();
 });

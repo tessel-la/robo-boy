@@ -4,6 +4,7 @@ import * as ROSLIB from 'roslib';
 import * as ROS3D from '../utils/ros3d';
 import * as THREE from 'three';
 import { CustomTFProvider } from '../utils/tfUtils';
+import { pinholeCorners } from '../utils/images/cameraCalibration';
 
 interface UseCameraInfoVisualizerProps {
   ros: Ros | null;
@@ -13,6 +14,7 @@ interface UseCameraInfoVisualizerProps {
   selectedCameraInfoTopic: string | null; // The selected CameraInfo topic name
   lineColor?: THREE.Color | number | string; // Optional color for the frustum lines
   lineScale?: number; // Optional scaling factor for frustum size (e.g., length of pyramid)
+  onObject?: (object: THREE.Group | null, frustum?: THREE.LineSegments) => void;
 }
 
 const DEFAULT_LINE_COLOR = 0x00ff00; // Green
@@ -31,7 +33,10 @@ export function useCameraInfoVisualizer({
   selectedCameraInfoTopic,
   lineColor = DEFAULT_LINE_COLOR,
   lineScale = DEFAULT_LINE_SCALE,
+  onObject,
 }: UseCameraInfoVisualizerProps) {
+  const onObjectRef = useRef(onObject);
+  onObjectRef.current = onObject;
   const cameraInfoSub = useRef<ROSLIB.Topic | null>(null);
   const frustumLinesRef = useRef<THREE.LineSegments | null>(null);
   const frustumContainerRef = useRef<THREE.Group | null>(null); // Container for lines + pose
@@ -41,8 +46,6 @@ export function useCameraInfoVisualizer({
   // Effect 1: Manage Frustum Container and LineSegments Object
   useEffect(() => {
     const viewer = ros3dViewer.current;
-    let _containerCreated = false;
-    // let linesCreated = false; // Not strictly needed for cleanup logic
 
     // Only create if connected and topic selected (TF handled separately)
     if (isRosConnected && viewer && selectedCameraInfoTopic) {
@@ -51,7 +54,6 @@ export function useCameraInfoVisualizer({
         frustumContainerRef.current = new THREE.Group();
         frustumContainerRef.current.visible = false; // Initially hidden until TF is applied
         viewer.scene.add(frustumContainerRef.current);
-        _containerCreated = true;
 
         // Create the LineSegments object ONCE
         if (!frustumLinesRef.current) {
@@ -65,6 +67,7 @@ export function useCameraInfoVisualizer({
           frustumLinesRef.current = new THREE.LineSegments(initialGeometry, material);
           frustumLinesRef.current.visible = false; // Lines also initially hidden
           frustumContainerRef.current.add(frustumLinesRef.current); // Add lines to container
+          onObjectRef.current?.(frustumContainerRef.current, frustumLinesRef.current);
           // linesCreated = true;
         }
       }
@@ -91,6 +94,7 @@ export function useCameraInfoVisualizer({
       // If container was created in this run, or if prerequisites changed
       // Simplified cleanup: always attempt removal if viewer exists
       if (frustumContainerRef.current && viewer) {
+        onObjectRef.current?.(null);
         // console.log('[CameraInfoViz E1 Cleanup] Attempting container removal');
         try {
           viewer.scene.remove(frustumContainerRef.current);
@@ -177,13 +181,9 @@ export function useCameraInfoVisualizer({
     const cy = K[5];
     const Z = lineScale;
 
-    const points = [
-      [0, 0, 0],
-      [((0 - cx) * Z) / fx, ((0 - cy) * Z) / fy, Z],
-      [((width - cx) * Z) / fx, ((0 - cy) * Z) / fy, Z],
-      [((width - cx) * Z) / fx, ((height - cy) * Z) / fy, Z],
-      [((0 - cx) * Z) / fx, ((height - cy) * Z) / fy, Z],
-    ];
+    let points: number[][];
+    try { points = [[0, 0, 0], ...pinholeCorners(width, height, fx, fy, cx, cy, Z)]; }
+    catch { lines.visible = false; ros3dViewer.current?.requestRender?.(); return; }
     const indices = [0, 1, 0, 2, 0, 3, 0, 4, 1, 2, 2, 3, 3, 4, 4, 1];
 
     // Use getAttribute

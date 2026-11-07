@@ -37,7 +37,7 @@ onmessage = async ({ data }: MessageEvent<ReaderRequest | { op: 'ack'; id: numbe
       const info = await reader.open(data.source);
       if (!cancelled()) send({ id: data.id, op: 'opened', info });
     } else if (data.op === 'seek') {
-      const messages = await reader.seek(data.time, data.topics, cancelled);
+      const messages = await reader.seek(data.time, data.topics, cancelled, data.grids);
       if (!cancelled()) send({ id: data.id, op: 'messages', messages, done: true });
     } else {
       const key = data.topics.join('\n');

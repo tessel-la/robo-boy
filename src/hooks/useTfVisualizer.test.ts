@@ -155,7 +155,7 @@ vi.mock('../utils/ros3d', () => ({
             geometry: { dispose: vi.fn() },
             material: { dispose: vi.fn(), transparent: false, opacity: 1 }
         }
-        constructor(_options: any) { axesInstances.push(this); }
+        constructor(public options: any) { axesInstances.push(this); }
     }
 }));
 
@@ -385,6 +385,16 @@ describe('useTfVisualizer', () => {
         expect(spriteInstances[0].material.options.opacity).toBe(0.6);
         expect(canvasContexts[0].fill).not.toHaveBeenCalled();
         expect(canvasContexts[0].strokeText).toHaveBeenCalledWith('map', expect.any(Number), expect.any(Number));
+    });
+
+    it('keeps length independent of width and disposes replaced geometry', () => {
+        const props = { ...defaultProps(), displayedTfFrames: ['map'], axesScale: 0.2, axesWidth: 0.004 };
+        const { rerender } = renderHook(value => useTfVisualizer(value), { initialProps: props });
+        expect(axesInstances[0].options).toEqual({ lineSize: 0.2, shaftRadius: 0.002 });
+        rerender({ ...props, axesWidth: 0.01 });
+        expect(axesInstances[0].lineSegments.geometry.dispose).toHaveBeenCalledOnce();
+        expect(axesInstances[0].lineSegments.material.dispose).toHaveBeenCalledOnce();
+        expect(axesInstances[1].options).toEqual({ lineSize: 0.2, shaftRadius: 0.005 });
     });
 
     it('can hide the axes, the connection lines, and size labels independently of the axes', () => {

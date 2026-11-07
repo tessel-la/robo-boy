@@ -39,7 +39,12 @@ export interface TimeseriesSeriesConfig {
 }
 
 export interface TimeseriesConfig {
-  schemaVersion: 4;
+  schemaVersion: 5;
+  mode: 'time' | 'xy';
+  xSeriesId: string;
+  xyPairing: 'message' | 'latest';
+  xyToleranceMs: number;
+  xyStyle: 'trajectory' | 'scatter';
   series: TimeseriesSeriesConfig[];
   timeWindowSec: number;
   sampleLimit: number;
@@ -52,7 +57,12 @@ export interface TimeseriesConfig {
 }
 
 export const DEFAULT_CONFIG: TimeseriesConfig = {
-  schemaVersion: 4,
+  schemaVersion: 5,
+  mode: 'time',
+  xSeriesId: '',
+  xyPairing: 'message',
+  xyToleranceMs: 100,
+  xyStyle: 'trajectory',
   series: [],
   timeWindowSec: 15,
   sampleLimit: 1200,
@@ -192,7 +202,8 @@ export const sanitizeConfig = (value: unknown): TimeseriesConfig => {
   const candidate = value && typeof value === 'object' ? (value as Record<string, unknown> & LegacyConfig) : {};
   const usedIds = new Set<string>();
   const series =
-    (candidate.schemaVersion === 3 || candidate.schemaVersion === 4) && Array.isArray(candidate.series)
+    (candidate.schemaVersion === 3 || candidate.schemaVersion === 4 || candidate.schemaVersion === 5) &&
+    Array.isArray(candidate.series)
       ? candidate.series
           .slice(0, SERIES_LIMIT)
           .map((item, index) => sanitizeSeries(item, index, usedIds))
@@ -200,7 +211,15 @@ export const sanitizeConfig = (value: unknown): TimeseriesConfig => {
           .slice(0, SERIES_LIMIT)
       : migrateLegacySeries(candidate);
   return {
-    schemaVersion: 4,
+    schemaVersion: 5,
+    mode: candidate.mode === 'xy' ? 'xy' : 'time',
+    xSeriesId:
+      typeof candidate.xSeriesId === 'string' && series.some(s => s.id === candidate.xSeriesId)
+        ? candidate.xSeriesId
+        : '',
+    xyPairing: candidate.xyPairing === 'latest' ? 'latest' : 'message',
+    xyToleranceMs: clamp(candidate.xyToleranceMs, 100, 0, 2000),
+    xyStyle: candidate.xyStyle === 'scatter' ? 'scatter' : 'trajectory',
     series,
     timeWindowSec: clamp(candidate.timeWindowSec, DEFAULT_CONFIG.timeWindowSec, 1, 600),
     sampleLimit: Math.round(clamp(candidate.sampleLimit, DEFAULT_CONFIG.sampleLimit, 100, 10000)),
@@ -223,7 +242,7 @@ export interface TopicSource {
 export const getDesiredSources = (config: TimeseriesConfig): TopicSource[] => {
   const sources = new Map<string, TopicSource>();
   config.series
-    .filter(series => series.enabled)
+    .filter(series => series.enabled || (config.mode === 'xy' && series.id === config.xSeriesId))
     .forEach(series => {
       const key = sourceKey(series.topic, series.messageType);
       sources.set(key, {
@@ -234,7 +253,7 @@ export const getDesiredSources = (config: TimeseriesConfig): TopicSource[] => {
       });
     });
   config.series
-    .filter(series => series.enabled)
+    .filter(series => series.enabled || (config.mode === 'xy' && series.id === config.xSeriesId))
     .forEach(series => {
       // Inputs are raw fields of other signals, often hidden ones; their topics must stay subscribed.
       mathInputs(series.math).forEach(name => {

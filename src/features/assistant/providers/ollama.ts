@@ -8,7 +8,7 @@ const getOllamaApiBaseUrl = (baseUrl: string): string => {
   return `${normalized}/api`;
 };
 
-export const sendChat: SendChat = async ({ settings, systemPrompt, messages, signal, onToken, jsonMode }) => {
+export const sendChat: SendChat = async ({ settings, systemPrompt, messages, signal, onToken, onThinking, jsonMode }) => {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   if (settings.apiKey.trim()) headers.Authorization = `Bearer ${settings.apiKey.trim()}`;
 
@@ -33,7 +33,10 @@ export const sendChat: SendChat = async ({ settings, systemPrompt, messages, sig
     headers,
     body: JSON.stringify(body),
   });
-  return readNdjson(response, payload => payload.message?.content, onToken);
+  return readNdjson(response, payload => {
+    if (payload.message?.thinking) onThinking?.(payload.message.thinking);
+    return payload.message?.content;
+  }, onToken);
 };
 
 export const fetchOllamaModels = async (baseUrl: string, apiKey = '', signal?: AbortSignal): Promise<string[]> => {

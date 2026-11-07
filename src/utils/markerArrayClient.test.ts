@@ -61,6 +61,26 @@ describe('mesh marker inventory', () => {
     client.dispose();
   });
 
+  it('applies current layer opacity to late meshes without changing cached templates or reloading', async () => {
+    let complete!: (object: THREE.Object3D) => void;
+    const { client, root, loadMesh, tfClient } = setup(() => new Promise(resolve => { complete = resolve; }));
+    client.receive({ markers: [{ ...marker(), mesh_use_embedded_materials: false, color: { r: 1, g: 0, b: 0, a: 0.6 } }] });
+    client.setOpacity(0.5);
+    const template = new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshBasicMaterial({ opacity: 0.8, transparent: true }));
+    complete(template);
+    await Promise.resolve();
+    const mesh = root.children[0].children[0].children[0] as THREE.Mesh<THREE.BufferGeometry, THREE.Material>;
+    expect(mesh.material.opacity).toBeCloseTo(0.3);
+    client.setOpacity(0.2);
+    expect(mesh.material.opacity).toBeCloseTo(0.12);
+    client.setOpacity(1);
+    expect(mesh.material.opacity).toBeCloseTo(0.6);
+    expect(template.material.opacity).toBe(0.8);
+    expect(loadMesh).toHaveBeenCalledOnce();
+    expect(tfClient.subscribe).toHaveBeenCalledOnce();
+    client.dispose();
+  });
+
   it('expires markers and unsubscribes their TF callbacks', async () => {
     vi.useFakeTimers();
     const { client, root, callbacks } = setup();

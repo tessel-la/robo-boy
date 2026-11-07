@@ -15,7 +15,7 @@ test('migrates the existing single-topic workspace without losing fields or plot
     maxY: 2,
     showPoints: true,
   });
-  assert.equal(migrated.schemaVersion, 4);
+  assert.equal(migrated.schemaVersion, 5);
   assert.deepEqual(
     migrated.series.map(series => series.fieldPath),
     ['position[0]', 'velocity[0]']

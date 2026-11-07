@@ -1,6 +1,7 @@
 FROM node:20-alpine
 
 WORKDIR /opt/roboboy-panel-installer
+COPY LICENSE /opt/roboboy-panel-installer/LICENSE
 COPY scripts/install-panels.mjs ./install-panels.mjs
 
 ENTRYPOINT ["node", "/opt/roboboy-panel-installer/install-panels.mjs"]

@@ -45,6 +45,8 @@ export class TimeSeriesEngine {
   readonly raw = new Map<string, TimeseriesSample>();
   paused = false;
   revision = 0;
+  private event = 0;
+  private epoch = 0;
   constructor(public config: TimeseriesConfig) {
     this.configure(config);
   }
@@ -90,6 +92,7 @@ export class TimeSeriesEngine {
 
   /** Reset processing across reconnections without discarding the captured history. */
   reconnect() {
+    this.epoch++;
     const histories = new Map([...this.runtime].map(([id, runtime]) => [id, runtime.buffer]));
     this.clear();
     this.discovered.clear();
@@ -100,6 +103,7 @@ export class TimeSeriesEngine {
   }
 
   receive(source: TopicSource, message: unknown, now: number): TimeseriesConfig | null {
+    const event = ++this.event;
     let changed = false;
     if (!this.discovered.has(source.key)) {
       const fields = discoverNumericFields(message, { maxDepth: 8, maxArrayItems: 64, maxFields: 64 });
@@ -139,7 +143,7 @@ export class TimeSeriesEngine {
       else this.raw.delete(s.id);
     }
     for (const s of matching) {
-      if (!s.enabled) continue;
+      if (!s.enabled && !(this.config.mode === 'xy' && s.id === this.config.xSeriesId)) continue;
       const runtime = this.runtime.get(s.id)!;
       const input = this.raw.get(s.id);
       if (!input || !runtime.math) continue;
@@ -165,7 +169,7 @@ export class TimeSeriesEngine {
         this.errors.set(s.id, 'Filter produced no finite value.');
         continue;
       }
-      if (!this.paused) runtime.buffer.push({ time: now, value: filtered }, now - this.config.timeWindowSec * 1000);
+      if (!this.paused) runtime.buffer.push({ time: now, value: filtered, event, epoch: this.epoch }, now - this.config.timeWindowSec * 1000);
     }
     this.revision++;
     return changed ? this.config : null;

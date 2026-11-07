@@ -144,12 +144,12 @@ describe('themeUtils', () => {
       expect(css).toContain('--card-bg: #f0f0f0')
     })
 
-    it('should respect provided buttonText color', () => {
+    it('should respect a readable provided buttonText color', () => {
       const theme: CustomTheme = {
         id: 'custom-button',
         name: 'Custom Button',
         colors: {
-          primary: '#4a90d9',
+          primary: '#0071ce',
           secondary: '#888888',
           background: '#ffffff',
           buttonText: '#ffffff',
@@ -159,6 +159,21 @@ describe('themeUtils', () => {
       const css = generateThemeCss(theme)
 
       expect(css).toContain('--button-text-color: #ffffff')
+    })
+
+    it.each([
+      ['#ff524a', '#ffffff', '#000000'],
+      ['#fa6147', '#171710', '#171710'],
+      ['#ffffff', '#ffffff', '#000000'],
+      ['#101820', '#101820', '#ffffff'],
+      ['#767676', undefined, '#000000'],
+    ])('keeps button text readable on %s with preferred color %s', (primary, buttonText, expected) => {
+      const css = generateThemeCss({
+        id: 'company',
+        name: 'Company',
+        colors: { primary, secondary: '#888888', background: '#ffffff', buttonText },
+      })
+      expect(css).toContain(`--button-text-color: ${expected}`)
     })
 
     it('should generate hover and darker variants', () => {

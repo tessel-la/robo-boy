@@ -308,4 +308,48 @@ describe('ComponentSettingsModal', () => {
       expect(screen.getByRole('checkbox', { name: 'angular.z (float64)' })).not.toBeChecked();
     });
   });
+
+  describe('comma-separated lists', () => {
+    // Types one key at a time, each keystroke appended to what the field shows, as a person types.
+    const typeInto = (input: HTMLElement, text: string) => {
+      fireEvent.change(input, { target: { value: '' } });
+      for (const key of text) {
+        fireEvent.change(input, { target: { value: (input as HTMLInputElement).value + key } });
+      }
+    };
+
+    it('keeps the separator while custom Twist axes are typed key by key', () => {
+      const joystick = createComponent('joystick', { x: 0, y: 0, width: 2, height: 2 }, 'joystick-1')!;
+      joystick.action = { topic: '/cmd_vel', messageType: 'geometry_msgs/Twist', field: 'axes' };
+      joystick.config = { ...joystick.config, axes: ['linear.x', 'linear.y'] };
+      const onSave = vi.fn();
+      render(<ComponentSettingsModal isOpen component={joystick} onClose={vi.fn()} onSave={onSave} />);
+
+      fireEvent.click(screen.getByLabelText('Use custom axis mapping'));
+      const axes = screen.getByLabelText('Custom Twist Axes (comma-separated):');
+      typeInto(axes, 'angular.z, linear.x');
+      expect(axes).toHaveValue('angular.z, linear.x');
+      fireEvent.click(screen.getByRole('button', { name: 'Save configuration' }));
+
+      expect(onSave).toHaveBeenCalledWith(expect.objectContaining({
+        config: expect.objectContaining({ axes: ['angular.z', 'linear.x'] }),
+      }));
+    });
+
+    it('keeps the separator while plot fields are typed key by key', () => {
+      const plot = createComponent('plot', { x: 0, y: 0, width: 4, height: 2 }, 'plot-1')!;
+      plot.action = { topic: '/telemetry', messageType: 'custom_msgs/msg/Telemetry', field: 'data' };
+      const onSave = vi.fn();
+      render(<ComponentSettingsModal isOpen component={plot} onClose={vi.fn()} onSave={onSave} />);
+
+      const fields = screen.getByLabelText('Numeric Fields:');
+      typeInto(fields, 'speed, effort');
+      expect(fields).toHaveValue('speed, effort');
+      fireEvent.click(screen.getByRole('button', { name: 'Save configuration' }));
+
+      expect(onSave).toHaveBeenCalledWith(expect.objectContaining({
+        config: expect.objectContaining({ fieldPaths: ['speed', 'effort'] }),
+      }));
+    });
+  });
 });

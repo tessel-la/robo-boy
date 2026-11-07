@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { installRosMock } from './helpers/rosMock';
+import { assistantStream } from './helpers/assistantMock';
 
 test('opens a Data Explorer, watches a topic and adds a health rule from the assistant', async ({ page }) => {
   await installRosMock(page, {
@@ -37,7 +38,7 @@ test('opens a Data Explorer, watches a topic and adds a health rule from the ass
     return route.fulfill({
       status: 200,
       contentType: 'text/event-stream',
-      body: `data: ${JSON.stringify({ choices: [{ delta: { content: JSON.stringify(response) } }] })}\n\ndata: [DONE]\n\n`,
+      body: assistantStream(response),
     });
   });
 

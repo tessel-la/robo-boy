@@ -13,7 +13,7 @@ const topicsOf = (values: ReturnType<typeof recordValuesFor>) =>
   (values.options as unknown as { topics: string[]; allTopics: boolean }).topics;
 
 describe('opening a topic in another panel', () => {
-  it('adds a plotted line to an open Time Series and keeps its other lines and settings', () => {
+  it('adds a plotted line to an open Plotting and keeps its other lines and settings', () => {
     const first = timeSeriesValuesFor(undefined, request({ fieldPath: 'data' }));
     const config = first.config as unknown as { series: { topic: string; fieldPath: string }[] };
     expect(config.series.map(series => `${series.topic}:${series.fieldPath}`)).toEqual(['/speed:data']);
@@ -68,4 +68,25 @@ describe('opening a topic in another panel', () => {
     expect(visualizationStateFor(added, scan, createId)).toBe(added);
     expect(visualizationStateFor(added, request({ panel: '3d', topic: '/x' }), createId)).toBe(added);
   });
+});
+
+it('starts explorer-created camera layers with explicit metadata-free timing', () => {
+  const state = visualizationStateFor(
+    DEFAULT_VISUALIZATION_STATE,
+    request({ panel: '3d', topic: '/image', visualizationType: 'cameraimage' }),
+    () => 'camera'
+  );
+  expect(state.visualizations[0].options).toEqual({ videoTiming: 'latest' });
+});
+
+it('opens camera diagnostics in the Explorer config while preserving unrelated watches', async () => {
+  const { explorerValuesFor } = await import('./openTarget');
+  expect(explorerValuesFor({ config: { watched: ['/battery'], source: 'live' } }, request({ panel: 'dataExplorer', topic: '/front/camera_info' })))
+    .toMatchObject({ config: { selected: 'topic:/front/camera_info', source: 'follow', watched: ['/battery'], view: 'resources' } });
+});
+
+it('preserves a camera transport/profile without carrying projection/capture settings or a previous endpoint', async () => {
+  const { cameraValuesFor } = await import('./openTarget');
+  expect(cameraValuesFor({ whepUrl: 'http://other/whep', someSetting: true }, { imageSource: 'ros', opacity: 0.2 }))
+    .toEqual({ imageSource: 'ros', streamQuality: 'medium', whepUrl: '', someSetting: true });
 });

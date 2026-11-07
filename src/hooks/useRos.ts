@@ -96,7 +96,7 @@ export const useRos = (): UseRosReturn => {
       console.log(`[connect] Using ${mode} ROS bridge URL: ${url}`);
 
       const newRos = new ROSLIB.Ros({ url });
-      controlSessionRef.current = new ControlSession(newRos);
+      controlSessionRef.current = new ControlSession(newRos, url);
 
       // 5. Assign Ref *before* adding listeners
       console.log('[connect] Assigning new ROS instance to ref.');

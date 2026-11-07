@@ -117,6 +117,10 @@ test('value components bind to ROS in the editor, show and send live values, and
   await page.getByRole('button', { name: 'Save Gamepad' }).click();
 
   const liveGauge = page.locator('.custom-gamepad-layout:not(.editing) .gamepad-component.gauge');
+  // Saving authoring must not silently rebind live controls. Apply the new revision
+  // explicitly, then verify presentation and subscriptions survive its clean remount.
+  await expect(liveGauge).toHaveCSS('grid-column-end', 'span 2');
+  await page.getByRole('button', { name: 'Activate updated controls', exact: true }).click();
   await expect(liveGauge).toHaveCSS('grid-column-start', '1');
   await expect(liveGauge).toHaveCSS('grid-column-end', 'span 3');
   await publishRosMessage(page, '/battery', { percentage: 0.61 });

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useCallback, useEffect, useRef } from 'react';
 import { Ros } from 'roslib';
 import * as ROS3D from '../../utils/ros3d';
 import * as THREE from 'three';
@@ -12,8 +12,11 @@ interface PointCloudVizProps {
   ros3dViewer: React.RefObject<ROS3D.Viewer | null>;
   customTFProvider: React.RefObject<CustomTFProvider | null>;
   topic: string;
+  messageType?: string;
   fixedFrame: string;
   options?: PointCloudOptions;
+  visualizationId?: string;
+  onStatus?: (id: string, status: string | null) => void;
 }
 
 const PointCloudViz: React.FC<PointCloudVizProps> = ({
@@ -22,9 +25,13 @@ const PointCloudViz: React.FC<PointCloudVizProps> = ({
   ros3dViewer,
   customTFProvider,
   topic,
+  messageType,
   fixedFrame,
   options,
+  visualizationId = '',
+  onStatus,
 }) => {
+  const report = useCallback((status: string | null) => onStatus?.(visualizationId, status), [onStatus, visualizationId]);
   // Keep a reference to the current client
   const clientRef = useRef<ROS3D.PointCloud2 | null>(null);
   const previousFixedFrameRef = useRef<string>(fixedFrame);
@@ -54,9 +61,11 @@ const PointCloudViz: React.FC<PointCloudVizProps> = ({
     customTFProvider,
     fixedFrame,
     selectedPointCloudTopic: topic,
+    messageType,
     material: materialOptions,
     options: clientOptions,
     clientRef,  // Pass the ref to store the client
+    onStatus: report,
   });
 
   // Effect to update settings when options change
@@ -117,4 +126,4 @@ const PointCloudViz: React.FC<PointCloudVizProps> = ({
 };
 
 // Memoize to prevent unnecessary hook re-runs if props haven't changed
-export default React.memo(PointCloudViz); 
+export default React.memo(PointCloudViz);

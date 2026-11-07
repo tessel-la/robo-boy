@@ -9,6 +9,13 @@ const emitBehaviorTreeStorageChanged = (): void => {
   window.dispatchEvent(new CustomEvent(BEHAVIOR_TREE_STORAGE_EVENT));
 };
 
+const assertWritableStorage = (): void => {
+  const raw = localStorage.getItem(STORAGE_KEY);
+  if (!raw) return;
+  const data = JSON.parse(raw);
+  if (!Array.isArray(data) || data.some(item => !item?.tree || typeof item.tree.id !== 'string' || !Array.isArray(item.tree.nodes) || !Array.isArray(item.tree.edges) || item.version !== STORAGE_VERSION)) throw new Error('Unrecognized Behavior Tree storage. Recover/export it before saving; the original data was preserved.');
+};
+
 /**
  * Get all saved behavior trees from localStorage
  */
@@ -30,6 +37,7 @@ export const listBehaviorTrees = (): SavedBehaviorTree[] => {
  */
 export const saveBehaviorTree = (tree: BehaviorTree): boolean => {
   try {
+    assertWritableStorage();
     const trees = listBehaviorTrees();
     
     // Check if tree with this ID already exists
@@ -62,6 +70,7 @@ export const saveBehaviorTree = (tree: BehaviorTree): boolean => {
 
 export const syncBehaviorTreeReferences = (sourceTree: BehaviorTree): boolean => {
   try {
+    assertWritableStorage();
     const trees = listBehaviorTrees();
     let didChange = false;
 
@@ -112,6 +121,7 @@ export const loadBehaviorTree = (id: string): BehaviorTree | null => {
  */
 export const deleteBehaviorTree = (id: string): boolean => {
   try {
+    assertWritableStorage();
     const trees = listBehaviorTrees();
     const filtered = trees.filter((t) => t.tree.id !== id);
     

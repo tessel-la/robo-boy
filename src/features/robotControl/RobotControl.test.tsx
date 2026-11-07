@@ -42,6 +42,22 @@ function fakeControlRos() {
 import { RobotControl } from './RobotControl';
 
 describe('RobotControl', () => {
+  it('shows the gateway block reason before runner readiness and preserves read-only access', () => {
+    const { ros, status } = fakeControlRos();
+    const session = new ControlSession(ros);
+    const view = render(<RobotControl ros={ros} />);
+    act(() => status({ ready: false, state: 'blocked', reason: 'Demo only. No robot is connected.' }));
+    expect(screen.getByText('Demo only. No robot is connected.')).toBeInTheDocument();
+    expect(screen.queryByText('Waiting for behavior-tree runner status.')).not.toBeInTheDocument();
+    expect(screen.getByText('You can view the workspace while commands are blocked.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Request control' })).toBeDisabled();
+    act(() => status({ ready: false }));
+    expect(screen.getByText('Waiting for behavior-tree runner status.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Request control' })).toBeDisabled();
+    view.unmount();
+    session.dispose();
+  });
+
   it('shows shared control without ownership buttons or UI configuration', () => {
     const { ros, status } = fakeControlRos();
     const session = new ControlSession(ros);

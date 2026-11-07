@@ -298,10 +298,6 @@ const CustomGamepadLayout: React.FC<CustomGamepadLayoutProps> = ({
   const gap = Math.max(1, Math.floor(4 * scaling.scaleFactor));
   const padding = isEditing ? Math.max(2, Math.floor(8 * scaling.scaleFactor)) : 8;
 
-  // Use the pre-calculated grid dimensions from scaling to ensure proper fit
-  const _actualGridWidth = scaling.gridWidth;
-  const _actualGridHeight = scaling.gridHeight;
-
   // Grid style with adaptive cell dimensions that maintain proper aspect ratios
   const gridStyle: React.CSSProperties = {
     display: 'grid',

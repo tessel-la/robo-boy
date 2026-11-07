@@ -34,6 +34,8 @@ type MockRosResources = {
   actionServers?: Array<{ name: string; type: string }>;
   nodes?: Array<{ name: string; subscribing?: string[]; publishing?: string[]; services?: string[] }>;
   parameters?: Record<string, unknown>;
+  /** rosapi typedef responses keyed by the requested interface type. */
+  schemas?: Record<string, unknown[]>;
 };
 
 const defaultResources: Required<MockRosResources> = {
@@ -42,6 +44,9 @@ const defaultResources: Required<MockRosResources> = {
   actionServers: [{ name: '/navigate_to_pose', type: 'nav2_msgs/action/NavigateToPose' }],
   nodes: [{ name: '/controller', subscribing: [], publishing: ['/cmd_vel'], services: ['/set_bool'] }],
   parameters: { '/controller/max_velocity': 1.5 },
+  schemas: {},
+  actionGoals: {},
+  serviceCalls: {},
 };
 
 export async function installRosMock(page: Page, resources: MockRosResources = {}): Promise<void> {
@@ -55,12 +60,14 @@ export async function installRosMock(page: Page, resources: MockRosResources = {
     parameters: resources.parameters ?? defaultResources.parameters,
     actionGoals: resources.actionGoals ?? {},
     serviceCalls: resources.serviceCalls ?? {},
+    schemas: resources.schemas ?? {},
   };
 
   await page.addInitScript(initResources => {
     type Listener = (event?: unknown) => void;
 
     class MockWebSocket {
+      static commands: Record<string, any>[] = [];
       static CONNECTING = 0;
       static OPEN = 1;
       static CLOSING = 2;
@@ -69,6 +76,7 @@ export async function installRosMock(page: Page, resources: MockRosResources = {
       static subscriptionCounts = new Map<string, number>();
       static published = new Map<string, unknown[]>();
       static scriptedUses = new Map<string, number>();
+      static serviceRequests: Array<{ service: string; type?: string; args: unknown }> = [];
 
       /** The next scripted answer for a name, the last one repeating. */
       static nextScripted<T>(kind: string, name: string, scripts: Record<string, T[]>): T | undefined {
@@ -127,6 +135,7 @@ export async function installRosMock(page: Page, resources: MockRosResources = {
       send(payload: string) {
         let message = JSON.parse(payload);
         if (message.op === 'roboboy_frame') message = message.message;
+        MockWebSocket.commands.push(message);
         if (message.op === 'roboboy_control') {
           if (message.action === 'acquire') this.controlOwner = true;
           if (message.action === 'release') this.controlOwner = false;
@@ -140,6 +149,7 @@ export async function installRosMock(page: Page, resources: MockRosResources = {
         }
         const read = ['subscribe', 'unsubscribe', 'advertise', 'unadvertise'].includes(message.op)
           || (message.op === 'call_service' && message.service.startsWith('/rosapi/') && !['/rosapi/set_param', '/rosapi/delete_param'].includes(message.service))
+          || (message.op === 'call_service' && ({ list_parameters: 'rcl_interfaces/srv/ListParameters', get_parameters: 'rcl_interfaces/srv/GetParameters', describe_parameters: 'rcl_interfaces/srv/DescribeParameters', get_parameter_types: 'rcl_interfaces/srv/GetParameterTypes' } as Record<string, string>)[message.service.split('/').pop()] === message.type && typeof message.type === 'string')
           || (message.op === 'publish' && message.topic === '/roboboy/inspection/request')
           || (message.op === 'publish' && message.topic === '/robo_boy/behavior_tree/command' && JSON.parse(message.msg.data).command === 'status');
         if (initResources.controlMode !== 'shared' && !read && ['publish', 'call_service', 'send_action_goal'].includes(message.op) && (!this.controlOwner || message.controlToken !== 'test-lease')) {
@@ -201,6 +211,7 @@ export async function installRosMock(page: Page, resources: MockRosResources = {
           return;
         }
         if (message.op !== 'call_service') return;
+        MockWebSocket.serviceRequests.push({ service: message.service, type: message.type, args: message.args });
 
         const scripted = MockWebSocket.nextScripted('service', message.service, initResources.serviceCalls);
         if (scripted) {
@@ -300,7 +311,8 @@ export async function installRosMock(page: Page, resources: MockRosResources = {
             return { topics: initResources.topics.filter(item => item.type === args.type).map(item => item.name) };
           case '/rosapi/message_details':
           case '/rosapi/service_request_details':
-            return { typedefs: [] };
+          case '/rosapi/action_goal_details':
+            return { typedefs: initResources.schemas[args.type] ?? [] };
           case '/rosapi/nodes':
             return { nodes: initResources.nodes.map(item => item.name) };
           case '/rosapi/node_details':
@@ -326,13 +338,21 @@ export async function installRosMock(page: Page, resources: MockRosResources = {
       __hasRosSubscription: (topic: string) => boolean;
       __publishRosTopic: (topic: string, message: unknown) => void;
       __getPublishedRosMessages: (topic: string) => unknown[];
+      __getRosCommands: () => Record<string, unknown>[];
+      __getRosServiceCalls: (service: string) => unknown[];
     };
     mockWindow.__getRosSubscriptionCount = topic => MockWebSocket.subscriptionCounts.get(topic) ?? 0;
     mockWindow.__getActiveRosSubscriptionCount = topic => MockWebSocket.activeSubscriptionCount(topic);
     mockWindow.__hasRosSubscription = topic => MockWebSocket.hasSubscription(topic);
     mockWindow.__publishRosTopic = (topic, message) => MockWebSocket.publish(topic, message);
     mockWindow.__getPublishedRosMessages = topic => MockWebSocket.published.get(topic) ?? [];
+    mockWindow.__getRosCommands = () => MockWebSocket.commands;
+    mockWindow.__getRosServiceCalls = service => MockWebSocket.serviceRequests.filter(request => request.service === service);
   }, mockResources);
+}
+
+export async function getRosServiceCalls(page: Page, service: string): Promise<unknown[]> {
+  return page.evaluate(service => (window as unknown as { __getRosServiceCalls: (service: string) => unknown[] }).__getRosServiceCalls(service), service);
 }
 
 export async function getRosSubscriptionCount(page: Page, topic: string): Promise<number> {

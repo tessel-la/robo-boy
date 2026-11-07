@@ -12,6 +12,11 @@ Custom gamepads are JSON-defined control surfaces created and rendered by the sa
 
 Layouts are stored in `localStorage` under `robo-boy-custom-gamepads`. Exported JSON is versioned and can be imported into another browser.
 
+The Pad library refreshes after editor or assistant authoring saves and Undo, including changes
+from another window. Existing running controls retain their previous definition until the operator
+chooses **Activate updated controls**. The runtime wrapper fills its workspace tile; an activation
+notice shares that space without shrinking the Pad horizontally or overflowing narrow mobile tiles.
+
 ## Supported Components
 
 | Component       | Primary role                                                                      |
@@ -58,7 +63,7 @@ Each standard button—including triggers, stick clicks, D-pad directions, cente
 | Component dispatch and editor shell      | `src/features/customGamepad/components/GamepadComponent.tsx`    |
 | Main-view adapter                        | `src/components/gamepads/custom/CustomGamepadWrapper.tsx`       |
 
-The `standard`, `gameboy`, and `voice` directories under `src/components/gamepads/` are legacy standalone implementations. New runtime controls belong in the configurable custom-gamepad system.
+Runtime controls belong in the configurable custom-gamepad system. The shell renders saved layouts through `CustomGamepadWrapper`; it does not select standalone pad implementations.
 
 ## Adding A Component Type
 

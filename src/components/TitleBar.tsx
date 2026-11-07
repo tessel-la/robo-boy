@@ -3,6 +3,7 @@ import type { DesktopWindow, ResizeDirection } from '../runtime/desktopWindow';
 import { getDesktopWindow } from '../runtime/desktopWindow';
 import { drawsOwnWindowChrome } from '../runtime/runtimeConfig';
 import './TitleBar.css';
+import { brand } from '../features/enterprise/config';
 
 const withAppWindow = async (run: (appWindow: DesktopWindow) => unknown): Promise<void> => {
   await run(await getDesktopWindow());
@@ -64,7 +65,7 @@ const TitleBar: React.FC = () => {
       <header className="title-bar" data-tauri-drag-region="deep">
         <div className="title-bar-brand">
           <span className="title-bar-mark" aria-hidden="true" />
-          <span className="title-bar-name">ROBO&middot;BOY</span>
+          <span className="title-bar-name">{brand.name}</span>
         </div>
 
         <div className="title-bar-controls">
@@ -90,12 +91,7 @@ const TitleBar: React.FC = () => {
               </svg>
             )}
           </button>
-          <button
-            type="button"
-            className="title-bar-button title-bar-button-close"
-            onClick={close}
-            aria-label="Close"
-          >
+          <button type="button" className="title-bar-button title-bar-button-close" onClick={close} aria-label="Close">
             <svg viewBox="0 0 10 10" aria-hidden="true">
               <path d="M2 2l6 6M8 2l-6 6" />
             </svg>

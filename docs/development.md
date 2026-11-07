@@ -24,6 +24,24 @@ Set `FRONTEND_PORT` to use a different local Vite port:
 FRONTEND_PORT=3000 npm run dev
 ```
 
+## Icons and release notices
+
+Run `npm run icons:generate` to regenerate the manifest-listed web icons, `favicon.ico` and the
+desktop icons in `src-tauri/icons/` (PNGs, `icon.ico`, `icon.icns`) from `images/logo.png`.
+Linux, Windows and browsers show icons as drawn, so those icons get rounded corners at Apple's
+template radius, and the macOS `.icns` follows Apple's inset template. Icons for platforms that
+apply their own mask stay square and opaque: iOS touch icons, maskable assets (which keep their
+declared pixel sizes and an opaque safe area) and the Android and iOS sets. Android builds copy
+the native icons from `src-tauri/icons/android/` into the generated project.
+
+Vite, Electron-shell, and enterprise builds generate `licenses.txt` from the JavaScript packages
+in their application and worker build inputs. Missing license material fails the build. `THIRD_PARTY_NOTICES.md` supplies
+icon credits and upstream notices that package metadata alone does not capture. Run
+`npm run test:notices` after changing this pipeline.
+
+The enterprise image ships the gateway bundle and its notices instead of installing the frontend's
+production dependency tree. `npm run build:enterprise` builds that payload locally.
+
 ## Complete Development Stack
 
 Generate the certificate as described in the root README and start the stack. Every ROS and DDS setting has a
@@ -41,6 +59,7 @@ The stack starts:
 - `caddy`: HTTP/HTTPS entry point and reverse proxy.
 - `ollama-relay`: transport-only adapter from Caddy's Unix socket to the configured external Ollama API.
 - `webrtc-relay`: part of the web deployment beside Caddy. A transport to a media gateway Robo-Boy does not run, needed only by browsers.
+- `mesh-relay`: read-only transport from Caddy to the robot's mesh server, including servers bound only to host loopback.
 - Ollama is external to the Compose stack and is reached through the same-origin `/ollama` proxy.
 
 Changes under `src/` should hot reload. Rebuild after changing files under `infra/`, Compose files, or ROS dependencies:
@@ -67,7 +86,8 @@ The default ports are defined in the copied `.env` file. The main knobs are:
 | `VIDEO_STREAM_PORT`             | `8080`                   | `web_video_server` and Caddy `/video_stream` upstream      |
 | `WEBRTC_BACKEND_URL`            | `http://127.0.0.1:8889`  | Host-network MediaMTX WHEP endpoint used by the relay      |
 | `WEBRTC_DISCOVERY_BACKEND_URL`  | `http://127.0.0.1:9997`  | Loopback MediaMTX API used only for active-path discovery  |
-| `MESH_RESOURCES_PORT`           | `8000`                   | Caddy `/mesh_resources` upstream                           |
+| `MESH_RESOURCES_PORT`           | `8000`                   | Mesh relay's backend port                                 |
+| `MESH_RESOURCES_UPSTREAM`       | mesh relay socket        | Caddy `/mesh_resources` upstream; override for a directly reachable server |
 | `ROBOBOY_RECORDINGS_PORT`       | unset                    | Optional TCP port for the recorder's file service          |
 | `RECORDINGS_UPSTREAM`           | recorder socket          | Caddy `/recordings` upstream                               |
 | `OLLAMA_BACKEND_URL`            | `http://127.0.0.1:11434` | Optional external Ollama API used by the same-origin relay |
@@ -89,8 +109,26 @@ independent robot-side switch. Recreate `ros-stack` after changing these setting
 For a frontend/proxy laptop talking to a backend laptop, set `BACKEND_HOST` to the backend laptop's hostname or IP before starting Caddy:
 
 ```bash
-BACKEND_HOST=192.168.1.20 docker compose up -d --build app caddy
+BACKEND_HOST=192.168.1.20 docker compose up -d --build app mesh-relay caddy
 ```
+
+The `/mesh_resources` route uses a host-network `mesh-relay` through a shared Unix socket. It
+keeps `BACKEND_HOST` and `MESH_RESOURCES_PORT` as the backend selection; an unset host or the
+`host.docker.internal` alias reaches local loopback. A remote backend hostname/IP continues to
+reach that remote server. The relay starts no mesh server and opens no host TCP port. It carries
+GET/HEAD requests, strips browser credentials, and preserves conditional requests and missing-file
+errors. Packaged apps continue to fetch the selected mesh server directly.
+
+For an existing web deployment, apply the new socket mount and relay without restarting ROS:
+
+```bash
+docker compose up -d --no-deps mesh-relay caddy
+```
+
+Recreating Caddy briefly reconnects browser transports. The ROS stack and packaged app stay running.
+If Caddy can reach the mesh server directly, `MESH_RESOURCES_UPSTREAM=robot.example:8000` selects
+that upstream instead. Run `npm run test:mesh-proxy` with Docker to check the actual Caddy/Unix
+socket path against a loopback-only fixture, including custom ports, cache validation and errors.
 
 Ollama remains external to Robo Boy. The application does not start Ollama or control its bind address,
 origins, models, or networking. The browser provider uses `/ollama` so discovery and generation remain
@@ -102,7 +140,7 @@ The Tauri app uses the host selected on the connection screen (including VPN hos
 VPN interface, so remote desktop clients can reach it. If a desktop webview receives
 a CORS rejection, include `tauri://*,http://tauri.localhost,https://tauri.localhost` in `OLLAMA_ORIGINS`.
 
-In the browser app, Quick Connect and Domain ID use the Caddy proxy. The advanced Host or IP field accepts any hostname, DNS name, VPN name, IPv4 address, IPv6 address, or URL that resolves from the client machine. The Ports fields control rosbridge, video, and mesh ports for direct host connections and default to the matching `VITE_*_PORT` values. It connects directly to that host in `auto` mode when it differs from the frontend host. Use `VITE_WEB_BACKEND_MODE=proxy` to force all browser connections through Caddy.
+In the browser app, Quick Connect uses the Caddy proxy. The Host or IP field accepts any hostname, DNS name, VPN name, IPv4 address, IPv6 address, or URL that resolves from the client machine. Expand **Connection ports** to change rosbridge, video, and mesh ports for direct host connections; these default to the matching `VITE_*_PORT` values. It connects directly to that host in `auto` mode when it differs from the frontend host. Use `VITE_WEB_BACKEND_MODE=proxy` to force all browser connections through Caddy.
 
 The camera gateway is external. Robo-Boy starts no media server and does not care which one you run: a
 simulator provides one, or you run your own. **The packaged desktop and mobile apps never go through Robo-Boy
@@ -180,6 +218,10 @@ changes must not make an otherwise unchanged Robo-Boy commit fail.
 If the frontend is opened over HTTPS, direct browser connections use `wss://` and `https://` backend URLs. For a plain ROS backend, use the HTTP frontend URL or set `VITE_WEB_BACKEND_MODE=proxy` with `BACKEND_HOST`.
 
 ## Desktop Frontend
+
+For optional employee login and company branding, see [Enterprise login and branding](enterprise.md).
+The default development build has login disabled; enterprise build flags are public configuration,
+while OIDC client secrets belong only to the optional gateway.
 
 The Tauri application packages only the frontend and expects the ROS stack to run separately. After installing the Tauri platform prerequisites and Rust, start it with:
 

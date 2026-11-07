@@ -25,6 +25,23 @@ const createManifest = (overrides: Record<string, unknown> = {}) => ({
 });
 
 describe('installed panel registry', () => {
+  it('accepts explicit action/control permissions and rejects malformed grants', () => {
+    const good = createManifest({ permissions: { ros: { actions: ['/robot/*'], control: true } } });
+    expect(parseInstalledPanelRegistry({ schemaVersion: 1, panels: [good] }, registryUrl).issues).toEqual([]);
+    for (const ros of [
+      { actions: 'all' },
+      { actions: ['relative'] },
+      { actions: ['/move', '/move'] },
+      { control: 'true' },
+      { forceControl: true },
+    ]) {
+      const result = parseInstalledPanelRegistry(
+        { schemaVersion: 1, panels: [createManifest({ permissions: { ros } })] },
+        registryUrl
+      );
+      expect(result.issues[0]?.code).toBe('invalid-manifest');
+    }
+  });
   it('validates and resolves a compatible same-origin panel', () => {
     const result = parseInstalledPanelRegistry({ schemaVersion: 1, panels: [createManifest()] }, registryUrl, {
       hostVersion: '0.3.1-alpha',

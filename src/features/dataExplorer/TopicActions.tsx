@@ -4,10 +4,14 @@ import type { Resource } from './types';
 
 const VISUAL_TYPES: Record<string, string> = {
   PointCloud2: 'pointcloud',
+  CompressedPointCloud2: 'pointcloud',
   LaserScan: 'laserscan',
   CameraInfo: 'camerainfo',
   // PoseStamped is left out for now: its 3D arrow does not show the pose correctly yet.
   MarkerArray: 'markerarray',
+  Path: 'path',
+  JointState: 'jointstate',
+  OccupancyGrid: 'occupancygrid',
 };
 
 /** Which panel a topic's type opens in, if any: images in Camera, TF in the TF tree, supported types in 3D. */

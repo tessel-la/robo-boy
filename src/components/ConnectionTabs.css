@@ -3,10 +3,11 @@
   min-width: 0;
   width: 220px;
   max-width: min(220px, calc(100vw - 152px));
-  height: 32px;
+  height: var(--toolbar-control-height);
   flex: 0 1 220px;
   display: flex;
   align-items: center;
+  gap: 6px;
   color: var(--navbar-text, #fff);
 }
 
@@ -80,23 +81,30 @@
 }
 
 .connection-switcher-trigger {
+  flex: 1 1 auto;
   width: 100%;
-  height: 30px;
+  height: var(--toolbar-control-height);
   min-width: 0;
   display: flex;
   align-items: center;
   gap: 7px;
   padding: 0 7px 0 9px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 8px;
-  color: #fff;
-  background: rgba(255, 255, 255, 0.14);
+  border: 0;
+  border-radius: var(--toolbar-control-radius);
+  color: var(--navbar-text, #fff);
+  background: var(--toolbar-control-bg);
+  box-sizing: border-box;
   text-align: left;
 }
 
 .connection-switcher-trigger:hover,
 .connection-switcher-trigger[aria-expanded='true'] {
-  background: rgba(255, 255, 255, 0.21);
+  background: var(--toolbar-control-hover-bg);
+}
+
+.connection-switcher-trigger:focus-visible {
+  outline: 2px solid var(--navbar-text, #fff);
+  outline-offset: -2px;
 }
 
 .connection-switcher-plus {
@@ -141,7 +149,7 @@
   flex-direction: column;
   overflow: hidden;
   padding: 7px;
-  border: 1px solid var(--border-color);
+  border: 0;
   border-radius: 11px;
   color: var(--text-color);
   background: color-mix(in srgb, var(--background-secondary) 94%, transparent);
@@ -354,4 +362,34 @@
   .connection-switcher-chevron {
     transition: none;
   }
+}
+
+.connection-count {
+  min-width: 17px;
+  padding: 1px 4px;
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--navbar-text, #fff) 13%, transparent);
+  font-size: 0.64rem;
+  text-align: center;
+  box-sizing: border-box;
+}
+.connection-switcher-popover { animation: connection-menu-enter 160ms ease-out; transform-origin: top left; }
+@keyframes connection-menu-enter { from { opacity: 0; transform: translateY(-4px) scale(0.98); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .connection-switcher-popover { animation: none; }
+}
+
+.connection-picker-top-bar .connection-tabs {
+  max-width: min(220px, calc(100vw - 20px));
+  flex-basis: 220px;
+}
+@media (max-width: 360px) {
+  /* Keep room for the current robot's name; the menu still shows the connection count. */
+  .connection-count { display: none; }
+}
+.connection-switcher-attribution {
+  margin-top: 8px;
+  padding: 10px 8px 2px;
+  border-top: 1px solid var(--border-color);
+  text-align: center;
 }

@@ -1,4 +1,5 @@
 # Byte-compiled / optimized / DLL files
+.secrets/
 __pycache__/
 *.py[cod]
 *$py.class
@@ -163,6 +164,7 @@ dev-dist/
 
 # Electron desktop shell: compiled shell, its renderer, and the packaged installers.
 dist-electron/
+dist-enterprise/
 release/
 playwright-report/
 test-results/
@@ -190,3 +192,6 @@ local-panel-sources.json
 
 # Local ROS recording output
 /recordings/
+
+# Private standalone enterprise access-session snapshots
+/.enterprise-sessions/

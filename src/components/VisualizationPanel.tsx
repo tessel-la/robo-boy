@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, memo } from 'react';
+import React, { useCallback, useEffect, useRef, useState, memo, lazy, Suspense } from 'react';
 // Revert to using namespace for roslib types
 import { Ros } from 'roslib';
 import * as THREE from 'three'; // Keep THREE import for potential use, though ROS3D handles Points creation
@@ -10,10 +10,9 @@ import SettingsPopup from './SettingsPopup';
 // Import AddVisualizationModal (will be created later)
 import AddVisualizationModal from './AddVisualizationModal';
 // Import the PointCloudSettings component
-import PointCloudSettings, { PointCloudSettingsOptions } from './visualizers/PointCloudSettings';
-import LaserScanSettings, { LaserScanSettingsOptions } from './visualizers/LaserScanSettings'; // Import LaserScanSettings
-import PoseStampedSettings, { PoseStampedSettingsOptions } from './visualizers/PoseStampedSettings'; // Import PoseStampedSettings
-import './visualizers/TopicSettings.css';
+import type { PointCloudSettingsOptions } from './visualizers/PointCloudSettings';
+import type { LaserScanSettingsOptions } from './visualizers/LaserScanSettings';
+import type { PoseStampedSettingsOptions } from './visualizers/PoseStampedSettings';
 import TreePanelMenu from '../features/treePanel/components/TreePanelMenu';
 
 // Import custom hooks
@@ -26,7 +25,8 @@ import { useTfVisualizer } from '../hooks/useTfVisualizer';
 
 // Import Wrapper Components
 import PointCloudViz from './visualizers/PointCloudViz';
-import CameraInfoViz from './visualizers/CameraInfoViz';
+import { pointCloudSource } from '../utils/pointCloudSource';
+const CameraInfoViz = lazy(() => import('./visualizers/CameraInfoViz'));
 import MarkerArrayViz from './visualizers/MarkerArrayViz';
 import UrdfViz from './visualizers/UrdfViz'; // Import UrdfViz
 import LaserScanViz, { LaserScanOptions } from './visualizers/LaserScanViz'; // Import LaserScanViz
@@ -39,9 +39,22 @@ import {
   saveVisualizationStateForKey,
   type TfDisplaySettings,
 } from '../utils/visualizationState';
-import { getTopicsForVisualizationType, isTopicVisualizationType, TOPIC_VISUALIZATION_TYPES } from '../utils/visualizationTopics';
+import { getTopicsForVisualizationType, isTopicVisualizationType, TOPIC_VISUALIZATION_TYPES, type TopicVisualizationType } from '../utils/visualizationTopics';
 import { getPreferredUrdfTopic } from '../utils/urdfTopics';
+import type { MeshDisplayOptions } from '../utils/meshOpacity';
+import type { NavigationDisplayOptions } from '../utils/navigationOptions';
+import NavigationViz from './visualizers/NavigationViz';
+const CameraImageViz = lazy(() => import('./visualizers/CameraImageViz'));
+import { DEFAULT_NEW_CAMERA_IMAGE_OPTIONS, cameraInfoTopicFor, type CameraImageOptions } from '../utils/images/cameraImageOptions';
+import { jointDescriptionTopic, type JointStateOptions } from '../utils/jointStates';
 import type { PanelSettingsBridge } from '../features/assistant/types';
+import type { WorkspaceOpenRequest } from './workspaceOpenRequest';
+import type { CameraImageClient } from '../utils/ros3d/visualizers/CameraImage';
+import { bindCameraPicking, type CameraPickObject } from '../utils/images/cameraInteraction';
+const CameraInspector = lazy(() => import('./visualizers/CameraInspector'));
+
+// Load optional telemetry only when selected; keep the workspace chunk within the PWA precache limit.
+const JointStateOverlay = lazy(() => import('./visualizers/JointStateOverlay'));
 
 interface VisualizationPanelProps {
   ros: Ros | null; // Allow null ros object
@@ -49,14 +62,15 @@ interface VisualizationPanelProps {
   /** Workspace panel id, used to register the assistant settings bridge. */
   panelId?: string;
   onRegisterAssistantBridge?: (panelId: string, bridge: PanelSettingsBridge | null) => void;
+  onOpen?: (request: WorkspaceOpenRequest) => void;
 }
 
 // Define the structure for a visualization configuration
 export interface VisualizationConfig {
   id: string;
-  type: 'pointcloud' | 'camerainfo' | 'urdf' | 'laserscan' | 'tf' | 'posestamped' | 'markerarray'; // Added 'laserscan', 'tf', and 'posestamped'
+  type: TopicVisualizationType | 'tf';
   topic: string; // For pointcloud/camerainfo/laserscan/posestamped. For URDF, this might be robot_description topic
-  options?: PointCloudOptions | CameraInfoOptions | UrdfOptions | LaserScanOptions | LaserScanSettingsOptions | PoseStampedOptions | PoseStampedSettingsOptions; // Union of option types
+  options?: JointStateOptions | CameraImageOptions | NavigationDisplayOptions | MeshDisplayOptions | PointCloudOptions | CameraInfoOptions | UrdfOptions | LaserScanOptions | LaserScanSettingsOptions | PoseStampedOptions | PoseStampedSettingsOptions; // Union of option types
 }
 
 // Define more specific option types
@@ -65,7 +79,7 @@ export interface CameraInfoOptions {
   lineColor?: THREE.Color | number | string;
   lineScale?: number;
 }
-export interface UrdfOptions {
+export interface UrdfOptions extends MeshDisplayOptions {
   robotDescriptionTopic?: string;
   urdfPath?: string;
   // Add other URDF specific options here, e.g., loaderType
@@ -79,26 +93,18 @@ interface TopicInfo {
   type: string;
 }
 
-const VALID_VISUALIZATION_TYPES: VisualizationConfig['type'][] = [
-  'pointcloud',
-  'camerainfo',
-  'urdf',
-  'laserscan',
-  'tf',
-  'posestamped',
-  'markerarray',
-];
+const VALID_VISUALIZATION_TYPES: VisualizationConfig['type'][] = [...TOPIC_VISUALIZATION_TYPES, 'tf'];
 
 const DEFAULT_STORAGE_KEY = 'roboboy_3d_visualization_state';
 
 const TF_DISPLAY_KEYS: ReadonlyArray<keyof TfDisplaySettings> = [
-  'showTfAxes', 'showTfFrameLabels', 'showTfConnections', 'tfAxesScale', 'tfLabelScale', 'tfAxesOpacity', 'tfLabelOpacity', 'showTfLabelBackground',
+  'showTfAxes', 'showTfFrameLabels', 'showTfConnections', 'tfAxesScale', 'tfAxesWidth', 'tfLabelScale', 'tfAxesOpacity', 'tfLabelOpacity', 'showTfLabelBackground',
 ];
 
 const ASSISTANT_SETTINGS_HELP =
   'Keys: "fixedFrame" (a frame name from availableFrames); "showAllTfFrames" (boolean); "showTfFrames" / "hideTfFrames" (arrays of frame names to add to or remove from the displayed list); ' +
-  '"tfDisplay" (object with any of showTfAxes, showTfFrameLabels, showTfConnections, showTfLabelBackground as booleans and tfAxesScale, tfLabelScale in metres, tfAxesOpacity, tfLabelOpacity from 0 to 1); ' +
-  '"addVisualizations" (array of {"type": one of pointcloud|camerainfo|urdf|laserscan|posestamped|markerarray, "topic": optional — the first compatible topic is used when omitted}); ' +
+  '"tfDisplay" (object with any of showTfAxes, showTfFrameLabels, showTfConnections, showTfLabelBackground as booleans and tfAxesScale (length), tfAxesWidth (diameter), tfLabelScale in metres, tfAxesOpacity, tfLabelOpacity from 0 to 1); ' +
+  '"addVisualizations" (array of {"type": one of pointcloud|camerainfo|urdf|laserscan|posestamped|markerarray|path|occupancygrid|cameraimage|jointstate, "topic": optional — the first compatible topic is used when omitted}); ' +
   '"removeVisualizations" (array of {"id"} or {"type"} or {"topic"} matching entries in visualizations).';
 
 const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({
@@ -106,6 +112,7 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({
   storageKey = DEFAULT_STORAGE_KEY,
   panelId,
   onRegisterAssistantBridge,
+  onOpen,
 }: VisualizationPanelProps) => {
   // console.log(`--- VisualizationPanel Render Start ---`);
 
@@ -125,6 +132,21 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({
   // Use the custom hook for viewer management
   const isRosConnected = ros?.isConnected ?? false;
   const { ros3dViewer, viewerGeneration } = useRos3dViewer(viewerRef, isRosConnected);
+  const cameraClients = useRef(new Map<string, CameraImageClient>());
+  const cameraPickObjects = useRef(new Map<string, CameraPickObject>());
+  const [cameraSelection, setCameraSelection] = useState<string | null>(null);
+  const [, setCameraClientVersion] = useState(0);
+  const registerCamera = useCallback((id: string, client: CameraImageClient | null) => {
+    if (client) { cameraClients.current.set(id, client); cameraPickObjects.current.set(id, client); }
+    else { cameraClients.current.delete(id); cameraPickObjects.current.delete(id); }
+    setCameraClientVersion(version => version + 1);
+  }, []);
+  const registerCameraInfo = useCallback((id: string, object: THREE.Group | null, frustum?: THREE.LineSegments) => {
+    if (object && frustum) cameraPickObjects.current.set(id, { object, frustum }); else cameraPickObjects.current.delete(id);
+  }, []);
+  useEffect(() => {
+    if (ros3dViewer.current) return bindCameraPicking(ros3dViewer.current, cameraPickObjects.current, setCameraSelection);
+  }, [ros3dViewer, viewerGeneration]);
 
   // Remove old topic states
   // const [availablePointCloudTopics, setAvailablePointCloudTopics] = useState<string[]>([]);
@@ -147,11 +169,14 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({
   const [isAddVizModalOpen, setIsAddVizModalOpen] = useState(false); // Add modal state
 
   // Add state for point cloud settings popup
-  const [activeSettingsVizId, setActiveSettingsVizId] = useState<string | null>(null);
 
   // State for modular visualizations
   const [visualizations, setVisualizations] = useState<VisualizationConfig[]>(initialState.visualizations);
   const [allTopics, setAllTopics] = useState<TopicInfo[]>([]); // Store all topics
+  const [visualizationStatus, setVisualizationStatus] = useState<Record<string, string | null>>({});
+  const reportVisualizationStatus = useCallback((id: string, status: string | null) => {
+    setVisualizationStatus(previous => previous[id] === status ? previous : { ...previous, [id]: status });
+  }, []);
 
   // Save visualization state whenever visualizations, fixed frame, or displayed TF frames change
   useEffect(() => {
@@ -210,6 +235,7 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({
     showFrameLabels: tfDisplay.showTfFrameLabels,
     showConnections: tfDisplay.showTfConnections,
     axesScale: tfDisplay.tfAxesScale,
+    axesWidth: tfDisplay.tfAxesWidth,
     labelScale: tfDisplay.tfLabelScale,
     axesOpacity: tfDisplay.tfAxesOpacity,
     labelOpacity: tfDisplay.tfLabelOpacity,
@@ -221,7 +247,7 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({
 
   // --- Add/Remove Visualization Logic ---
   const addVisualization = (config: Omit<VisualizationConfig, 'id'>) => {
-    const newViz: VisualizationConfig = { ...config, id: uuidv4() };
+    const newViz: VisualizationConfig = { ...config, id: uuidv4(), options: { ...(config.type === 'cameraimage' ? DEFAULT_NEW_CAMERA_IMAGE_OPTIONS : {}), ...config.options } };
     setVisualizations((prev: VisualizationConfig[]) => [...prev, newViz]);
     setIsAddVizModalOpen(false); // Close modal after adding
     setIsSettingsPopupOpen(true); // Reopen settings popup
@@ -229,6 +255,7 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({
   };
 
   const removeVisualization = (idToRemove: string) => {
+    setVisualizationStatus(previous => { const next = { ...previous }; delete next[idToRemove]; return next; });
     setVisualizations((prev: VisualizationConfig[]) => prev.filter((viz: VisualizationConfig) => viz.id !== idToRemove));
     console.log("Removed visualization with ID:", idToRemove);
   };
@@ -273,16 +300,6 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({
   const closeAddVizModalAndReturnToSettings = () => {
     setIsAddVizModalOpen(false);
     setIsSettingsPopupOpen(true);
-  };
-
-  // Function to open settings popup for a specific visualization
-  const openVisualizationSettings = (vizId: string) => {
-    setActiveSettingsVizId(vizId);
-  };
-
-  // Function to close visualization settings popup
-  const closeVisualizationSettings = () => {
-    setActiveSettingsVizId(null);
   };
 
   // Function to update visualization settings
@@ -385,7 +402,8 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({
           Object.entries(settings.tfDisplay as Record<string, unknown>).forEach(([key, value]) => {
             if (!TF_DISPLAY_KEYS.includes(key as keyof TfDisplaySettings)) return rejected.push(key);
             const expectsBoolean = key.startsWith('show');
-            if (expectsBoolean ? typeof value === 'boolean' : typeof value === 'number' && Number.isFinite(value) && value > 0) {
+            if (expectsBoolean ? typeof value === 'boolean' : typeof value === 'number' && Number.isFinite(value) && value > 0
+              && (key !== 'tfAxesWidth' || (value >= 0.001 && value <= 0.1))) {
               (patch as Record<string, unknown>)[key] = value;
             } else {
               rejected.push(key);
@@ -419,7 +437,7 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({
             }
             const newViz: VisualizationConfig = {
               id: uuidv4(), type, topic,
-              options: type === 'urdf' ? ({ robotDescriptionTopic: topic } as UrdfOptions) : {},
+              options: type === 'urdf' ? ({ robotDescriptionTopic: topic } as UrdfOptions) : type === 'cameraimage' ? { ...DEFAULT_NEW_CAMERA_IMAGE_OPTIONS } : {},
             };
             current.setVisualizations(prev => [...prev, newViz]);
             current.visualizations = [...current.visualizations, newViz];
@@ -451,27 +469,6 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({
     onRegisterAssistantBridge(panelId, bridge);
     return () => onRegisterAssistantBridge(panelId, null);
   }, [panelId, onRegisterAssistantBridge]);
-
-  // Visualization-specific editors still use their legacy popovers. The shared
-  // panel menu and add-visualization sheet handle their own outside clicks.
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      const pcSettingsElement = panelRef.current?.querySelector('.point-cloud-settings-popup');
-      if (activeSettingsVizId && pcSettingsElement && !pcSettingsElement.contains(event.target as Node)) {
-        setActiveSettingsVizId(null);
-      }
-    };
-    if (activeSettingsVizId !== null) {
-      const timerId = setTimeout(() => {
-        document.addEventListener('mousedown', handleClickOutside);
-      }, 0);
-      return () => {
-        clearTimeout(timerId);
-        document.removeEventListener('mousedown', handleClickOutside);
-      };
-    }
-    return () => { };
-  }, [activeSettingsVizId]);
 
   // --- Effect to fetch ALL topics ONCE ---
   useEffect(() => {
@@ -524,11 +521,6 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({
     }
   }, [ros, isRosConnected]);
 
-  // Get active visualization data for settings popup if needed
-  const activeViz = activeSettingsVizId
-    ? visualizations.find(viz => viz.id === activeSettingsVizId)
-    : null;
-
   // console.log(`--- VisualizationPanel Render End ---`);
 
   return (
@@ -536,14 +528,18 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({
       {/* Render Visualization Wrapper Components */}
       {visualizersReady && visualizations.map((viz: VisualizationConfig) => {
         if (viz.type === 'pointcloud') {
+          const source = pointCloudSource(viz.topic, allTopics);
           return (
             <React.Fragment key={viz.id}>
               <PointCloudViz
                 ros={ros}
+                visualizationId={viz.id}
+                onStatus={reportVisualizationStatus}
                 isRosConnected={isRosConnected}
                 ros3dViewer={ros3dViewer}
                 customTFProvider={customTFProvider}
-                topic={viz.topic}
+                topic={source.topic}
+                messageType={source.messageType}
                 fixedFrame={fixedFrame}
                 options={viz.options as PointCloudOptions}
               />
@@ -551,19 +547,22 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({
           );
         } else if (viz.type === 'camerainfo') {
           return (
+            <Suspense key={viz.id} fallback={null}>
             <CameraInfoViz
+              id={viz.id} onObject={registerCameraInfo}
               key={viz.id}
               ros={ros}
-              isRosConnected={isRosConnected}
+              isRosConnected={isRosConnected && isProviderReady}
               ros3dViewer={ros3dViewer}
               customTFProvider={customTFProvider}
               topic={viz.topic}
               options={viz.options as CameraInfoOptions}
             />
+            </Suspense>
           );
         } else if (viz.type === 'markerarray') {
           return <MarkerArrayViz key={viz.id} ros={ros} topic={viz.topic} viewer={ros3dViewer}
-            provider={customTFProvider} ready={isProviderReady} />;
+            provider={customTFProvider} ready={isProviderReady} opacity={(viz.options as MeshDisplayOptions)?.opacity} />;
         } else if (viz.type === 'urdf') { // Added URDF rendering
           return (
             <React.Fragment key={viz.id}>
@@ -575,6 +574,7 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({
                 dependenciesReady={isProviderReady}
                 robotDescriptionTopic={(viz.options as UrdfOptions)?.robotDescriptionTopic || viz.topic}
                 urdfPath={(viz.options as UrdfOptions)?.urdfPath}
+                opacity={(viz.options as UrdfOptions)?.opacity}
               // Pass other URDF options as needed
               />
             </React.Fragment>
@@ -597,6 +597,8 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({
           return (
             <React.Fragment key={viz.id}>
               <PoseStampedViz
+                visualizationId={viz.id}
+                onStatus={reportVisualizationStatus}
                 ros={ros}
                 isRosConnected={isRosConnected}
                 ros3dViewer={ros3dViewer}
@@ -607,6 +609,17 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({
               />
             </React.Fragment>
           );
+        } else if (viz.type === 'cameraimage' && ros) {
+          const options = viz.options as CameraImageOptions | undefined;
+          return <Suspense key={viz.id} fallback={null}><CameraImageViz id={viz.id} ros={ros} viewer={ros3dViewer} provider={customTFProvider}
+            ready={isProviderReady} onClient={registerCamera}
+            topic={viz.topic} messageType={allTopics.find(item => item.name === viz.topic)?.type
+              ?? (viz.topic.endsWith('/compressed') ? 'sensor_msgs/CompressedImage' : 'sensor_msgs/Image')}
+            options={{ ...options, cameraInfoTopic: options?.cameraInfoTopic ?? cameraInfoTopicFor(viz.topic, allTopics) }} onStatus={reportVisualizationStatus} /></Suspense>;
+        } else if (viz.type === 'path' || viz.type === 'occupancygrid') {
+          return <NavigationViz key={viz.id} id={viz.id} type={viz.type} topic={viz.topic}
+            ros={ros} connected={isRosConnected} viewer={ros3dViewer} provider={customTFProvider}
+            ready={isProviderReady} options={viz.options as NavigationDisplayOptions} onStatus={reportVisualizationStatus} />;
         } else if (viz.type === 'tf') {
           // TF visualization is handled globally by the useTfVisualizer hook,
           // so we don't need to render a specific component here.
@@ -617,8 +630,28 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({
         return null;
       })}
 
+      <Suspense fallback={null}>
+        {visualizations.filter(viz => viz.type === 'jointstate').map(viz => (
+          <JointStateOverlay key={viz.id} id={viz.id} ros={isRosConnected ? ros : null} topic={viz.topic}
+            messageType={allTopics.find(item => item.name === viz.topic)?.type ?? 'sensor_msgs/JointState'}
+            options={viz.options as JointStateOptions} container={panelRef}
+            descriptionTopic={(viz.options as JointStateOptions)?.robotDescriptionTopic ?? jointDescriptionTopic(viz.topic, allTopics)}
+            onChange={updateVisualizationSettings} onStatus={reportVisualizationStatus} />
+        ))}
+      </Suspense>
+
       {/* Main Viewer Div */}
       <div ref={viewerRef} className="viewer-container" id={viewerIdRef.current}></div>
+      <Suspense fallback={null}>
+        {visualizations.filter(viz => viz.id === cameraSelection && (viz.type === 'cameraimage' || viz.type === 'camerainfo')).map(viz =>
+          <CameraInspector key={viz.id} client={cameraClients.current.get(viz.id)} viewer={ros3dViewer.current} ros={ros}
+            calibrationTopic={viz.type === 'camerainfo' ? viz.topic : undefined}
+            imageTopics={allTopics.filter(item => /\/(?:CompressedImage|Image)$/.test(item.type))}
+            topic={viz.type === 'camerainfo' ? '' : viz.topic} options={{ ...viz.options as CameraImageOptions,
+              cameraInfoTopic: (viz.options as CameraImageOptions)?.cameraInfoTopic ?? cameraInfoTopicFor(viz.topic, allTopics) }}
+            status={visualizationStatus[viz.id]} onChange={patch => updateVisualizationSettings(viz.id, patch)}
+            onClose={() => { setCameraSelection(null); panelRef.current?.querySelector<HTMLButtonElement>('.tree-panel-menu-button')?.focus(); }} onOpen={onOpen} />)}
+      </Suspense>
 
       <TreePanelMenu
         open={isSettingsPopupOpen}
@@ -633,6 +666,8 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({
         classNames={{ panel: 'visualization-menu-panel' }}
         menuContent={
           <SettingsPopup
+            onInspectCamera={id => { setCameraSelection(id); setIsSettingsPopupOpen(false); }}
+            visualizationStatus={visualizationStatus}
             onClose={closeSettingsPopup}
             fixedFrame={fixedFrame}
             availableFrames={availableFrames}
@@ -646,8 +681,8 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({
             activeVisualizations={visualizations}
             onRemoveVisualization={removeVisualization}
             onAddVisualizationClick={openAddVizModalFromSettings}
-            onEditVisualization={openVisualizationSettings}
             onUpdateVisualizationTopic={updateVisualizationTopic}
+            onUpdateVisualizationOptions={updateVisualizationSettings}
             allTopics={allTopics}
           />
         }
@@ -660,39 +695,6 @@ const VisualizationPanel: React.FC<VisualizationPanelProps> = memo(({
           allTopics={allTopics}
           onAddVisualization={addVisualization}
           onClose={closeAddVizModalAndReturnToSettings} // Return to Settings after closing
-        />
-      )}
-
-      {/* Point Cloud Settings Popup - only show when a point cloud viz is selected */}
-      {activeSettingsVizId && activeViz?.type === 'pointcloud' && (
-        <PointCloudSettings
-          vizId={activeSettingsVizId}
-          topic={activeViz.topic}
-          initialOptions={activeViz.options as PointCloudOptions}
-          onClose={closeVisualizationSettings}
-          onSaveSettings={updateVisualizationSettings}
-        />
-      )}
-
-      {/* LaserScan Settings Popup */}
-      {activeSettingsVizId && activeViz?.type === 'laserscan' && (
-        <LaserScanSettings
-          vizId={activeSettingsVizId}
-          topic={activeViz.topic}
-          initialOptions={activeViz.options as LaserScanSettingsOptions}
-          onClose={closeVisualizationSettings}
-          onSaveSettings={updateVisualizationSettings}
-        />
-      )}
-
-      {/* PoseStamped Settings Popup */}
-      {activeSettingsVizId && activeViz?.type === 'posestamped' && (
-        <PoseStampedSettings
-          vizId={activeSettingsVizId}
-          topic={activeViz.topic}
-          initialOptions={activeViz.options as PoseStampedSettingsOptions}
-          onClose={closeVisualizationSettings}
-          onSaveSettings={updateVisualizationSettings}
         />
       )}
 

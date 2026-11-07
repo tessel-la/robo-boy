@@ -105,11 +105,15 @@ describe('PanelManagerDialog', () => {
   });
 
   it('shows requested permissions in the review', async () => {
+    const actionPanel = {
+      ...panel,
+      permissions: { ros: { ...panel.permissions?.ros, actions: ['/robot/move'], control: true } },
+    };
     api.preview.mockResolvedValue({
       planId: 'sha256-plan',
       expiresInSeconds: 600,
-      panels: [panel],
-      changes: [{ type: 'add', panel }],
+      panels: [actionPanel],
+      changes: [{ type: 'add', panel: actionPanel }],
     });
     render(
       <PanelManagerDialog
@@ -127,6 +131,8 @@ describe('PanelManagerDialog', () => {
     expect(await screen.findByText('discover approved ROS topics')).toBeInTheDocument();
     expect(screen.getByText('ask you to select individual ROS topics')).toBeInTheDocument();
     expect(screen.getByText('subscribe ROS: /telemetry/**')).toBeInTheDocument();
+    expect(screen.getByText('send ROS action goals: /robot/move')).toBeInTheDocument();
+    expect(screen.getByText('request robot control from a user gesture')).toBeInTheDocument();
   });
 
   it('keeps consecutive planned removals instead of restoring an earlier one', async () => {
@@ -186,16 +192,56 @@ describe('PanelManagerDialog', () => {
     );
   });
 
+  it('omits legacy Plotting from the available catalog while offering other external panels', async () => {
+    api.catalog.mockResolvedValue({
+      panels: [
+        { id: 'la.tessel.roboboy.timeseries', name: 'ROS Time Series', description: 'Plots.', version: '2.0.0' },
+        { id: 'la.tessel.roboboy.hello', name: 'Hello', description: 'Shows a greeting.', version: '1.0.0' },
+      ],
+    });
+    render(
+      <PanelManagerDialog
+        installedPanels={[]}
+        availablePanels={[]}
+        onPanelEnabledChange={vi.fn()}
+        onClose={vi.fn()}
+        onApplied={vi.fn()}
+      />
+    );
+
+    await screen.findByText('Hello');
+    expect(screen.queryByText('ROS Time Series')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('0 installed, 1 available')).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Install' })).toHaveLength(1);
+  });
+
+  it('directs a requested legacy Plotting install to the built-in panel', async () => {
+    render(
+      <PanelManagerDialog
+        installedPanels={[]}
+        availablePanels={[]}
+        onPanelEnabledChange={vi.fn()}
+        onClose={vi.fn()}
+        onApplied={vi.fn()}
+        requestedInstallPanelId="la.tessel.roboboy.timeseries"
+      />
+    );
+
+    await screen.findByText('Plotting is built into Robo-Boy. Add it from the panel menu.');
+    expect(api.preview).not.toHaveBeenCalled();
+    expect(api.apply).not.toHaveBeenCalled();
+  });
+
   it('prepares an install the assistant asked for, and leaves applying it to the user', async () => {
-    const officialSummary = { id: 'la.tessel.roboboy.timeseries', name: 'ROS Time Series', description: 'Plots.', version: '1.0.0' };
-    const timeseriesPanel = { ...panel, id: officialSummary.id, name: officialSummary.name, version: officialSummary.version };
+    const officialSummary = { id: 'la.tessel.roboboy.hello', name: 'Hello', description: 'Shows a greeting.', version: '1.0.0' };
+    const helloPanel = { ...panel, id: officialSummary.id, name: officialSummary.name, version: officialSummary.version };
     api.catalog.mockResolvedValue({ panels: [officialSummary] });
-    api.preview.mockResolvedValue({ planId: 'sha256-plan', expiresInSeconds: 600, panels: [timeseriesPanel], changes: [{ type: 'add', panel: timeseriesPanel }] });
+    api.preview.mockResolvedValue({ planId: 'sha256-plan', expiresInSeconds: 600, panels: [helloPanel], changes: [{ type: 'add', panel: helloPanel }] });
     const { rerender } = render(
       <PanelManagerDialog installedPanels={[]} availablePanels={availableFrom([])} onPanelEnabledChange={vi.fn()} onClose={vi.fn()} onApplied={vi.fn()}
         requestedInstallPanelId={officialSummary.id} />
     );
-    await screen.findByText('add ROS Time Series@1.0.0');
+    await screen.findByText('add Hello@1.0.0');
     expect(api.preview).toHaveBeenCalledTimes(1);
     expect(api.preview.mock.calls[0][1]).toMatchObject({ selection: { mode: 'include', panelIds: expect.arrayContaining([officialSummary.id]) } });
     expect(api.apply).not.toHaveBeenCalled();
@@ -220,12 +266,12 @@ describe('PanelManagerDialog', () => {
 
   it('installs an official catalog panel with Install, confirm, and Apply', async () => {
     const officialSummary = {
-      id: 'la.tessel.roboboy.timeseries',
-      name: 'ROS Time Series',
-      description: 'Plots ROS numeric fields.',
+      id: 'la.tessel.roboboy.hello',
+      name: 'Hello',
+      description: 'Shows a greeting.',
       version: '1.0.0',
     };
-    const timeseriesPanel = {
+    const helloPanel = {
       ...panel,
       id: officialSummary.id,
       name: officialSummary.name,
@@ -235,8 +281,8 @@ describe('PanelManagerDialog', () => {
     api.preview.mockResolvedValue({
       planId: 'sha256-plan',
       expiresInSeconds: 600,
-      panels: [timeseriesPanel],
-      changes: [{ type: 'add', panel: timeseriesPanel }],
+      panels: [helloPanel],
+      changes: [{ type: 'add', panel: helloPanel }],
     });
     render(
       <PanelManagerDialog
@@ -248,7 +294,7 @@ describe('PanelManagerDialog', () => {
       />
     );
 
-    await screen.findByText('ROS Time Series');
+    await screen.findByText('Hello');
 
     fireEvent.click(screen.getByRole('button', { name: 'Install' }));
 
@@ -262,7 +308,7 @@ describe('PanelManagerDialog', () => {
       )
     );
 
-    await screen.findByText('add ROS Time Series@1.0.0');
+    await screen.findByText('add Hello@1.0.0');
     fireEvent.click(
       screen.getByLabelText(
         'I reviewed these sources and permissions and trust the selected panels with the granted data.'
@@ -272,7 +318,7 @@ describe('PanelManagerDialog', () => {
     await waitFor(() => expect(api.apply).toHaveBeenCalledWith('', 'sha256-plan'));
   });
 
-  it('removes an official catalog panel with Remove, confirm, and Apply', async () => {
+  it('keeps a legacy external Plotting installation removable', async () => {
     const officialSummary = {
       id: 'la.tessel.roboboy.timeseries',
       name: 'ROS Time Series',
@@ -498,9 +544,9 @@ describe('PanelManagerDialog', () => {
 
   it('does not duplicate the official source when it is already configured under a custom name', async () => {
     const officialSummary = {
-      id: 'la.tessel.roboboy.timeseries',
-      name: 'ROS Time Series',
-      description: 'Plots ROS numeric fields.',
+      id: 'la.tessel.roboboy.hello',
+      name: 'Hello',
+      description: 'Shows a greeting.',
       version: '1.0.0',
     };
     api.catalog.mockResolvedValue({ panels: [officialSummary] });
@@ -522,7 +568,7 @@ describe('PanelManagerDialog', () => {
       />
     );
 
-    await screen.findByText('ROS Time Series');
+    await screen.findByText('Hello');
 
     fireEvent.click(screen.getByRole('button', { name: 'Install' }));
 
@@ -534,9 +580,9 @@ describe('PanelManagerDialog', () => {
 
   it('installing under "all discovered panels" mode only adds the clicked panel, not every discovered one', async () => {
     const officialSummary = {
-      id: 'la.tessel.roboboy.timeseries',
-      name: 'ROS Time Series',
-      description: 'Plots ROS numeric fields.',
+      id: 'la.tessel.roboboy.hello',
+      name: 'Hello',
+      description: 'Shows a greeting.',
       version: '1.0.0',
     };
     api.catalog.mockResolvedValue({
@@ -560,7 +606,7 @@ describe('PanelManagerDialog', () => {
       />
     );
 
-    await screen.findByText('ROS Time Series');
+    await screen.findByText('Hello');
 
     fireEvent.click(screen.getAllByRole('button', { name: 'Install' })[0]);
 

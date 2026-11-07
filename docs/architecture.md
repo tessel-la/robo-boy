@@ -4,6 +4,12 @@ This document describes the current runtime and the boundaries future developmen
 
 ## System Overview
 
+Enterprise deployments can add an optional OIDC authentication gateway in front of the existing
+routes. It protects access while the robot control gateway continues to own command arbitration.
+The default deployment has no login requirement. Public branding and the frontend login boundary
+live in `src/features/enterprise/`; the optional server lives in `infra/enterprise/`. See
+[Enterprise login and branding](enterprise.md) for the trust boundary and session lifecycle.
+
 ```text
 Browser or Tauri webview
   React application
@@ -54,7 +60,7 @@ Keep orchestration here, but place feature-specific behavior inside feature modu
 
 ## ROS Boundary
 
-`useRos` is the owner of the active `ROSLIB.Ros` instance. `src/runtime/runtimeConfig.tsx` owns deployment-specific endpoints. Web builds use same-origin proxy routes for Quick Connect and Domain ID, and can use the selected host or IP for direct backend connections. Tauri builds connect directly to rosbridge, video, and mesh services on the selected ROS host. Keep this distinction out of feature components by consuming the runtime configuration boundary.
+`useRos` is the owner of the active `ROSLIB.Ros` instance. `src/runtime/runtimeConfig.tsx` owns deployment-specific endpoints. Web builds use same-origin proxy routes for Quick Connect, and can use the selected host or IP for direct backend connections. Tauri builds connect directly to rosbridge, video, and mesh services on the selected ROS host. Keep this distinction out of feature components by consuming the runtime configuration boundary.
 
 The public WebSocket endpoint is `infra/ros/control_gateway.py`; raw rosbridge binds only to loopback.
 `useRos` installs a connection-scoped `ControlSession`, and the shared top-bar `RobotControl` exposes
@@ -100,6 +106,11 @@ The editor owns graph state; an executor consumes a complete tree snapshot and e
 
 The Data Explorer keeps one inspection session per ROS connection (`src/features/dataExplorer/InspectionSession.ts`), shared by every Explorer tile and released when the last one closes. Graph discovery, endpoint counts, QoS and traffic measurement run on the ROS host in `infra/ros/inspection_runner.py`, which serves leased, expiring probes over `std_msgs/String` topics and never calls robot services. Without it the session falls back to the serialized rosapi queue and labels browser-side rates as such; see [Data Explorer](data-explorer.md).
 
+Its Parameters view owns tile-local drafts and uses `parameterClient.ts` for bounded native ROS 2 service calls
+through the same serialized queue. The control gateway verifies standard read-service types against the private ROS
+graph and retains ownership enforcement and pending-work tracking for writes. Parameters never flow through the
+read-only inspection companion or the assistant's settings bridge; drafts are not persisted.
+
 ### 3D Visualization
 
 The 3D stack has three layers:
@@ -109,13 +120,35 @@ The 3D stack has three layers:
 - `src/hooks/` and `src/utils/ros3d/` own ROS subscriptions, TF coordination, Three.js objects, shaders, primitives, and disposal.
 
 The application-facing `../utils/ros3d` import currently resolves to `src/utils/ros3d.ts`; that
-entry point owns the live viewer, point-cloud, orbit-control, and URDF implementations and
-re-exports the modular LaserScan implementation. The viewer is invalidation-driven: scene/data,
+entry point owns the live viewer, orbit-control, and URDF implementations and
+re-exports the modular PointCloud2 and LaserScan implementations. The viewer is invalidation-driven: scene/data,
 resize, settings, and camera changes coalesce into one requested frame, while an unchanged scene
 does not retain a render loop. Keep new visualizers on that boundary so idle panels do no WebGL
 work. See [Performance evaluation](performance.md) for measurements and the profiling suite.
 
+`tfStream` owns one timestamped `TfHistory` per ROS connection alongside its latest-transform snapshot. History is bounded to 30 seconds and 256 samples per child frame, with at most 1024 child frames. Static TF is timeless. `CustomTFProvider.watchTransform` resolves stamped observations and retries on incoming TF or fixed-frame changes; its existing latest API remains available for robot models and frame axes. PoseStamped composes the local pose with this transform, and PointCloud2 applies it to the cloud wrapper. Path batches unique frame/time requests through `watchTransforms` with one listener per layer. OccupancyGrid applies the header transform to its wrapper and the map origin to its textured plane. Other spatial layer types retain their existing TF behavior.
+
+Path/OccupancyGrid configuration extends `visualizationTopics` and the panel's persisted layer list. `NavigationViz` owns the client lifetime; `PathClient` and `OccupancyGridClient` own subscriptions and GPU resources. Appearance updates never recreate clients. Paths use Three.js wide lines in world metres, not implementation-dependent WebGL line widths, and deduplicate identical pose transform requests. Maps use a bounded, nearest-sampled RGBA DataTexture with ROS row ordering, origin pose and resolution. Matching full-map dimensions/resolution reuse geometry and textures; changed dimensions/resolution, malformed messages and disposal release previous GPU resources; empty messages clear the layer. ROS connection changes and backward replay seeks remount the clients through the existing source boundary. The layers have no publishing path and no independent playback clock or TF subscription.
+
+`occupancyGridData.ts` owns pure, bounded full-map/patch validation and occupancy/RViz costmap colors. `OccupancyGridClient` keeps numeric cells and patches only the affected RGBA rows; frame requests coalesce through the viewer, while Three.js currently uploads the full texture on the next draw. Updates are explicit per-layer topic pairs with no throttling or server-side patch coalescing. Full snapshots reset patch history; reconnects and invalid chains clear the baseline and wait for a fresh full snapshot. ROS 1 sequence gaps can be detected; ROS 2 has no sequence/revision contract, so periodic fresh full maps are needed to recover unobservable loss. The transport’s existing ROS 2 QoS limitations remain.
+
+Incremental replay registers the map/update pair with `ReplaySession`. `BagReader.seek` reconstructs one bounded numeric grid from the last full map and the subsequent patch range in the existing reader worker; it does not retain an unbounded patch queue or use a second clock. Late consumers trigger reconstruction instead of accepting a cached single patch. Backward seeks carry the pair across source replacement. Reconstructed snapshots are dispatched only to consumers of that exact map/update pair; the raw topic cache and full-map-only views are unchanged. Shared timestamp parsing lives in `rosTime.ts` so the worker does not import the Three.js/TF renderer.
+
+The live stream retains the existing preference for `/roboboy/tf` when available. That relay preserves the latest state of each child but samples intermediate motion; interpolation cannot recover discarded motion. Replay prefers recorded raw `/tf` when available, restores bounded TF samples on seeks (up to 8192 samples per topic), and isolates backward seeks with a replacement replay ROS identity. Sensor-time history uses ROS stamps, independently of the wall clock; seek scanning uses the bag's log-time window. Messages whose acquisition time falls outside that window can remain unavailable. Invalid/missing transforms never silently fall back to latest for a nonzero sensor timestamp. History and pending bindings are released with their owning stream/provider/layer.
+
+`JointStateOverlay` is a DOM overlay in the existing 3D panel's layer registry, independent of viewer/TF readiness. `useJointStates` owns read-only JointState and robot-description subscriptions on the supplied ROS identity, releases them on source/topic changes, and bounds merged partial telemetry to 2,048 named joints at a requested 10 Hz. `jointStates` validates array lengths and finite readings and parses only URDF joint metadata (no mesh loading); invalid descriptions clear their limits. `useOverlayFrame` keeps pointer/keyboard movement and resizing inside the panel using ResizeObserver, while placement and appearance persist in the layer options. The existing replay source/remount boundary owns cursor/seek changes; only live sources run a freshness timer, so paused replay values do not expire. No control publishers or services are involved.
+
 New visualization types should follow the same split: serializable configuration in the panel, a thin React adapter, and lifecycle-heavy ROS/Three.js code in a hook or `ros3d` class. Dispose subscriptions, geometries, materials, animation callbacks, and viewer objects when dependencies change or components unmount.
+
+`src/utils/images/` owns shared image formats, bounded byte decoding, calibration and camera message streams. The former replay `imageFrames` entry point re-exports the decoder for compatibility. `cameraStreams` shares one image topic/decoder per ROS identity and normalized topic/type, with one active decode, one newest pending message and one cached decoded frame. The stream owns ImageBitmap lifetime: synchronous consumers replace/drop a bitmap on the next event and never close it themselves. Last unsubscribe cancels scheduled work, closes cached or late-completing bitmaps, and removes the stream. Calibration streams retain at most 64 samples and discard obsolete optical-frame histories. Replay's existing source identity/remount boundary isolates seeks and live connections; no second playback clock is introduced.
+
+`CameraImageViz` adapts persisted layer settings to `CameraImageClient`. The client matches calibration in the same optical frame (exact stamps by default, explicit tolerance/latest modes), applies ROI/binning, and builds a pinhole image plane/frustum using raw zero-distortion K or rectified P with inverse R. Optical-center placement belongs to TF, so P's stereo Tx/Ty are not applied again. The existing CameraInfo visualizer shares the pinhole-corner math. Unsupported distortion, invalid matrices, frame/dimension mismatches and oversized images fail visibly. Temporarily missing calibration/TF holds the last complete image/calibration/pose snapshot; replacement is atomic, with a stale status after 500 ms. A displayed pose is frozen in its resolved fixed frame until replacement or a fixed-frame change. Out-of-order nonzero image timestamps cannot roll the displayed pose backward. Two pending candidates (oldest unresolved and newest) avoid starvation when TF trails camera arrivals, with a 2-second pending deadline to retire unresolvable candidates. Shared decoded-frame leases keep held bitmaps valid until their last consumer releases them. Geometry/textures are reused for matching calibration/dimensions; opacity/distance/frustum changes do not resubscribe. Frames use image-time TF through the shared provider and release GPU resources with the layer. Live Camera and 3D can share timestamped MJPEG through the image source boundary described in [Camera streams](camera-streams.md). Control publishers are unchanged.
+
+Metric depth extends that same shared frame: `depthFrames` retains immutable Float32 metres for REP 118 16UC1/32FC1; `compressedDepth` decodes bounded, CRC-checked, non-interlaced 16-bit PNG through the native DecompressionStream without browser eight-bit conversion. The fixed metric preview is decoded once per stream. Live/replay Camera canvases share drawing and measurement code. Depth points use CameraImageClient’s existing acquisition/calibration/TF snapshot and disposal; switching to depth explicitly selects ROS, including for imported video settings. Geometry samples at most 100,000 pixels, reuses matching GPU attributes, releases replaced buffers, and updates only on frame/calibration/range changes. There is no additional subscription, clock or render loop. Nonzero raw distortion and RVL remain unsupported.
+
+`CameraImageClient` exposes a tile-local inspection snapshot and subscription. It retains the displayed frame, calibration and resolved pose together; manual freeze does not stop shared acquisition. PNG encoding retains its own frame lease before asynchronous work. Original MJPEG acquisition headers are preserved separately when Latest TF uses a synthetic zero-stamp projection header. Snapshot sidecars omit transport URLs and command payloads. CameraInfo-only inspection subscribes through the existing shared calibration cache.
+
+`cameraInteraction.ts` owns camera picking and viewpoint math; drags/multi-touch do not select. Selection and inspector UI remain in VisualizationPanel/CameraInspector. `WorkspaceOpenRequest` carries serializable navigation intent to the shell, preserving transport/profile on Open in Camera and replay ownership. `cameraCapture.ts` executes only an explicit service/action binding via `executeRosOperation`; it has bounded waits, cancellation, result decoding, and optional exact-stamp topic/result correlation with at most four pending images. It rejects replay sources and never guesses a capture endpoint. The existing gateway remains the command authority; pad/servo publishers and lease policy are unchanged.
 
 ### Themes
 
@@ -175,6 +208,14 @@ flow instead of owning a second BT-editing implementation; opening the assistant
 Ctrl/Cmd+I pins that bridge rather than starting another conversation. See
 [AI assistant](ai-assistant.md) for capabilities, trust boundaries, and privacy/credential handling.
 
+### Plotting
+
+The built-in **Plotting** panel retains the `timeSeries` identity. Its existing tile-owned engine and
+subscription controller serve both time-series and XY views. Bounded samples carry transient message/connection
+identity for explicit XY pairing; rendering caches pairing by source snapshot/configuration. Interval analysis
+uses a frozen sample snapshot independently of continuing acquisition. Serializable schema-5 settings migrate
+previous configurations to time-series mode. See [Plotting](native-time-series.md) for user-facing behavior.
+
 ## State And Persistence
 
 State is intentionally local to the browser:
@@ -187,6 +228,7 @@ State is intentionally local to the browser:
 | Current view and open panels | `MainControlView`         | Memory only                                                      |
 | Mobile single/split panels   | `MainControlView`         | `localStorage`                                                   |
 | Panel split                  | `useResizablePanels`      | `localStorage`                                                   |
+| Last company welcome message | `enterprise/loginMessage` | Versioned, company-scoped `localStorage`; memory fallback |
 | Themes                       | `App` and theme utilities | `localStorage`                                                   |
 | Gamepad definitions          | `gamepadStorage.ts`       | Versioned `localStorage` and JSON                                |
 | Behavior trees               | `treeStorage.ts`          | Versioned `localStorage` and JSON                                |

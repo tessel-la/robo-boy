@@ -52,6 +52,25 @@ describe('VisualizationPanel state restoration', () => {
     vi.restoreAllMocks();
   });
 
+  it('restores path/map layers and their independent appearance settings', () => {
+    const visualizations = [
+      { id: 'route', type: 'path', topic: '/robot/plan', options: { visible: false, color: '#ff0000', lineWidth: 0.08 } },
+      { id: 'map', type: 'occupancygrid', topic: '/robot/map', options: { opacity: 0.2 } },
+    ];
+    localStorage.setItem('roboboy_3d_visualization_state', JSON.stringify({ visualizations }));
+    const ros = { isConnected: true, getTopics: (callback: (value: unknown) => void) => callback({ topics: [], types: [] }) };
+    render(<VisualizationPanel ros={ros as any} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
+    fireEvent.click(screen.getByRole('tab', { name: /Visualizations/ }));
+    fireEvent.click(screen.getByLabelText('Edit Path visualization for topic /robot/plan'));
+    expect(screen.getByLabelText('Show Path on /robot/plan')).not.toBeChecked();
+    expect(screen.getByLabelText('Color for Path on /robot/plan')).toHaveValue('#ff0000');
+    fireEvent.click(screen.getByLabelText('Back to 3D view settings'));
+    fireEvent.click(screen.getByLabelText('Edit Occupancy grid visualization for topic /robot/map'));
+    expect(screen.getByLabelText('Opacity for Occupancy grid on /robot/map')).toHaveValue('0.2');
+    expect(JSON.parse(localStorage.getItem('roboboy_3d_visualization_state')!).visualizations).toEqual(visualizations);
+  });
+
   it('restores settings before the initial save when there are no visualizations', () => {
     const savedState = {
       visualizations: [],
@@ -62,6 +81,7 @@ describe('VisualizationPanel state restoration', () => {
       showTfFrameLabels: false,
       showTfConnections: false,
       tfAxesScale: 1.2,
+      tfAxesWidth: 0.003,
       tfLabelScale: 0.3,
       tfAxesOpacity: 0.6,
       tfLabelOpacity: 0.7,
@@ -82,7 +102,7 @@ describe('VisualizationPanel state restoration', () => {
     expect(screen.getByLabelText('Fixed Frame:')).toHaveValue('map');
     expect(screen.getByLabelText('odom')).toBeChecked();
     fireEvent.click(screen.getByRole('button', { name: 'Frame display settings' }));
-    expect(screen.getByLabelText('Axes size in metres')).toHaveValue(1.2);
+    expect(screen.getByLabelText('Axes length in metres')).toHaveValue(1.2);
     expect(screen.getByLabelText('Label size in metres')).toHaveValue(0.3);
     expect(screen.getByLabelText('Axes opacity')).toHaveValue('0.6');
     expect(screen.getByLabelText('Label opacity')).toHaveValue('0.7');
@@ -157,6 +177,7 @@ describe('VisualizationPanel state restoration', () => {
       displayedTfFrames: [],
       showFrameLabels: true,
       tfAxesScale: 0.1,
+      tfAxesWidth: 0.003,
     };
     localStorage.setItem('delayed-viewer', JSON.stringify(savedState));
     const createRos = () => ({
@@ -169,7 +190,7 @@ describe('VisualizationPanel state restoration', () => {
     const { rerender } = render(<VisualizationPanel ros={createRos() as any} storageKey="delayed-viewer" />);
     expect(pointCloudVizMock).not.toHaveBeenCalled();
 
-    viewerLifecycleMock.ros3dViewer.current = { scene: {} };
+    viewerLifecycleMock.ros3dViewer.current = { scene: {}, renderer: { domElement: document.createElement('canvas') } };
     viewerLifecycleMock.viewerGeneration = 1;
     tfProviderLifecycleMock.customTFProvider.current = {};
     tfProviderLifecycleMock.isProviderReady = true;

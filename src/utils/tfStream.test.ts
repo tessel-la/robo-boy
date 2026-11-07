@@ -43,6 +43,37 @@ describe('shared TF stream', () => {
     topicMock.instances = [];
   });
 
+  it('shares historical samples with late panels without rewinding latest TF', async () => {
+    const { subscribeToTfStream, getTfHistory } = await import('./tfStream');
+    const { CustomTFProvider } = await import('./tfUtils');
+    const ros = {} as any;
+    const snapshots = vi.fn();
+    const stop = subscribeToTfStream(ros, snapshots);
+    const dynamic = topicMock.instances.find(topic => topic.name === '/tf')!;
+    const send = (sec: number, x: number) => {
+      const value = transformMessage('base', x);
+      Object.assign(value.transforms[0].header, { stamp: { sec, nanosec: 0 } });
+      dynamic.callback?.(value);
+    };
+    send(3, 30);
+    send(1, 10);
+    expect(snapshots.mock.lastCall![0].transforms.base.transform.translation.x).toBe(30);
+    const late = new CustomTFProvider('map', {}, getTfHistory(ros));
+    const resolved = vi.fn();
+    const detach = late.watchTransform('base', 2_000_000_000n, resolved);
+    expect(resolved.mock.lastCall![0].transform.translation.x).toBe(20);
+    // A newer timestamp with identical geometry must still resolve waiting observations.
+    const waiting = vi.fn();
+    const detachWaiting = late.watchTransform('base', 4_000_000_000n, waiting);
+    expect(waiting.mock.lastCall![0].transform).toBeNull();
+    send(4, 30);
+    expect(waiting.mock.lastCall![0].transform.translation.x).toBe(30);
+    expect(snapshots.mock.lastCall![0].changedFrames.size).toBe(0);
+    expect(topicMock.instances).toHaveLength(2);
+    detach(); detachWaiting(); late.dispose(); stop();
+    expect(getTfHistory(ros).lookup('map', 'base', 2_000_000_000n).transform).toBeNull();
+  });
+
   it('shares one topic pair and releases it after the final consumer', async () => {
     const { subscribeToTfStream } = await import('./tfStream');
     const ros = {} as any;

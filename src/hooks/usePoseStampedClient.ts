@@ -4,6 +4,7 @@ import * as ROSLIB from 'roslib';
 import * as ROS3D from '../utils/ros3d';
 import * as THREE from 'three';
 import { CustomTFProvider } from '../utils/tfUtils';
+import { watchMessageTransform } from '../utils/stampedTransform';
 
 interface PoseStampedMessage {
   header: {
@@ -52,6 +53,7 @@ interface UsePoseStampedClientProps {
   topic: string;
   fixedFrame: string;
   options?: PoseStampedOptions;
+  onStatus?: (status: string | null) => void;
 }
 
 export function usePoseStampedClient({
@@ -62,8 +64,12 @@ export function usePoseStampedClient({
   topic,
   fixedFrame,
   options = {},
+  onStatus,
 }: UsePoseStampedClientProps) {
   const topicClientRef = useRef<ROSLIB.Topic | null>(null);
+  const stopTransformRef = useRef<(() => void) | undefined>();
+  const report = useRef(onStatus);
+  report.current = onStatus;
   const visualizationGroupRef = useRef<THREE.Group | null>(null);
   const visualizationObjectRef = useRef<THREE.Object3D | null>(null);
   const trailPointsRef = useRef<THREE.Vector3[]>([]);
@@ -152,37 +158,55 @@ export function usePoseStampedClient({
     }
 
     try {
-      const { pose } = message;
-      const { position, orientation } = pose;
-
-      // Create position vector
-      const positionVec = new THREE.Vector3(position.x, position.y, position.z);
-      
-      // Create quaternion for orientation
-      const quaternion = new THREE.Quaternion(orientation.x, orientation.y, orientation.z, orientation.w);
-
-      // Geometry is stable between messages. Rebuilding and discarding meshes at the topic rate
-      // created avoidable CPU work and leaked GPU buffers because Group.clear() does not dispose.
-      if (!visualizationObjectRef.current) {
-        visualizationObjectRef.current = visualizationType === 'arrow'
-          ? createArrow(arrowLength * scale, arrowWidth * scale, color)
-          : createAxes(axesSize * scale);
-        visualizationGroupRef.current.add(visualizationObjectRef.current);
+      const group = visualizationGroupRef.current;
+      const provider = customTFProvider.current;
+      stopTransformRef.current?.();
+      stopTransformRef.current = undefined;
+      group.visible = false;
+      const { position, orientation } = message.pose ?? {};
+      if (![position?.x, position?.y, position?.z, orientation?.x, orientation?.y, orientation?.z, orientation?.w].every(Number.isFinite)) {
+        report.current?.('Pose contains invalid coordinates.');
+        ros3dViewer.current.requestRender?.();
+        return;
       }
-      const visualization = visualizationObjectRef.current;
-
-      // Apply position and orientation
-      visualization.position.copy(positionVec);
-      visualization.quaternion.copy(quaternion);
-
-      // Update trail if enabled
-      if (showTrail) {
-        updateTrail(positionVec);
+      const localRotation = new THREE.Quaternion(orientation.x, orientation.y, orientation.z, orientation.w);
+      if (!Number.isFinite(localRotation.lengthSq()) || localRotation.lengthSq() < 1e-12) {
+        report.current?.('Pose orientation is invalid.');
+        ros3dViewer.current.requestRender?.();
+        return;
       }
+      localRotation.normalize();
+      let addedToTrail = false;
+      stopTransformRef.current = watchMessageTransform(provider, message.header, ({ transform, error }) => {
+        if (visualizationGroupRef.current !== group) return;
+        const wasVisible = group.visible;
+        group.visible = !!transform;
+        report.current?.(error);
+        if (!transform) {
+          if (wasVisible) ros3dViewer.current?.requestRender?.();
+          return;
+        }
+        const positionVec = new THREE.Vector3(position.x, position.y, position.z)
+          .applyQuaternion(transform.rotation).add(transform.translation);
+        const quaternion = transform.rotation.clone().multiply(localRotation);
+        if (!visualizationObjectRef.current) {
+          visualizationObjectRef.current = visualizationType === 'arrow'
+            ? createArrow(arrowLength * scale, arrowWidth * scale, color)
+            : createAxes(axesSize * scale);
+          group.add(visualizationObjectRef.current);
+        }
+        const visualization = visualizationObjectRef.current;
+        const changed = !wasVisible || !visualization.position.equals(positionVec) || !visualization.quaternion.equals(quaternion);
+        visualization.position.copy(positionVec);
+        visualization.quaternion.copy(quaternion);
+        if (showTrail && !addedToTrail) { updateTrail(positionVec); addedToTrail = true; }
+        if (changed) ros3dViewer.current?.requestRender?.();
+      });
       ros3dViewer.current.requestRender?.();
 
     } catch (error) {
-      console.error('[PoseStamped] Error processing message:', error);
+      report.current?.('Invalid PoseStamped message.');
+      ros3dViewer.current?.requestRender?.();
     }
   }, [visualizationType, scale, color, arrowLength, arrowWidth, axesSize, showTrail, createArrow, createAxes, updateTrail]);
 
@@ -197,6 +221,7 @@ export function usePoseStampedClient({
     // Create visualization group
     if (!visualizationGroupRef.current) {
       visualizationGroupRef.current = new THREE.Group();
+      visualizationGroupRef.current.visible = false;
       ros3dViewer.current.addObject(visualizationGroupRef.current);
     }
 
@@ -207,14 +232,18 @@ export function usePoseStampedClient({
       messageType: 'geometry_msgs/msg/PoseStamped'
     });
 
-    topicClient.subscribe(handlePoseStampedMessage);
+    let active = true;
+    topicClient.subscribe(message => { if (active) handlePoseStampedMessage(message as unknown as PoseStampedMessage); });
+    report.current?.('Waiting for pose messages.');
     topicClientRef.current = topicClient;
 
     console.log(`[PoseStamped] Subscribed to ${topic}`);
 
     // Cleanup function
     return () => {
-      console.log(`[PoseStamped] Cleaning up client for topic: ${topic}`);
+      active = false;
+      stopTransformRef.current?.();
+      stopTransformRef.current = undefined;
       
       if (topicClientRef.current) {
         topicClientRef.current.unsubscribe();

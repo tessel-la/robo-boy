@@ -1,0 +1,35 @@
+cmake_minimum_required(VERSION 3.16)
+project(roboboy_cloudini LANGUAGES C CXX)
+add_subdirectory("${CLOUDINI_SOURCE_DIR}/cloudini_lib" cloudini)
+
+if(EMSCRIPTEN)
+  add_executable(codec decoder.cpp)
+  target_link_libraries(codec PRIVATE cloudini::cloudini_lib)
+  target_compile_features(codec PRIVATE cxx_std_20)
+  target_compile_options(codec PRIVATE -fexceptions)
+  target_compile_options(cloudini_lib PRIVATE -fexceptions)
+  target_link_options(codec PRIVATE --no-entry -O3
+    "-sMODULARIZE=1" "-sEXPORT_ES6=1" "-sENVIRONMENT=worker"
+    "-sSINGLE_FILE=1" "-sFILESYSTEM=0" "-sALLOW_MEMORY_GROWTH=1"
+    "-sINITIAL_MEMORY=16777216" "-sMAXIMUM_MEMORY=134217728"
+    "-sNO_DISABLE_EXCEPTION_CATCHING=1" "-sEXPORTED_FUNCTIONS=['_malloc','_free','_roboboy_cloudini_decode']"
+    "-sEXPORTED_RUNTIME_METHODS=['HEAPU8']")
+else()
+  find_package(ament_cmake REQUIRED)
+  find_package(rclcpp REQUIRED)
+  find_package(sensor_msgs REQUIRED)
+  find_package(point_cloud_interfaces REQUIRED)
+  add_executable(pointcloud-relay relay.cpp)
+  target_compile_features(pointcloud-relay PRIVATE cxx_std_20)
+  ament_target_dependencies(pointcloud-relay rclcpp sensor_msgs point_cloud_interfaces)
+  target_link_libraries(pointcloud-relay cloudini::cloudini_lib)
+  install(TARGETS pointcloud-relay RUNTIME DESTINATION bin)
+  include(CTest)
+  if(BUILD_TESTING)
+    add_executable(cloudini-test test.cpp decoder.cpp)
+    target_compile_features(cloudini-test PRIVATE cxx_std_20)
+    ament_target_dependencies(cloudini-test sensor_msgs)
+    target_link_libraries(cloudini-test cloudini::cloudini_lib)
+    add_test(NAME cloudini-boundaries COMMAND cloudini-test)
+  endif()
+endif()

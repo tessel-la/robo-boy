@@ -3,7 +3,7 @@ import type { Ros } from 'roslib';
 
 import * as ROS3D from '../utils/ros3d';
 import { CustomTFProvider, getTfFrameNames, normalizeFrameId, resolveFixedFrame, type TransformStore } from '../utils/tfUtils';
-import { subscribeToTfStream } from '../utils/tfStream';
+import { getTfHistory, subscribeToTfStream } from '../utils/tfStream';
 
 interface UseTfProviderProps {
   ros: Ros | null;
@@ -51,7 +51,7 @@ export function useTfProvider({
       return;
     }
 
-    const provider = new CustomTFProvider(fixedFrameRef.current, {});
+    const provider = new CustomTFProvider(fixedFrameRef.current, {}, getTfHistory(ros));
     let active = true;
     latestTransformsRef.current = {};
     setTransforms({});

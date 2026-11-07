@@ -1,4 +1,8 @@
 import React from 'react';
+import { AgentWorkflows } from './AgentWorkflows';
+import { AgentIntegrations } from './AgentIntegrations';
+import { AgentProfiles } from './AgentProfiles';
+import { AgentHooks } from './AgentHooks';
 import { FaSyncAlt } from 'react-icons/fa';
 import type { AssistantProviderId, AssistantSettings } from '../types';
 import { transcribeAssistantAudio } from '../providers/transcription';
@@ -253,6 +257,78 @@ const AssistantSettingsPopover: React.FC<AssistantSettingsPopoverProps> = ({
           />
         </div>
       </section>
+      <section className="assistant-settings-section is-single">
+        <AgentWorkflows />
+      </section>
+      <section className="assistant-settings-section is-single">
+        <AgentProfiles
+          selected={settings.agentProfileId}
+          onSelect={(agentProfileId, model) =>
+            onUpdate({ agentProfileId, ...(model ? { model, thinkingEffort: undefined } : {}) })
+          }
+        />
+      </section>
+      <section className="assistant-settings-section is-single">
+        <AgentIntegrations />
+      </section>
+      <section className="assistant-settings-section is-single">
+        <AgentHooks />
+      </section>
+      <section className="assistant-settings-section is-single">
+        <details>
+          <summary>Monitoring</summary>
+          <label>
+            <input
+              type="checkbox"
+              checked={settings.monitorEnabled ?? false}
+              onChange={event => onUpdate({ monitorEnabled: event.target.checked })}
+            />
+            Enable explicitly requested read-only topic watches
+          </label>
+          <label>
+            Watch expiry
+            <select
+              value={settings.monitorDurationMinutes ?? 60}
+              onChange={event => onUpdate({ monitorDurationMinutes: Number(event.target.value) })}
+            >
+              <option value={15}>15 minutes</option>
+              <option value={60}>1 hour</option>
+              <option value={240}>4 hours</option>
+              <option value={1440}>24 hours</option>
+            </select>
+          </label>
+          <label>
+            Maximum model analyses per watch
+            <select
+              value={settings.monitorInferenceLimit ?? 1}
+              onChange={event => onUpdate({ monitorInferenceLimit: Number(event.target.value) })}
+            >
+              <option value={1}>1</option>
+              <option value={5}>5</option>
+              <option value={10}>10</option>
+              <option value={20}>20</option>
+            </select>
+          </label>
+          <label>
+            <input
+              type="checkbox"
+              disabled={!getDesktopBridge()?.assistant?.setBackgroundActive}
+              checked={settings.monitorBackground ?? false}
+              onChange={event => onUpdate({ monitorBackground: event.target.checked })}
+            />
+            Keep Electron running in the tray for active watches
+          </label>
+          <p>
+            Analyses use the selected model/account. No inference on unchanged data. Watches stop on reconnect, expiry,
+            allowance exhaustion or Quit; browser/mobile execution remains foreground-only.
+          </p>
+        </details>
+      </section>
+      <p className="assistant-key-note">
+        Sending a message shares conversation history, workspace settings, saved pads and behavior trees, and available
+        robot context with the selected provider. Camera frames, files, logs and audio are included when used. Browser
+        speech recognition may use a separate remote service.
+      </p>
       <p className="assistant-key-note">
         {settings.authMode === 'subscription'
           ? 'Subscription credentials stay in the desktop runtime. ChatGPT credentials use the OS credential store; Claude Code manages its own sign-in. Conversation history stays in this browser.'
@@ -260,7 +336,7 @@ const AssistantSettingsPopover: React.FC<AssistantSettingsPopoverProps> = ({
             ? getDesktopBridge()?.assistant?.getApiKeyStorage
               ? 'API keys use OS encryption when available; storage failures do not prevent use. Your OS may request keychain access. This session only and unencrypted saving avoid keychain access. Conversation history stays on this device.'
               : 'This desktop version saves API keys locally without encryption. Update Robo-Boy to use secure storage. Conversation history stays on this device.'
-            : 'API keys and conversation history are stored in this browser. For shared deployments, use a server-side proxy instead of storing production keys here.'}
+            : 'API keys are saved unencrypted in this browser. For shared deployments, use a server-side proxy instead of storing production keys here.'}
       </p>
     </div>
   </div>

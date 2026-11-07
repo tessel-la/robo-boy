@@ -27,15 +27,19 @@ docker compose up -d --build --force-recreate ros-stack
 
 ## DDS Middleware
 
-Robo-Boy uses Fast DDS by default and can switch to Cyclone DDS through the standard ROS 2 `RMW_IMPLEMENTATION` variable. Every container that should discover the same graph must use compatible `ROS_DOMAIN_ID`, `ROS_LOCALHOST_ONLY`, and DDS middleware settings.
+Robo-Boy uses Fast DDS by default and can switch to Cyclone DDS through the standard ROS 2 `RMW_IMPLEMENTATION` variable. Every container that should discover the same graph must use compatible `ROS_DOMAIN_ID`, discovery scope, and DDS middleware settings.
 
-For ROS 2 Jazzy and newer, prefer the explicit discovery range variables as well:
+For ROS 2 Jazzy, configure discovery with:
 
 ```dotenv
 ROS_DOMAIN_ID=0
 ROS_AUTOMATIC_DISCOVERY_RANGE=SUBNET
 ROS_STATIC_PEERS=
 ```
+
+`ROS_LOCALHOST_ONLY` is deprecated in Jazzy. Compose leaves it empty by default, which preserves subnet discovery without the deprecation warnings. Remove an explicit `ROS_LOCALHOST_ONLY=0` from your `.env` to use the modern settings without warnings. An explicit `ROS_LOCALHOST_ONLY=1` remains supported and takes precedence over both modern variables, including ignoring static peers.
+
+For localhost discovery on Jazzy, remove the legacy variable and set `ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST`. Keep `ROS_STATIC_PEERS` empty if discovery must stay on this host; static peers can reach other hosts. For Humble, use `ROS_LOCALHOST_ONLY=1` for localhost discovery or leave it empty for normal discovery; Humble does not support the modern discovery variables. This compatibility setting is retained for existing deployments. See the [ROS discovery guide](https://docs.ros.org/en/jazzy/Tutorials/Advanced/Improved-Dynamic-Discovery.html) and [Jazzy initialization precedence](https://github.com/ros2/rcl/blob/jazzy/rcl/src/rcl/init.c).
 
 Fast DDS default:
 
@@ -138,7 +142,7 @@ If generated hooks require the original build path, mount the referenced build/s
 
 ## Compatibility And Diagnosis
 
-The simulation and `ros-stack` must use compatible `ROS_DISTRO`, `ROS_DOMAIN_ID`, `ROS_LOCALHOST_ONLY`, and `RMW_IMPLEMENTATION` values. The workspace must be built before it is mounted.
+The simulation and `ros-stack` must use compatible `ROS_DISTRO`, `ROS_DOMAIN_ID`, discovery scope, and `RMW_IMPLEMENTATION` values. On Jazzy, check `ROS_AUTOMATIC_DISCOVERY_RANGE`, `ROS_STATIC_PEERS`, and any explicit legacy `ROS_LOCALHOST_ONLY` setting. On Humble, check `ROS_LOCALHOST_ONLY`. The workspace must be built before it is mounted.
 
 Confirm activation and inspect errors with:
 

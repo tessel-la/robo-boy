@@ -3,6 +3,7 @@ import { defaultGamepadLibrary } from './defaultLayouts';
 
 const STORAGE_KEY = 'robo-boy-custom-gamepads';
 const STORAGE_VERSION = '1.0.0';
+export const GAMEPAD_STORAGE_EVENT = 'robo-boy-gamepads-changed';
 
 interface StorageData {
   version: string;
@@ -15,6 +16,14 @@ export interface GamepadImportResult {
   imported: number;
   errors: string[];
   idMap: Record<string, string>;
+}
+
+// Reading can fall back for display. Mutating must never replace unrecognized data.
+function assertWritableStorage(): void {
+  const raw = localStorage.getItem(STORAGE_KEY);
+  if (!raw) return;
+  const data = JSON.parse(raw);
+  if (!data || data.version !== STORAGE_VERSION || !Array.isArray(data.customLayouts) || data.customLayouts.some((item: GamepadLibraryItem) => !item || typeof item.id !== 'string' || !item.layout || !Array.isArray(item.layout.components))) throw new Error('Unrecognized Pad storage. Export/recover it before saving; the original data was preserved.');
 }
 
 /**
@@ -48,6 +57,7 @@ export function loadGamepadLibrary(): GamepadLibraryItem[] {
  */
 export function saveCustomGamepad(layout: CustomGamepadLayout): boolean {
   try {
+    assertWritableStorage();
     const library = loadGamepadLibrary();
     const customLayouts = library.filter(item => !item.isDefault);
     
@@ -81,6 +91,7 @@ export function saveCustomGamepad(layout: CustomGamepadLayout): boolean {
     };
 
     localStorage.setItem(STORAGE_KEY, JSON.stringify(storageData));
+    window.dispatchEvent(new CustomEvent(GAMEPAD_STORAGE_EVENT));
     return true;
   } catch (error) {
     console.error('Failed to save custom gamepad:', error);
@@ -93,6 +104,7 @@ export function saveCustomGamepad(layout: CustomGamepadLayout): boolean {
  */
 export function deleteCustomGamepad(layoutId: string): boolean {
   try {
+    assertWritableStorage();
     const library = loadGamepadLibrary();
     const customLayouts = library.filter(item => !item.isDefault && item.id !== layoutId);
     
@@ -103,6 +115,7 @@ export function deleteCustomGamepad(layoutId: string): boolean {
     };
 
     localStorage.setItem(STORAGE_KEY, JSON.stringify(storageData));
+    window.dispatchEvent(new CustomEvent(GAMEPAD_STORAGE_EVENT));
     return true;
   } catch (error) {
     console.error('Failed to delete custom gamepad:', error);

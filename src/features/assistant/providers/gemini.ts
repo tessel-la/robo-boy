@@ -1,7 +1,7 @@
 import { checkedFetch, readSse } from './transport';
 import type { SendChat } from './types';
 
-export const sendChat: SendChat = async ({ settings, systemPrompt, messages, signal, onToken, jsonMode }) => {
+export const sendChat: SendChat = async ({ settings, systemPrompt, messages, signal, onToken, onThinking, jsonMode }) => {
   const url = `${settings.baseUrl.replace(/\/$/, '')}/models/${encodeURIComponent(settings.model)}:streamGenerateContent?alt=sse`;
   const contents = messages.map(turn => ({
     role: turn.role === 'assistant' ? 'model' : 'user',
@@ -26,7 +26,10 @@ export const sendChat: SendChat = async ({ settings, systemPrompt, messages, sig
   });
   return readSse(
     response,
-    payload => payload.candidates?.[0]?.content?.parts?.map((part: any) => part.text ?? '').join(''),
+    payload => payload.candidates?.[0]?.content?.parts?.map((part: any) => {
+      if (part.thought) { if (part.text) onThinking?.(part.text); return ''; }
+      return part.text ?? '';
+    }).join(''),
     onToken
   );
 };

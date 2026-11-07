@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import sharp from 'sharp';
 
 test.describe('App Navigation', () => {
     test.beforeEach(async ({ page }) => {
@@ -6,17 +7,14 @@ test.describe('App Navigation', () => {
         await page.waitForLoadState('domcontentloaded');
     });
 
-    test('should have navigation elements', async ({ page }) => {
-        // Check if there's a navbar or navigation
-        const navbar = page.locator('.navbar, nav, [role="navigation"]');
-
-        // Navbar might be visible depending on the app state
-        const isVisible = await navbar.isVisible().catch(() => false);
-
-        // If visible, verify it has proper structure
-        if (isVisible) {
-            await expect(navbar.first()).toBeVisible();
-        }
+    test('opens and closes the connection options from the entry screen', async ({ page }) => {
+        const disclosure = page.getByTitle('Advanced Options');
+        await expect(disclosure).toHaveAttribute('aria-expanded', 'false');
+        await disclosure.click();
+        await expect(disclosure).toHaveAttribute('aria-expanded', 'true');
+        await expect(page.locator('#ros2Value')).toBeVisible();
+        await disclosure.click();
+        await expect(disclosure).toHaveAttribute('aria-expanded', 'false');
     });
 
     test('should handle page reload gracefully', async ({ page }) => {
@@ -33,8 +31,8 @@ test.describe('Error Handling', () => {
         // Navigate to a potentially invalid route
         await page.goto('/nonexistent-route');
 
-        // Page should still render (either redirect or show entry/404)
-        await expect(page.locator('body')).toBeVisible();
+        await expect(page.locator('.entry-section')).toBeVisible();
+        await expect(page.getByRole('button', { name: /Quick Connect/ })).toBeEnabled();
     });
 });
 
@@ -42,11 +40,28 @@ test.describe('PWA Features', () => {
     test('should have manifest link', async ({ page }) => {
         await page.goto('/');
 
-        // Check for PWA manifest
-        const manifestLink = page.locator('link[rel="manifest"]');
-        // May or may not be present depending on build
-        const count = await manifestLink.count();
-        expect(count).toBeGreaterThanOrEqual(0);
+        const manifestLink = page.locator('link[rel="manifest"][href="./manifest.webmanifest"]');
+        await expect(manifestLink).toHaveCount(1);
+        const response = await page.request.get('/manifest.webmanifest');
+        expect(response.ok()).toBe(true);
+        expect(await response.json()).toMatchObject({ name: 'Robo-Boy' });
+    });
+
+    // Desktop systems and browsers show these icons as drawn, so they carry their own rounded
+    // corners; iOS and Android mask theirs and need an opaque square.
+    test('ships every manifest icon, rounded except where the platform masks it', async ({ page }) => {
+        const { icons } = await (await page.request.get('/manifest.webmanifest')).json();
+        for (const icon of icons as { src: string; sizes: string; purpose?: string }[]) {
+            const response = await page.request.get(icon.src);
+            expect(response.headers()['content-type'], icon.src).toBe('image/png');
+            const image = sharp(await response.body());
+            const { width, height } = await image.metadata();
+            expect(`${width}x${height}`, icon.src).toBe(icon.sizes);
+            const { data, info } = await image.ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+            const cornerAlpha = data[info.channels - 1];
+            const masked = icon.purpose === 'maskable' || /apple|ios/.test(icon.src);
+            expect(cornerAlpha, icon.src).toBe(masked ? 255 : 0);
+        }
     });
 
     test('should have viewport meta tag', async ({ page }) => {

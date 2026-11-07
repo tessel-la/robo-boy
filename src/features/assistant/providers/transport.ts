@@ -1,5 +1,6 @@
 // Streaming transport helpers shared by every provider. Relocated from the former
 // behaviorTree/agent/agentClient.ts (SSE/NDJSON parsing is not BT-specific).
+import { enterpriseFetch } from '../../enterprise/session';
 
 export const readSse = async (
   response: Response,
@@ -17,7 +18,9 @@ export const readSse = async (
       if (!line.startsWith('data:')) continue;
       const data = line.slice(5).trim();
       if (!data || data === '[DONE]') continue;
-      const token = extract(JSON.parse(data));
+      const payload = JSON.parse(data);
+      if (payload.error || payload.type === 'error') throw new Error(payload.error?.message ?? String(payload.error ?? 'Provider stream failed.'));
+      const token = extract(payload);
       if (token) {
         result += token;
         onToken?.(token);
@@ -91,7 +94,7 @@ const describeNetworkFailure = (url: string, cause: unknown): Error => {
 export const checkedFetch = async (url: string, init: RequestInit): Promise<Response> => {
   let response: Response;
   try {
-    response = await fetch(url, init);
+    response = await enterpriseFetch(url, init);
   } catch (cause) {
     if (cause instanceof DOMException && cause.name === 'AbortError') throw cause;
     throw describeNetworkFailure(url, cause);

@@ -36,6 +36,14 @@ jobs:
         base: ${{ github.ref_name }}
         filters: |
           frontend:
+            - 'infra/ros/jpeg_ros_metadata.hpp'
+            - 'infra/ros/web_video_server_metadata.patch'
+            - 'infra/enterprise/**'
+            - 'infra/caddy/**'
+            - 'infra/compose/enterprise.yml'
+            - 'infra/docker/Dockerfile.enterprise'
+            - 'infra/docker/Dockerfile'
+            - 'docker-compose.yml'
             - 'src/**'
             - 'electron/**'
             # src/panels/types.ts imports '../../panel-sdk' by relative path, so the type-only SDK
@@ -46,6 +54,9 @@ jobs:
             - 'config/**'
             - 'public/**'
             - 'scripts/**'
+            - 'LICENSE'
+            - 'THIRD_PARTY_NOTICES.md'
+            - 'third-party/**'
             - 'package.json'
             - 'package-lock.json'
             - 'index.html'
@@ -56,11 +67,16 @@ jobs:
             - '.github/workflows/test.yml'
             - '.github/scripts/**'
           e2e:
+            - 'enterprise-e2e/**'
             - 'e2e/**'
             - 'config/playwright.config.ts'
             - '.github/workflows/test.yml'
             - '.github/scripts/**'
           ros:
+            - 'infra/cloudini/**'
+            - 'scripts/test-cloudini-ros.py'
+            - 'infra/docker/ros_entrypoint.sh'
+            - 'infra/docker/Dockerfile.ros'
             - 'infra/ros/**'
             - '.github/workflows/test.yml'
 
@@ -104,7 +120,7 @@ jobs:
       if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.frontend == 'true' || needs.changes.outputs.e2e == 'true'
       uses: actions/setup-node@v4
       with:
-        node-version: '20'
+        node-version: '22'
         cache: 'npm'
 
     - name: Install dependencies
@@ -133,6 +149,21 @@ jobs:
         echo "status=${status}" >> "$GITHUB_OUTPUT"
         .github/scripts/write-log-summary.sh "Build" "${status}" build-output.log "npm run build" 160
         exit "${status}"
+
+    - name: Test enterprise authentication gateway
+      if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.frontend == 'true' || needs.changes.outputs.e2e == 'true'
+      run: |
+        npm run test:notices
+        npm run build:enterprise
+        npm run test:enterprise
+
+    - name: Test loopback mesh proxy transport
+      if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.frontend == 'true' || needs.changes.outputs.e2e == 'true'
+      run: npm run test:mesh-proxy
+
+    - name: Test camera acquisition metadata producer
+      if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.frontend == 'true' || needs.changes.outputs.e2e == 'true'
+      run: npm run test:camera-metadata
 
     - name: Run tests with coverage
       if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.frontend == 'true' || needs.changes.outputs.e2e == 'true'
@@ -278,7 +309,8 @@ jobs:
 
   e2e:
     name: E2E Tests
-    runs-on: ubuntu-latest
+    # Playwright 1.57 supports Ubuntu 24.04; ubuntu-latest now rolls onto 26.04.
+    runs-on: ubuntu-24.04
     needs: [changes, test]  # Run after unit tests pass
 
     steps:
@@ -315,7 +347,7 @@ jobs:
       if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.frontend == 'true' || needs.changes.outputs.e2e == 'true'
       uses: actions/setup-node@v4
       with:
-        node-version: '20'
+        node-version: '22'
         cache: 'npm'
 
     - name: Install dependencies
@@ -324,7 +356,7 @@ jobs:
 
     - name: Install Playwright browsers
       if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.frontend == 'true' || needs.changes.outputs.e2e == 'true'
-      run: npx playwright install --with-deps chromium firefox
+      run: npx playwright install --with-deps chromium firefox webkit
 
     - name: Install external panel test artifacts
       if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.frontend == 'true' || needs.changes.outputs.e2e == 'true'
@@ -343,6 +375,16 @@ jobs:
         echo "status=${status}" >> "$GITHUB_OUTPUT"
         .github/scripts/write-log-summary.sh "E2E Tests" "${status}" playwright-output.log "xvfb-run --auto-servernum npm run e2e" 260
         exit 0
+
+    - name: Test compressed point clouds in web and packaged desktop
+      if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.frontend == 'true' || needs.changes.outputs.e2e == 'true'
+      run: npm run test:cloudini
+
+    - name: Test enterprise login in web and packaged-app mode
+      if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.frontend == 'true' || needs.changes.outputs.e2e == 'true'
+      env:
+        LIBGL_ALWAYS_SOFTWARE: '1'
+      run: xvfb-run --auto-servernum npm run e2e:enterprise
 
     - name: Upload Playwright report
       uses: actions/upload-artifact@v4
@@ -392,3 +434,28 @@ jobs:
       run: |
         python -m pip install pyyaml tornado
         python -m unittest discover -s infra/ros -v
+
+    - name: Verify the pinned worker codec matches its source
+      if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.ros == 'true'
+      run: |
+        sh scripts/build-cloudini.sh
+        git diff --exit-code -- src/utils/cloudini/vendor
+
+    - name: Build and test point-cloud compression through the ROS gateway
+      if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.ros == 'true'
+      run: |
+        docker build -f infra/docker/Dockerfile.ros -t roboboy-cloudini:ci .
+        docker run --rm --network none --entrypoint bash \
+          -e ROS_DOMAIN_ID=157 -e ROS_LOCALHOST_ONLY=1 \
+          -e RMW_IMPLEMENTATION=rmw_fastrtps_cpp -e FASTDDS_BUILTIN_TRANSPORTS=UDPv4 \
+          -v "$PWD/scripts/test-cloudini-ros.py:/test.py:ro" roboboy-cloudini:ci \
+          -c 'source /opt/ros/jazzy/setup.bash && python3 /test.py'
+
+    - name: Test native and readable camera stream responses
+      if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.ros == 'true'
+      run: |
+        docker run --rm --network none --entrypoint bash \
+          -e ROS_DOMAIN_ID=158 -e ROS_LOCALHOST_ONLY=1 \
+          -e RMW_IMPLEMENTATION=rmw_fastrtps_cpp -e FASTDDS_BUILTIN_TRANSPORTS=UDPv4 \
+          -v "$PWD/scripts/test-camera-streamer.py:/test.py:ro" roboboy-cloudini:ci \
+          -c 'source /opt/ros/jazzy/setup.bash && source /opt/roboboy-video/share/web_video_server/local_setup.bash && python3 /test.py'

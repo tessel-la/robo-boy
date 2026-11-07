@@ -339,6 +339,14 @@ const JoystickComponent: React.FC<JoystickComponentProps> = ({
     publishMessage([0, 0]);
   }, [publishMessage, publishThrottled, stopHeldPublishing, isEditing]);
 
+  useEffect(() => {
+    const stopHiddenControl = () => { if (heldValuesRef.current) handleStop(); };
+    const visibilityChanged = () => { if (document.visibilityState === 'hidden') stopHiddenControl(); };
+    document.addEventListener('visibilitychange', visibilityChanged);
+    window.addEventListener('pagehide', stopHiddenControl);
+    return () => { document.removeEventListener('visibilitychange', visibilityChanged); window.removeEventListener('pagehide', stopHiddenControl); };
+  }, [handleStop]);
+
   // Container style that centers the joystick and maintains aspect ratio
   const containerStyle: React.CSSProperties = {
     width: '100%',

@@ -23,6 +23,20 @@ describe('useFloatingFrame', () => {
     const { result } = renderHook(() => useFloatingFrame(false));
     expect(result.current.frame).toBeNull();
   });
+  it('disposes active pointer listeners without persisting a stale gesture after unmount', () => {
+    const { result, unmount } = renderHook(() => useFloatingFrame(true));
+    const handle = document.createElement('div');
+    act(() =>
+      result.current.startGesture(
+        { ...pointer('pointerdown', 900, 100), currentTarget: handle, preventDefault() {} } as never,
+        'nw'
+      )
+    );
+    unmount();
+    handle.dispatchEvent(pointer('pointermove', 500, 200));
+    handle.dispatchEvent(pointer('pointerup', 500, 200));
+    expect(localStorage.getItem('robo-boy-assistant-frame-v1')).toBeNull();
+  });
 
   it('moves with a header drag, resizes from an edge, clamps to the viewport, and remembers the frame', () => {
     const { result } = renderHook(() => useFloatingFrame(true));
@@ -30,26 +44,47 @@ describe('useFloatingFrame', () => {
     const start = result.current.frame!;
 
     act(() => {
-      result.current.startGesture({ ...pointer('pointerdown', 900, 100), currentTarget: handle, preventDefault() {} } as never, 'move');
+      result.current.startGesture(
+        { ...pointer('pointerdown', 900, 100), currentTarget: handle, preventDefault() {} } as never,
+        'move'
+      );
     });
-    act(() => { handle.dispatchEvent(pointer('pointermove', 700, 80)); });
+    act(() => {
+      handle.dispatchEvent(pointer('pointermove', 700, 80));
+    });
     expect(result.current.frame).toMatchObject({ left: start.left - 200, top: start.top - 20 });
-    act(() => { handle.dispatchEvent(pointer('pointerup', 700, 80)); });
+    act(() => {
+      handle.dispatchEvent(pointer('pointerup', 700, 80));
+    });
 
     act(() => {
-      result.current.startGesture({ ...pointer('pointerdown', 700, 400), currentTarget: handle, preventDefault() {} } as never, 'w');
+      result.current.startGesture(
+        { ...pointer('pointerdown', 700, 400), currentTarget: handle, preventDefault() {} } as never,
+        'w'
+      );
     });
-    act(() => { handle.dispatchEvent(pointer('pointermove', 600, 400)); });
+    act(() => {
+      handle.dispatchEvent(pointer('pointermove', 600, 400));
+    });
     expect(result.current.frame!.width).toBe(start.width + 100);
-    act(() => { handle.dispatchEvent(pointer('pointerup', 600, 400)); });
+    act(() => {
+      handle.dispatchEvent(pointer('pointerup', 600, 400));
+    });
 
     // Dragged far off screen, the frame stays within the viewport margin.
     act(() => {
-      result.current.startGesture({ ...pointer('pointerdown', 0, 0), currentTarget: handle, preventDefault() {} } as never, 'move');
+      result.current.startGesture(
+        { ...pointer('pointerdown', 0, 0), currentTarget: handle, preventDefault() {} } as never,
+        'move'
+      );
     });
-    act(() => { handle.dispatchEvent(pointer('pointermove', -5000, -5000)); });
+    act(() => {
+      handle.dispatchEvent(pointer('pointermove', -5000, -5000));
+    });
     expect(result.current.frame).toMatchObject({ left: 8, top: 0 });
-    act(() => { handle.dispatchEvent(pointer('pointerup', -5000, -5000)); });
+    act(() => {
+      handle.dispatchEvent(pointer('pointerup', -5000, -5000));
+    });
 
     const remembered = JSON.parse(localStorage.getItem('robo-boy-assistant-frame-v1')!);
     expect(remembered).toEqual(result.current.frame);

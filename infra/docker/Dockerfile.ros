@@ -3,6 +3,49 @@
 # Humble/Jammy) when overriding these build arguments.
 ARG ROS_DISTRO=jazzy
 ARG ROS_UBUNTU_CODENAME=noble
+
+# Keep upstream encoding/backpressure, adding acquisition metadata to each JPEG.
+# Build separately so compilers and codec headers do not enlarge the runtime image.
+FROM ros:${ROS_DISTRO}-ros-core-${ROS_UBUNTU_CODENAME} AS video-build
+ARG ROS_DISTRO
+SHELL ["/bin/bash", "-c"]
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      build-essential cmake pkg-config curl ca-certificates patch \
+      ros-${ROS_DISTRO}-web-video-server libboost-system-dev \
+      libavcodec-dev libavformat-dev libavutil-dev libswscale-dev \
+    && rm -rf /var/lib/apt/lists/*
+RUN curl -fLsS https://codeload.github.com/RobotWebTools/web_video_server/tar.gz/0b6944deef80db148b3e09d2901fbbf85b199c67 -o /tmp/video.tar.gz \
+    && echo 'fb679f78d4dc0edee5f31de5dd1c07bec1bc3f9a480630e5349d9d911bfb11f1  /tmp/video.tar.gz' | sha256sum -c - \
+    && mkdir /tmp/video && tar -xzf /tmp/video.tar.gz -C /tmp/video --strip-components=1
+COPY infra/ros/web_video_server_metadata.patch /tmp/video.patch
+COPY infra/ros/jpeg_ros_metadata.hpp /tmp/video/include/web_video_server/jpeg_ros_metadata.hpp
+RUN cd /tmp/video && patch -p1 < /tmp/video.patch \
+    && source /opt/ros/${ROS_DISTRO}/setup.bash \
+    && cmake -S . -B /tmp/video-build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF -DCMAKE_INSTALL_PREFIX=/opt/roboboy-video \
+    && cmake --build /tmp/video-build -j2 && cmake --install /tmp/video-build \
+    && install -Dm644 LICENSE /opt/roboboy-video/share/licenses/web_video_server/LICENSE
+
+# The read-only point-cloud relay links Cloudini directly. Compilers stay out of runtime.
+FROM ros:${ROS_DISTRO}-ros-core-${ROS_UBUNTU_CODENAME} AS cloudini-build
+ARG ROS_DISTRO
+SHELL ["/bin/bash", "-c"]
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      build-essential cmake curl ca-certificates libzstd-dev liblz4-dev \
+      ros-${ROS_DISTRO}-rclcpp ros-${ROS_DISTRO}-sensor-msgs ros-${ROS_DISTRO}-point-cloud-interfaces \
+    && rm -rf /var/lib/apt/lists/*
+COPY infra/cloudini/fetch.sh /fetch.sh
+RUN sh /fetch.sh /deps
+COPY infra/cloudini /src
+RUN source /opt/ros/${ROS_DISTRO}/setup.bash \
+    && cmake -S /src -B /build -DCMAKE_BUILD_TYPE=Release -DCLOUDINI_SOURCE_DIR=/deps/cloudini \
+      -DCLOUDINI_FORCE_VENDORED_DEPS=OFF -DCMAKE_INSTALL_PREFIX=/opt/roboboy-cloudini \
+    && cmake --build /build --target pointcloud-relay cloudini-test -j2 \
+    && ctest --test-dir /build --output-on-failure \
+    && cmake --install /build \
+    && install -Dm644 /deps/cloudini/LICENSE /opt/roboboy-cloudini/share/licenses/cloudini/LICENSE \
+    && head -28 /deps/cloudini/cloudini_lib/include/cloudini_lib/contrib/ankerl/unordered_dense.h \
+      > /opt/roboboy-cloudini/share/licenses/unordered_dense-LICENSE
+
 FROM ros:${ROS_DISTRO}-ros-core-${ROS_UBUNTU_CODENAME}
 
 ARG ROS_DISTRO
@@ -18,7 +61,9 @@ RUN echo 'APT::Acquire::Retries "3";' > /etc/apt/apt.conf.d/80-retries && \
       ros-${ROS_DISTRO}-rmw-cyclonedds-cpp \
       ros-${ROS_DISTRO}-rmw-fastrtps-cpp \
       ros-${ROS_DISTRO}-rosbridge-server \
-      python3-tornado \
+      ros-${ROS_DISTRO}-map-msgs \
+      ros-${ROS_DISTRO}-point-cloud-interfaces libzstd1 liblz4-1 \
+      python3-tornado patch \
       ros-${ROS_DISTRO}-image-transport \
       ros-${ROS_DISTRO}-cv-bridge \
       ros-${ROS_DISTRO}-control-msgs \
@@ -41,11 +86,25 @@ RUN source /opt/ros/${ROS_DISTRO}/setup.bash && \
     proxy_path="$(python3 -c 'import importlib.util; print(importlib.util.find_spec("rosapi.proxy").origin)')" && \
     sed -i 's|from ros2action.api import get_action_names_and_types|from rclpy.action import get_action_names_and_types|' "${proxy_path}"
 
+# Report proven pre-submission failures and rejected goals separately from uncertain
+# transport failures. Fail the build if upstream no longer matches this safety patch.
+COPY infra/ros/rosbridge_action_outcomes.patch /tmp/rosbridge_action_outcomes.patch
+COPY infra/ros/test_rosbridge_action_outcomes.py /tmp/rosbridge-tests/test_rosbridge_action_outcomes.py
+RUN source /opt/ros/${ROS_DISTRO}/setup.bash && \
+    rosbridge_path="$(python3 -c 'import importlib.util; print(next(iter(importlib.util.find_spec("rosbridge_library").submodule_search_locations)))')" && \
+    patch --batch --fuzz=0 -p1 -d "${rosbridge_path}" < /tmp/rosbridge_action_outcomes.patch && \
+    python3 -m unittest discover -s /tmp/rosbridge-tests -v && \
+    rm -rf /tmp/rosbridge-tests /tmp/rosbridge_action_outcomes.patch
+
 # Pre-create the conventional mount point for robot interface overlays.
 RUN mkdir -p /overlay_ws
 
+COPY --from=video-build /opt/roboboy-video /opt/roboboy-video
+COPY --from=cloudini-build /opt/roboboy-cloudini /opt/roboboy-cloudini
+
 WORKDIR /ros_ws
 
+COPY LICENSE /usr/share/doc/robo-boy/LICENSE
 COPY infra/docker/ros_entrypoint.sh /ros_ws/entrypoint.sh
 COPY infra/ros/behavior_tree_runner.py /ros_ws/behavior_tree_runner.py
 COPY infra/ros/bt_execution_details.py /ros_ws/bt_execution_details.py

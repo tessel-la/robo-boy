@@ -18,6 +18,10 @@
   --button-text-color: #ffffff; /* Text on primary button */
   --navbar-bg: #333333;
   --navbar-text: #ffffff;
+  --toolbar-control-height: 32px;
+  --toolbar-control-radius: 8px;
+  --toolbar-control-bg: color-mix(in srgb, var(--navbar-text) 12%, transparent);
+  --toolbar-control-hover-bg: color-mix(in srgb, var(--navbar-text) 18%, transparent);
   --success-color: #28a745; /* Green: healthy, regardless of the theme's accent */
   --error-color: #dc3545; /* Red */
   --error-hover-color: #c82333; /* Darker Red */

@@ -3,7 +3,7 @@ import { BUILT_IN_PANELS, createPanelCatalog } from './builtInPanels';
 import type { ResolvedPanelManifest } from './types';
 
 describe('panel catalog', () => {
-  it('replaces the legacy external Time Series catalog entry with the native panel', () => {
+  it('replaces the legacy external Plotting catalog entry with the native panel', () => {
     const catalog = createPanelCatalog([{ id: 'la.tessel.roboboy.timeseries' } as ResolvedPanelManifest]);
     expect(catalog.filter(panel => panel.id === 'timeSeries')).toHaveLength(1);
     expect(catalog.some(panel => panel.id === 'la.tessel.roboboy.timeseries')).toBe(false);

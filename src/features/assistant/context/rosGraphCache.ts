@@ -24,7 +24,7 @@ export interface RosGraphCache {
    * new generation — closing the reconnect-invalidation gap documented in the plan for this one
    * new caller, without touching `discoverAllROSResources` or any of its other existing callers.
    */
-  get(ros: Ros, generation: number, options?: { forceRefresh?: boolean }): Promise<RosGraphCacheEntry | null>;
+  get(ros: Ros, generation: number, options?: { forceRefresh?: boolean; signal?: AbortSignal }): Promise<RosGraphCacheEntry | null>;
   clear(): void;
 }
 
@@ -56,7 +56,7 @@ export const createRosGraphCache = (ttlMs: number = DEFAULT_TTL_MS): RosGraphCac
       return null;
     }
 
-    const promise = discoverAllROSResources(ros);
+    const promise = discoverAllROSResources(ros, undefined, { catalogOnly: true });
     const thisRequest: InFlightRequest = { ros, generation, promise };
     inFlight = thisRequest;
     try {
@@ -78,5 +78,19 @@ export const createRosGraphCache = (ttlMs: number = DEFAULT_TTL_MS): RosGraphCac
     inFlight = null;
   };
 
-  return { get, clear };
+  // Discovery is shared by the context browser and concurrent turns. Cancelling one reader must
+  // release it promptly without cancelling the others or duplicating rosapi discovery.
+  const cancellableGet: RosGraphCache['get'] = (ros, generation, options) => {
+    const signal = options?.signal;
+    if (signal?.aborted) return Promise.reject(new DOMException('ROS discovery cancelled.', 'AbortError'));
+    const pending = get(ros, generation, options);
+    if (!signal) return pending;
+    return new Promise((resolve, reject) => {
+      const cancel = () => { signal.removeEventListener('abort', cancel); reject(new DOMException('ROS discovery cancelled.', 'AbortError')); };
+      signal.addEventListener('abort', cancel, { once: true });
+      if (signal.aborted) cancel();
+      pending.then(value => { signal.removeEventListener('abort', cancel); resolve(value); }, cause => { signal.removeEventListener('abort', cancel); reject(cause); });
+    });
+  };
+  return { get: cancellableGet, clear };
 };

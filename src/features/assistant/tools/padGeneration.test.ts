@@ -37,16 +37,22 @@ describe('normalizePadLayout', () => {
     });
   });
 
-  it('normalizes service and action bindings', () => {
+  it('moves supplied primary service and action payloads into executable button events', () => {
     const layout = normalizePadLayout({
       name: 'Service Pad',
       components: [
-        { id: 'a', type: 'button', position: {}, action: { name: '/set_bool', type: 'service', messageType: 'std_srvs/srv/SetBool' } },
-        { id: 'b', type: 'button', position: {}, action: { name: '/nav', type: 'action', messageType: 'nav2_msgs/action/NavigateToPose' } },
+        { id: 'a', type: 'button', position: {}, action: { name: '/set_bool', type: 'service', messageType: 'std_srvs/srv/SetBool', request: { data: true } } },
+        { id: 'b', type: 'button', position: {}, action: { name: '/nav', type: 'action', messageType: 'nav2_msgs/action/NavigateToPose' }, config: { goal: { pose: { header: { frame_id: 'map' } } } } },
       ],
     });
-    expect(layout.components[0].action).toEqual({ name: '/set_bool', type: 'service', messageType: 'std_srvs/srv/SetBool' });
-    expect(layout.components[1].action).toEqual({ name: '/nav', type: 'action', messageType: 'nav2_msgs/action/NavigateToPose' });
+    expect(layout.components[0].action).toBeUndefined();
+    expect(layout.components[0].eventOperations?.press).toEqual({ kind: 'service', name: '/set_bool', messageType: 'std_srvs/srv/SetBool', payload: { data: true } });
+    expect(layout.components[1].eventOperations?.press?.payload).toEqual({ pose: { header: { frame_id: 'map' } } });
+  });
+
+  it('rejects a Home action with no configured trajectory instead of silently producing a dead button', () => {
+    expect(() => normalizePadLayout({ name: 'Pad', components: [{ type: 'button', action: { name: '/home', type: 'action', messageType: 'control_msgs/action/FollowJointTrajectory' }, config: {} }] })).toThrow(/no payload/);
+    expect(() => normalizePadLayout({ name: 'Pad', components: [{ type: 'button', eventOperations: { press: { kind: 'action', name: '/home', messageType: 'control_msgs/action/FollowJointTrajectory', payload: {} } } }] })).toThrow(/empty goal/);
   });
 
   it('normalizes eventOperations, inferring the operation kind when omitted', () => {
@@ -58,7 +64,7 @@ describe('normalizePadLayout', () => {
           type: 'button',
           position: {},
           eventOperations: {
-            press: { serviceName: '/estop', messageType: 'std_srvs/srv/Trigger' },
+            press: { serviceName: '/estop', messageType: 'std_srvs/srv/Trigger', payload: {} },
             release: { kind: 'topic', name: '/cmd', messageType: 'std_msgs/msg/Bool', payload: { data: false } },
             bogus: { nothing: true },
           },
@@ -66,7 +72,7 @@ describe('normalizePadLayout', () => {
       ],
     });
     const operations = layout.components[0].eventOperations!;
-    expect(operations.press).toEqual({ kind: 'service', name: '/estop', messageType: 'std_srvs/srv/Trigger' });
+    expect(operations.press).toEqual({ kind: 'service', name: '/estop', messageType: 'std_srvs/srv/Trigger', payload: {} });
     expect(operations.release).toEqual({ kind: 'topic', name: '/cmd', messageType: 'std_msgs/msg/Bool', payload: { data: false } });
   });
 

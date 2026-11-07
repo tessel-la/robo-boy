@@ -1,6 +1,9 @@
 export interface TimeseriesSample {
   time: number;
   value: number;
+  /** Tile-local message identity and connection epoch; never persisted. */
+  event?: number;
+  epoch?: number;
 }
 
 export interface TimeseriesRange {

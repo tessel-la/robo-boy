@@ -23,6 +23,20 @@ const stream = (...events: unknown[]) =>
   new Response(events.map(event => `data: ${JSON.stringify(event)}\n\n`).join(''));
 
 describe('completed Responses stream', () => {
+  it('streams reasoning summaries without including them in the answer', async () => {
+    const onThinking = vi.fn();
+    const result = await completedResponse(
+      stream(
+        { type: 'response.reasoning_summary_text.delta', delta: 'Checking robot data.' },
+        { type: 'response.output_text.delta', delta: '{"kind":"explanation","message":"Done"}' },
+        { type: 'response.completed', response: { status: 'completed' } }
+      ),
+      new AbortController().signal,
+      onThinking
+    );
+    expect(onThinking).toHaveBeenCalledWith('Checking robot data.');
+    expect(result).not.toContain('Checking robot data.');
+  });
   it('requires completion and preserves UTF-8 text split across bytes', async () => {
     const bytes = new TextEncoder().encode(
       'data: {"type":"response.output_text.delta","delta":"hé"}\n\ndata: {"type":"response.completed","response":{"status":"completed"}}\n\n'
@@ -144,14 +158,22 @@ describe('ChatGPT account lifecycle', () => {
         if (url.endsWith('/models'))
           return response({
             models: [
-              { slug: 'model', display_name: 'Model', visibility: 'list' },
+              { slug: 'model', display_name: 'Model', visibility: 'list', context_window: 131072 },
               { slug: 'hidden', visibility: 'hide' },
             ],
           });
         if (url.endsWith('/responses')) {
           lastRequest = JSON.parse(String(init?.body));
           return stream(
-            { type: 'response.output_text.delta', delta: '{"kind":"explanation","message":"ok"}' },
+            { type: 'response.created', response: { id: 'fixture', created_at: 0, model: 'model' } },
+            { type: 'response.output_item.added', output_index: 0, item: { type: 'message', id: 'answer' } },
+            {
+              type: 'response.output_text.delta',
+              item_id: 'answer',
+              output_index: 0,
+              delta: '{"kind":"explanation","message":"ok"}',
+            },
+            { type: 'response.output_item.done', output_index: 0, item: { type: 'message', id: 'answer' } },
             { type: 'response.completed', response: { status: 'completed' } }
           );
         }
@@ -165,10 +187,27 @@ describe('ChatGPT account lifecycle', () => {
     await rm(directory, { recursive: true, force: true });
   });
 
+  it('uses verified account model metadata rather than the small unknown-model fallback for native context', async () => {
+    await runtime.signIn(undefined, new AbortController().signal);
+    await runtime.getState();
+    const result = await runtime.send(
+      {
+        provider: 'openai',
+        model: 'model',
+        systemPrompt: 'observations '.repeat(10_000),
+        messages: [{ role: 'user', content: 'Summarize current state.' }],
+      },
+      new AbortController().signal,
+      undefined,
+      { definitions: [], execute: vi.fn(async () => ({ ok: true })) }
+    );
+    expect(result).toContain('explanation');
+    expect(lastRequest).toMatchObject({ model: 'model', store: false });
+  });
   it('signs in, encrypts credentials, refreshes once across concurrent reads, and uses Responses', async () => {
     await runtime.signIn(undefined, new AbortController().signal);
     const [state] = await Promise.all([runtime.getState(), runtime.getState()]);
-    expect(state.models).toEqual([{ id: 'model', label: 'Model' }]);
+    expect(state.models).toEqual([{ id: 'model', label: 'Model', contextWindowTokens: 131072 }]);
     expect(refreshes).toBe(1);
     expect(JSON.stringify(state)).not.toContain('secret-');
     expect((await readFile(join(directory, 'accounts.bin'))).toString()).not.toContain('secret-access');
@@ -219,12 +258,12 @@ describe('ChatGPT account lifecycle', () => {
       },
       new AbortController().signal
     );
-    expect(lastRequest.reasoning).toEqual({ effort: 'high' });
+    expect(lastRequest.reasoning).toEqual({ effort: 'high', summary: 'auto' });
     await runtime.send(
       { provider: 'openai', model: 'gpt-6.1-sol', systemPrompt: '', messages: [{ role: 'user', content: 'hello' }] },
       new AbortController().signal
     );
-    expect(lastRequest).not.toHaveProperty('reasoning');
+    expect(lastRequest.reasoning).toEqual({ summary: 'auto' });
   });
   it('does not treat identity-only consent as plan access', async () => {
     grantedScope = 'openid email';

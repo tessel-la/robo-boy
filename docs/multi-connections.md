@@ -3,6 +3,13 @@
 This document defines how Robo-Boy owns multiple live ROS connections. The connection layer is the
 foundation; the tab bar is only a view over it.
 
+The landing screen offers **Quick Connect** for its suggested target and **Choose another robot**
+for a host or IP address. The form shows one address field; expand **Connection ports** to
+change the ROS, video or mesh service ports. ROS domain IDs are configured on the robot,
+not in the connection form. Once connected, use **Open another connection** in the
+connection dropdown. The switcher shows the number of open connections and lets you
+return to an existing workspace without closing it. The same actions work with reduced motion.
+
 ## Existing architecture
 
 Before multi-connection support, `App` held one `ConnectionParams` value and mounted one

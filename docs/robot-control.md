@@ -58,6 +58,10 @@ nonfinite timeouts fail startup instead of silently changing policy.
 
 ## Why enforcement lives on the robot host
 
+An optional [enterprise authentication gateway](enterprise.md) can require employee sign-in
+before connections reach this control gateway. Access sessions and robot ownership leases are
+separate: signing in never grants control automatically.
+
 Previously, `useRos` created a separate ROSLIB connection for every session. Pads published directly; local behavior trees and external panels called services and sent action goals on that connection. rosbridge shared publishers between clients and ran services and action goals in separate threads. There was no application-wide ownership check. A local rosapi queue only serialized discovery within one browser; persistent-tree rejection only prevented two persistent trees, not pad commands or local trees from overlapping them.
 
 The ROS stack now runs `infra/ros/control_gateway.py` on the existing public rosbridge port (default **9090**). Caddy's `/websocket`, direct web connections, Tauri, and Electron all reach that gateway. The actual rosbridge listens only on **127.0.0.1:9092**, with the port optionally selected through `ROSBRIDGE_INTERNAL_PORT`. Each external connection has a private upstream connection, preserving ROSLIB subscriptions, service responses, action IDs, binary telemetry, and cleanup. A separate private subscription monitors the persistent runner.
@@ -172,8 +176,8 @@ Run one policy publisher in the robot's trusted ROS domain. The former per-reque
 `requests`, `decision`, and `command` topics are no longer used; operators only set the
 parameter. The public gateway reads policy state through its private rosbridge connection.
 
-The public WebSocket gateway permits reads of the policy namespace but rejects writes,
-advertisements, services, actions, and rosapi parameter writes in it, including from the owner.
+The public WebSocket gateway permits subscriptions and verified standard parameter reads in the policy namespace,
+but rejects writes, advertisements, mutating services, actions, and rosapi parameter writes in it, including from the owner.
 Robo-Boy shows whether the switch is enabled, disabled, or unavailable. It provides no toggle
 or bypass. Native DDS peers remain trusted; this policy is not authentication or an emergency
 stop, and robot-native watchdogs and stopping tools remain required. For a standalone gateway,
@@ -203,6 +207,7 @@ The configured inactivity timeout is **not a guaranteed minimum control duration
 | No outstanding work | Recover automatically. Topic publishers first pass a same-socket rosapi response barrier so buffered commands leave rosbridge before handover. |
 | Service already running | Services cannot be cancelled generically. Keep the reservation until a successful transport response confirms completion. |
 | Action already running | Feedback and cancellation acknowledgements do not release it. Wait for terminal ROS goal status 4, 5, or 6. Retry cancellation because the goal may still be registering. |
+| Action never started | The private rosbridge confirms a pre-submission failure or explicit goal rejection. Clear that request and its recovery journal automatically once no other work remains. |
 | Action/service reports an uncertain transport failure | Keep its reservation. rosbridge's generic failure response, including its service timeout, does not establish that the robot stopped. |
 | Runner status missing or more than 10 seconds old | Block acquisition and new mutations; continue subscriptions and discovery. |
 | Upstream lost with pending work, runner restarts with work, or gateway restarts with an unconfirmed-work journal | Fail closed; require operator recovery after verifying the robot is stopped. |
@@ -210,6 +215,10 @@ The configured inactivity timeout is **not a guaranteed minimum control duration
 Read-only forwarding failures retire the affected connection without fencing another session's control. Losing the owner's transport still releases its lease. A failed command write, lost transport with outstanding work, or a recovery-journal failure retains the robot-wide recovery fence because completion is uncertain. Action-cancellation write failures remain fenced and do not escape the recovery loop.
 
 A disconnected session's upstream socket stays alive while a tracked request is outstanding. The gateway continues consuming terminal results even when the viewer is gone or slow. This allows ordinary disconnect recovery without discarding the only completion notification. Mutating service/action results are requested without compression or fragmentation so the gateway can inspect them. Request IDs cannot be reused within a connection.
+
+Release, disconnect, and heartbeat expiry clear the owner and token immediately. Outstanding work reserves the endpoint independently of session ownership. A disconnected session is no longer shown as the controller while that reservation drains; a persistent tree can still be adopted through **Manage running tree**.
+
+The ROS image patches rosbridge to add `roboboyWorkOutcome: "not_started"` to failed action results only when no goal was submitted or the server explicitly rejected it. Missing action packages, invalid goal fields, and unavailable action servers therefore do not leave permanent reservations. The gateway checks the original request, action name, failed result, and unknown status before accepting this private response. Generic failures after submission and service timeouts retain the safety fence. An older, unpatched rosbridge remains conservative and cannot clear these failed-action reservations automatically. Rebuild the ROS stack to install both changes; the image build fails if the patch no longer matches upstream.
 
 ### Persistent behavior trees
 
@@ -237,12 +246,33 @@ The `control-journal` named volume survives container replacement. A marker is f
 - Use the `Ros` instance owned by `useRos`, or the existing permission-checked panel SDK operations. `ControlSession` attaches each lease token and wraps outgoing ROSLIB operations in `roboboy_frame`. Panels should not create an independent command socket, acquire control automatically, queue rejected writes, or store tokens. Subscriptions continue independently of ownership.
 - Use absolute canonical ROS names. Relative, private, duplicate-slash, and deprecated `#` action aliases are rejected so reserved names have one meaning.
 - Use ROS 2 `send_action_goal` / `cancel_action_goal` for actions. Direct calls to `/_action/` services are rejected because a send-goal service response does not establish action completion.
-- Only a positive allowlist of rosapi discovery/read services, plus the deployment's [observer services](#observer-services), is available to observers. `set_param`, `delete_param`, and arbitrary robot services require ownership when session locking is enabled. The read-only inspection request topic and persistent-tree `status` requests remain available to observers. Recorder status and folder listings remain readable; start, stop, pause, resume, and split require ownership when session locking is enabled.
+- Observers can call the positive allowlist of rosapi discovery/read services, verified native parameter readers, and the deployment's [observer services](#observer-services). Native readers must use the standard node service suffix and matching `rcl_interfaces/srv` type: `list_parameters`, `get_parameters`, `describe_parameters`, or `get_parameter_types`. Because rosbridge ignores a caller's type hint, the gateway checks the actual type through private rosapi before forwarding each read (3-second verification timeout, at most 32 pending reads per connection). Type checks are not cached and fail closed. `set_param`, `delete_param`, native `set_parameters` / `set_parameters_atomically`, and arbitrary robot services require ownership when session locking is enabled. Native parameter writes cannot be made observer-safe by deployment patterns. The read-only inspection request topic and persistent-tree `status` requests remain available to observers. Recorder status and folder listings remain readable; start, stop, pause, resume, and split require ownership when session locking is enabled.
 - Publisher advertisement can occur while observing; actual publishes require ownership when session locking is enabled. Status-topic publishing, latched command publishers, service/action server advertisement, and unknown rosbridge operations are rejected. Cleanup, unsubscription, and unadvertisement remain allowed.
 - The reserved `/roboboy/control/status` topic is synthesized per connection by the gateway, including `enabled` (session locking, defaults to `true` when absent), `idleMs` (`0` means no idle expiry, defaults to `120000` when absent), `selfId`, owner label, state, readiness, pending count, adoption availability, and that connection's token when appropriate. It is never forwarded from ROS. `roboboy_control` supports `identify`, `status`, `acquire`, `heartbeat`, `release`, `transfer`, `adopt`, `request`, `cancel_request`, `approve`, and `deny`. Only the owner with a valid token can release, transfer, renew, approve, or deny. `cancel_request`, `approve`, and `deny` require the exact `requestId`. Version-1 status adds optional `requests` entries (`id`, `clientId`, `label`) for the owner and a connection-specific `request` result (`id`, `state`, `message`), with states `pending`, `accepted`, `granted`, `denied`, `expired`, or `cancelled`.
 - Topic publishing is fire-and-forget. A FIFO barrier proves admission to ROS, not physical stopping. Robot controllers **must provide their own command watchdog/deadman and emergency-stop behavior**; no generic UI can infer a safe neutral message for every topic. Integrations that start asynchronous work through opaque topic messages or services that return before physical completion need a tracked ROS action or the persistent runner. Do not use a quick service response as proof that a background actuator job finished.
 
 New panels can therefore use existing ROS operations without implementing a second lock. An integration exposing a new asynchronous command transport must add its lifetime tracking at the gateway/robot boundary before relying on handover safety.
+
+External panels built against SDK 2.3.0 can declare `permissions.ros.actions` and use
+`ros.sendActionGoal` / `ros.cancelActionGoal`. The broker uses this connection's `ControlSession`
+and the gateway's existing ROS 2 action protocol; it creates no separate socket or authority.
+Only terminal action status 4, 5 or 6 resolves the goal's result. Cancel acknowledgements do not
+resolve it. Cancellation is scoped to the originating tile and retries until completion, including
+after unmount. A transport failure rejects the panel promise with uncertain completion; gateway
+recovery fences remain in force. Reconnect never resends the goal.
+
+A failed result with status 0 clears panel tracking only when the matching action carries
+`roboboyWorkOutcome: "not_started"`. The gateway adds this marker to admission refusals only
+when the request ID has no pending work; patched rosbridge adds it to confirmed pre-submission
+failures and goal rejections. Unmarked failures retain cancellation tracking and count toward
+the connection's outstanding-goal limit until terminal status or transport closure.
+
+`permissions.ros.control: true` enables `ros.control.request()` from an explicit gesture in the
+focused, visible tile. Both sandbox and trusted broker check browser user activation. It shares
+the top bar's acquisition/owner-consent workflow, returns `owned` or `pending`, and exposes no
+token, release, adoption, forced transfer or policy toggle. The panel must not request control
+on load, queue rejected robot commands, or run a command merely because a pending consent was
+later granted. Browsers without user-activation support use the top bar.
 
 ## Deployment boundary and compatibility
 
@@ -270,7 +300,7 @@ This is **browser-origin filtering, not user authentication**. Tornado permits c
 
 ## Verification
 
-`python -m unittest discover -s infra/ros -v` runs policy tests, RobotWork lifetime tests, and real Tornado WebSocket tests with a scripted rosbridge. Tests cover simultaneous contenders, observers, token fencing, transfers, topic barriers, disconnects, expired/idle leases, terminal action results, uncertain service responses, runner restarts, persistent adoption, and durable recovery.
+`python -m unittest discover -s infra/ros -v` runs policy tests, RobotWork lifetime tests, and real Tornado WebSocket tests with a scripted rosbridge. Tests cover simultaneous contenders, observers, token fencing, transfers, topic barriers, disconnects, expired/idle leases, terminal action results, confirmed goals that never started, uncertain service responses, runner restarts, persistent adoption, and durable recovery. `test_rosbridge_action_outcomes.py` also exercises the patched handlers inside the ROS image; host-only runs skip those tests when ROS is unavailable.
 
 Frontend tests cover command envelopes, status updates, heartbeats, stale status, cleanup, and ownership UI. `e2e/robot-control.spec.ts` checks the observer/acquire/release workflow in the browser; existing feature tests use an established controller in the shared ROS mock. These tests do not certify a specific robot's stopping behavior; deployment acceptance should exercise that robot's real ROS actions and watchdog with two clients.
 
@@ -285,7 +315,8 @@ docker run --rm --network none --entrypoint /bin/bash \
 ```
 
 It checks two competing clients, observer rejection, topic forwarding and drain, actual action
-cancellation, service completion, and a persistent run surviving disconnect, being adopted, and stopped.
+cancellation, service completion, missing action types, invalid goal fields, unavailable action servers,
+rejected goals, and a persistent run surviving disconnect, being adopted, and stopped.
 
 Add `-e CONTROL_SMOKE_EXTERNAL_LOCK=true` to the same isolated smoke command to exercise the
 reference ROS policy node, its default-closed parameter, ordinary session acquisition, adoption,

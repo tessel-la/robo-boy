@@ -117,6 +117,21 @@ describe('sendAssistantChat', () => {
     expect(reply).toBe('answer');
   });
 
+  it.each(['openai-compatible', 'anthropic', 'gemini', 'ollama'] as const)('streams %s thinking separately from answer JSON', async provider => {
+    const payload = provider === 'anthropic'
+      ? [{ type: 'content_block_delta', delta: { type: 'thinking_delta', thinking: 'Checking evidence.' } }, { type: 'content_block_delta', delta: { type: 'text_delta', text: '{"kind":"explanation","message":"Done"}' } }]
+      : provider === 'gemini'
+        ? [{ candidates: [{ content: { parts: [{ thought: true, text: 'Checking evidence.' }, { text: '{"kind":"explanation","message":"Done"}' }] } }] }]
+        : provider === 'ollama'
+          ? [{ message: { thinking: 'Checking evidence.', content: '{"kind":"explanation","message":"Done"}' } }]
+          : [{ choices: [{ delta: { reasoning_content: 'Checking evidence.', content: '{"kind":"explanation","message":"Done"}' } }] }];
+    fetchMock.mockResolvedValue({ ok: true, body: provider === 'ollama' ? ndjsonBody(payload.map(item => JSON.stringify(item))) : sseBody(payload.map(item => `data: ${JSON.stringify(item)}\n\n`)) });
+    const onThinking = vi.fn();
+    const reply = await sendAssistantChat({ settings: settingsFor(provider), systemPrompt: '', messages: [{ role: 'user', content: 'hi' }], onThinking });
+    expect(reply).toBe('{"kind":"explanation","message":"Done"}');
+    expect(onThinking).toHaveBeenCalledWith('Checking evidence.');
+  });
+
   it('sends Ollama chat requests as NDJSON with a native system message', async () => {
     fetchMock.mockResolvedValue({ ok: true, body: ndjsonBody(['{"message":{"content":"Hi"}}', '{"message":{"content":"!"}}']) });
 

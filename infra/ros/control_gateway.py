@@ -34,6 +34,20 @@ READ_SERVICES = frozenset('/rosapi/' + name for name in (
 ))
 # Never widened by deployment patterns: parameter writes and action internals keep their own policy.
 NEVER_OBSERVER_SERVICES = frozenset(('/rosapi/set_param', '/rosapi/delete_param'))
+PARAMETER_READ_SERVICES = {
+    'list_parameters': 'rcl_interfaces/srv/ListParameters',
+    'get_parameters': 'rcl_interfaces/srv/GetParameters',
+    'describe_parameters': 'rcl_interfaces/srv/DescribeParameters',
+    'get_parameter_types': 'rcl_interfaces/srv/GetParameterTypes',
+}
+
+
+def parameter_read(message):
+    service = message.get('service', '')
+    return (isinstance(service, str) and canonical_name(service)
+            and service.count('/') >= 2 and '/_action/' not in service
+            and service.rsplit('/', 1)[-1] in PARAMETER_READ_SERVICES
+            and PARAMETER_READ_SERVICES.get(service.rsplit('/', 1)[-1]) == message.get('type'))
 
 
 def canonical_name(value):
@@ -282,6 +296,9 @@ class Authority:
         self.token = None
         self.reason = reason
         writers = [self.owner] if self.locking_enabled and self.owner else list(self.clients) if not self.locking_enabled else []
+        # Ownership ends now. Pending work retains its own reservation and transport;
+        # a disconnected session must not continue to appear as the controller.
+        self.owner = self.owner_label = None
         for writer in writers:
             if was_draining or not self.clients[writer]['wrote_topics']:
                 continue
@@ -410,13 +427,19 @@ class Authority:
         if message.get('op') == 'call_service':
             self.clients[client_id]['send'](dict(op='service_response', service=message.get('service'), result=False, values=reason, **common))
         elif message.get('op') == 'send_action_goal':
-            self.clients[client_id]['send'](dict(op='action_result', action=message.get('action'), result=False, status=0, values=reason, **common))
+            response = dict(op='action_result', action=message.get('action'), result=False, status=0, values=reason, **common)
+            # Refusing a new goal proves it never started. A reused ID or failure after
+            # admission must not make an already pending goal look safe to forget.
+            if isinstance(message.get('id'), str) and (client_id, message['id']) not in self.pending:
+                response['roboboyWorkOutcome'] = 'not_started'
+            self.clients[client_id]['send'](response)
         else:
             self.clients[client_id]['send'](dict(op='status', level='error', msg=reason, **common))
 
     def read_service(self, service):
         return service in READ_SERVICES or (
             service not in NEVER_OBSERVER_SERVICES and '/_action/' not in service
+            and service.rsplit('/', 1)[-1] not in ('set_parameters', 'set_parameters_atomically')
             and any(pattern.match(service) for pattern in self.observer_services))
 
     def receive(self, client_id, message):
@@ -451,7 +474,7 @@ class Authority:
             if op in ('call_service', 'cancel_action_goal', 'send_action_goal'):
                 if not canonical_name(message.get('service') if op == 'call_service' else message.get('action')):
                     raise ValueError('Services/actions must use absolute canonical ROS names.')
-                if message.get('service', message.get('action', '')).startswith(EXTERNAL_PREFIX):
+                if message.get('service', message.get('action', '')).startswith(EXTERNAL_PREFIX) and not (op == 'call_service' and parameter_read(message)):
                     raise ValueError('Robot-side control policy can only be changed through native ROS.')
                 if message.get('service') in ('/rosapi/set_param', '/rosapi/delete_param'):
                     args = message.get('args')
@@ -459,7 +482,7 @@ class Authority:
                     if isinstance(name, str) and name.lstrip('/').startswith(EXTERNAL_PREFIX.lstrip('/')):
                         raise ValueError('Robot-side control policy can only be changed through native ROS.')
             read = op in ('subscribe', 'unsubscribe', 'advertise', 'unadvertise', 'set_level')
-            read = read or (op == 'call_service' and self.read_service(message['service']))
+            read = read or (op == 'call_service' and (self.read_service(message['service']) or parameter_read(message)))
             read = read or (op == 'publish' and message.get('topic') == '/roboboy/inspection/request')
             command = topic_command(message) if op == 'publish' else {}
             read = read or (op == 'publish' and message.get('topic') == BT_COMMAND and command.get('protocolVersion') == 1 and command.get('command') == 'status')
@@ -549,6 +572,12 @@ class Authority:
         if pending:
             terminal = (pending['op'] == 'call_service' and message.get('op') == 'service_response' and message.get('result') is True)
             terminal = terminal or (pending['op'] == 'send_action_goal' and message.get('op') == 'action_result' and message.get('status') in (4, 5, 6))
+            # Only the private, patched rosbridge can attest that a goal never started.
+            # Generic status=0 failures may occur after submission and must stay fenced.
+            terminal = terminal or (pending['op'] == 'send_action_goal' and message.get('op') == 'action_result'
+                                    and message.get('action') == pending['action'] and message.get('result') is False
+                                    and type(message.get('status')) is int and message['status'] == 0
+                                    and message.get('roboboyWorkOutcome') == 'not_started')
             if terminal:
                 del self.pending[key]
                 self.clean_if_safe()
@@ -595,6 +624,8 @@ class GatewaySocket(tornado.websocket.WebSocketHandler):
         self.allowed_origins = allowed_origins
         self.client_id = None
         self.upstream_socket = None
+        self.parameter_reads = set()
+        self.type_probes = {}
 
     def check_origin(self, origin):
         # Origin restricts browser pages, not users: native clients can omit or
@@ -630,6 +661,42 @@ class GatewaySocket(tornado.websocket.WebSocketHandler):
             self.close(1011, 'Client write failed')
 
     def forward(self, message):
+        if message.get('op') == 'call_service' and parameter_read(message):
+            # rosbridge ignores the caller's `type` hint. Verify the ROS graph's actual
+            # type before treating an arbitrary node's named service as observer-safe.
+            if len(self.parameter_reads) >= 32:
+                self.authority.reject(self.client_id, message, 'Too many pending parameter reads.')
+                return
+            task = asyncio.create_task(self.forward_parameter_read(message))
+            self.parameter_reads.add(task)
+            task.add_done_callback(self.parameter_reads.discard)
+            return
+        self.write_upstream(message)
+
+    async def forward_parameter_read(self, message):
+        probe_id = 'private-parameter-type-' + str(uuid.uuid4())
+        future = asyncio.get_running_loop().create_future()
+        self.type_probes[probe_id] = future
+        try:
+            self.write_upstream(dict(op='call_service', id=probe_id, service='/rosapi/service_type',
+                                     type='rosapi_msgs/srv/ServiceType', args=dict(service=message['service'])))
+            response = await asyncio.wait_for(future, 3)
+            values = response.get('values')
+            if (response.get('result') is not True or not isinstance(values, dict)
+                    or values.get('type') != message['type']):
+                raise ValueError('The ROS host did not confirm the standard parameter service type.')
+            client = self.authority.clients.get(self.client_id)
+            if client and client['connected']:
+                self.write_upstream(message)
+        except asyncio.CancelledError:
+            pass
+        except Exception as error:
+            if self.authority.clients.get(self.client_id, {}).get('connected'):
+                self.authority.reject(self.client_id, message, str(error) or 'Parameter service type check timed out.')
+        finally:
+            self.type_probes.pop(probe_id, None)
+
+    def write_upstream(self, message):
         if not self.upstream_socket or not self.upstream_socket.protocol:
             raise RuntimeError('ROS bridge unavailable')
         future = self.upstream_socket.write_message(json.dumps(message))
@@ -648,6 +715,13 @@ class GatewaySocket(tornado.websocket.WebSocketHandler):
                     break
                 if isinstance(raw, str):
                     message = json.loads(raw)
+                    if message.get('op') == 'service_response' and isinstance(message.get('id'), str) and (
+                            message['id'] in self.type_probes or
+                            (message.get('service') == '/rosapi/service_type' and message['id'].startswith('private-parameter-type-'))):
+                        future = self.type_probes.get(message['id'])
+                        if future and not future.done():
+                            future.set_result(message)
+                        continue
                     self.authority.upstream(self.client_id, message)
                     # An observer may subscribe to authority status only locally.
                     if message.get('op') == 'publish' and message.get('topic') == STATUS_TOPIC:
@@ -672,6 +746,8 @@ class GatewaySocket(tornado.websocket.WebSocketHandler):
         self.authority.receive(self.client_id, message)
 
     def on_close(self):
+        for task in self.parameter_reads:
+            task.cancel()
         if self.client_id:
             self.authority.disconnect(self.client_id)
 
@@ -739,6 +815,7 @@ def observer_services(value):
 def parse_args(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--port', type=int, default=9090)
+    parser.add_argument('--address', default=os.environ.get('ROBOBOY_SERVICE_BIND_ADDRESS', '0.0.0.0'))
     parser.add_argument('--upstream-port', type=int, default=9092)
     parser.add_argument('--journal', default='/var/lib/roboboy-control/unconfirmed')
     parser.add_argument('--allowed-origins', default=os.environ.get('ROBOBOY_CONTROL_ALLOWED_ORIGINS', ''),
@@ -770,7 +847,7 @@ def main():
                           observer_services=args.observer_services)
     url = f'ws://127.0.0.1:{args.upstream_port}'
     allowed_origins = frozenset(origin.strip() for origin in args.allowed_origins.split(',') if origin.strip()) if args.allowed_origins.strip() else None
-    application(authority, url, allowed_origins).listen(args.port, address='0.0.0.0')
+    application(authority, url, allowed_origins).listen(args.port, address=args.address)
     tornado.ioloop.PeriodicCallback(authority.tick, 1000).start()
     tornado.ioloop.IOLoop.current().spawn_callback(monitor_runner, authority, url)
     tornado.ioloop.IOLoop.current().start()

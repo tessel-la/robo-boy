@@ -53,10 +53,10 @@ export function RobotControl({ ros }: { ros: Ros | null }) {
   const owned = Boolean(status?.owner === status?.selfId && status?.token);
   const description = !status
     ? 'Control gateway unavailable — commands are disabled. Update the ROS stack.'
-    : !status.ready
-      ? 'Waiting for behavior-tree runner status.'
-      : status.state === 'blocked' || status.state === 'draining'
-        ? status.reason
+    : status.state === 'blocked' || status.state === 'draining'
+      ? status.reason || 'Commands are blocked by the robot gateway.'
+      : !status.ready
+        ? 'Waiting for behavior-tree runner status.'
         : status.external?.enabled && !status.external.allowControl
           ? status.external.reason
           : !lockingEnabled
@@ -139,6 +139,9 @@ export function RobotControl({ ros }: { ros: Ros | null }) {
             {description}
           </p>
         </div>
+        {status && (!status.ready || blocked) && (
+          <p className="robot-control-request-message">You can view the workspace while commands are blocked.</p>
+        )}
         {status?.error && (
           <p className="robot-control-error" role="alert">
             {status.error}

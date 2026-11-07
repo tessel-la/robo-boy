@@ -1,0 +1,27 @@
+{
+    admin off
+    storage file_system /data/caddy_storage
+    log {
+        format filter {
+            wrap json
+            fields {
+                request>uri delete
+                request>headers delete
+            }
+        }
+    }
+}
+import /etc/caddy/Routes.caddy
+
+# Public TLS entry. No access logging: callback codes and native media URLs are credentials.
+{$ROBOBOY_ENTERPRISE_ORIGIN} {
+    header Referrer-Policy no-referrer
+    header X-Content-Type-Options nosniff
+    reverse_proxy 127.0.0.1:4180
+}
+
+# Only the authentication broker can reach these routes over the host's loopback interface.
+http://127.0.0.1:4181 {
+    bind 127.0.0.1
+    import roboboy_routes
+}

@@ -12,6 +12,7 @@ const streamMock = vi.hoisted(() => ({
 }));
 
 vi.mock('../utils/tfStream', () => ({
+  getTfHistory: vi.fn(() => undefined),
   subscribeToTfStream: vi.fn((_ros, listener) => {
     streamMock.listener = listener;
     listener({ transforms: {}, changedFrames: new Set() });
@@ -67,7 +68,7 @@ describe('useTfProvider', () => {
   it('initializes the provider and shared TF stream while connected', () => {
     const { result } = renderProvider();
 
-    expect(CustomTFProvider).toHaveBeenCalledWith('map', {});
+    expect(CustomTFProvider).toHaveBeenCalledWith('map', {}, undefined);
     expect(subscribeToTfStream).toHaveBeenCalledWith(ros, expect.any(Function));
     expect(result.current.customTFProvider.current).toBeTruthy();
     expect(result.current.isProviderReady).toBe(true);

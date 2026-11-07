@@ -1,200 +1,101 @@
-const fs = require('fs');
-const path = require('path');
+const fs = require('node:fs/promises');
+const path = require('node:path');
 const sharp = require('sharp');
 const pngToIco = require('png-to-ico');
 
-// Ensure directories exist
-const publicPath = path.join(__dirname, '../public');
-const imagesPath = path.join(publicPath, 'images');
+const root = path.resolve(__dirname, '..');
+const publicPath = path.join(root, 'public');
+const desktopPath = path.join(root, 'src-tauri/icons');
+const source = path.join(root, 'images/logo.png');
+// Apple's macOS template radius (185.4 of 824), used for every rounded icon so the corners match
+// the platforms that round icons themselves.
+const CORNER = 0.225;
 
-if (!fs.existsSync(publicPath)) {
-  fs.mkdirSync(publicPath, { recursive: true });
+async function syncAndroidIcons() {
+  // Tauri generates these icons once during init; builds otherwise keep stale template artwork.
+  const destination = path.join(root, 'src-tauri/gen/android/app/src/main/res');
+  await fs.cp(path.join(root, 'src-tauri/icons/android'), destination, { recursive: true });
 }
-if (!fs.existsSync(imagesPath)) {
-  fs.mkdirSync(imagesPath, { recursive: true });
+
+// The artwork with transparent rounded corners, optionally inset in a transparent canvas.
+async function rounded(size, inset = 0) {
+  const body = size - inset * 2;
+  const mask = `<svg xmlns="http://www.w3.org/2000/svg" width="${body}" height="${body}">
+    <rect width="${body}" height="${body}" rx="${body * CORNER}"/></svg>`;
+  const shape = await sharp(source)
+    .resize(body, body)
+    .composite([{ input: Buffer.from(mask), blend: 'dest-in' }])
+    .png()
+    .toBuffer();
+  return sharp(shape)
+    .extend({ top: inset, bottom: inset, left: inset, right: inset, background: { r: 0, g: 0, b: 0, alpha: 0 } })
+    .png()
+    .toBuffer();
 }
 
-// Source logo path
-const logoPath = path.join(__dirname, '../images/logo.PNG');
+// An .icns made of PNG entries, which macOS has read since 10.7.
+async function icns() {
+  const types = { icp4: 16, icp5: 32, ic11: 32, ic12: 64, ic07: 128, ic13: 256, ic08: 256, ic14: 512, ic09: 512, ic10: 1024 };
+  const entries = await Promise.all(
+    Object.entries(types).map(async ([type, size]) => {
+      // macOS draws app icons as given; its template insets the rounded body 100 units in 1024.
+      const png = await rounded(size, Math.round((size * 100) / 1024));
+      const header = Buffer.alloc(8);
+      header.write(type, 0, 'ascii');
+      header.writeUInt32BE(png.length + 8, 4);
+      return Buffer.concat([header, png]);
+    })
+  );
+  const header = Buffer.alloc(8);
+  header.write('icns', 0, 'ascii');
+  header.writeUInt32BE(8 + entries.reduce((total, entry) => total + entry.length, 0), 4);
+  return Buffer.concat([header, ...entries]);
+}
 
-// Define comprehensive icon sizes for all platforms and devices
-const sizes = [
-  // Favicons
-  { width: 16, height: 16, name: 'favicon-16x16.png' },
-  { width: 32, height: 32, name: 'favicon-32x32.png' },
-  { width: 48, height: 48, name: 'favicon-48x48.png' },
-  { width: 64, height: 64, name: 'favicon-64x64.png' },
-
-  // Android Chrome icons
-  { width: 36, height: 36, name: 'icon-36x36.png' },
-  { width: 48, height: 48, name: 'icon-48x48.png' },
-  { width: 72, height: 72, name: 'icon-72x72.png' },
-  { width: 96, height: 96, name: 'icon-96x96.png' },
-  { width: 128, height: 128, name: 'icon-128x128.png' },
-  { width: 144, height: 144, name: 'icon-144x144.png' },
-  { width: 152, height: 152, name: 'icon-152x152.png' },
-  { width: 192, height: 192, name: 'icon-192x192.png' },
-  { width: 384, height: 384, name: 'icon-384x384.png' },
-  { width: 512, height: 512, name: 'icon-512x512.png' },
-
-  // PWA standard sizes
-  { width: 192, height: 192, name: 'pwa-192x192.png' },
-  { width: 512, height: 512, name: 'pwa-512x512.png' },
-
-  // Apple iOS icons (comprehensive list for all devices including iPhone 12 mini)
-  { width: 57, height: 57, name: 'apple-icon-57x57.png' },
-  { width: 60, height: 60, name: 'apple-icon-60x60.png' },
-  { width: 72, height: 72, name: 'apple-icon-72x72.png' },
-  { width: 76, height: 76, name: 'apple-icon-76x76.png' },
-  { width: 114, height: 114, name: 'apple-icon-114x114.png' },
-  { width: 120, height: 120, name: 'apple-icon-120x120.png' },
-  { width: 144, height: 144, name: 'apple-icon-144x144.png' },
-  { width: 152, height: 152, name: 'apple-icon-152x152.png' },
-  { width: 167, height: 167, name: 'apple-icon-167x167.png' },
-  { width: 180, height: 180, name: 'apple-touch-icon.png' },
-  { width: 180, height: 180, name: 'apple-icon-180x180.png' },
-
-  // iOS-specific duplicates for compatibility
-  { width: 180, height: 180, name: 'ios-apple-touch-icon.png' },
-  { width: 57, height: 57, name: 'ios-mini-touch-icon.png' },
-
-  // Windows tiles
-  { width: 70, height: 70, name: 'ms-icon-70x70.png' },
-  { width: 150, height: 150, name: 'ms-icon-150x150.png' },
-  { width: 310, height: 310, name: 'ms-icon-310x310.png' },
-
-  // Maskable icons (with proper safe zone - 20% padding for better compatibility)
-  { width: 192, height: 192, name: 'maskable-icon-192x192.png', maskable: true },
-  { width: 512, height: 512, name: 'maskable-icon-512x512.png', maskable: true },
-
-  // Additional large sizes for high-DPI displays
-  { width: 256, height: 256, name: 'icon-256x256.png' },
-  { width: 1024, height: 1024, name: 'icon-1024x1024.png' },
-
-  // Apple launch/splash screen icons (square versions)
-  { width: 1024, height: 1024, name: 'apple-launch-icon-1024x1024.png' },
-  { width: 2048, height: 2048, name: 'apple-launch-icon-2048x2048.png' }
-];
-
-// Generate icons in different sizes
 async function generateIcons() {
-  try {
-    console.log('Starting icon generation...');
-
-    // Load the source image and get its metadata
-    const image = sharp(logoPath);
-    const metadata = await image.metadata();
-    console.log(`Source image: ${metadata.width}x${metadata.height}, format: ${metadata.format}`);
-
-    // Generate each size
-    for (const size of sizes) {
-      const outputPath = path.join(imagesPath, size.name);
-      let processedImage = image.clone();
-
-      // If it's a maskable icon, add padding for safe zone
-      if (size.maskable) {
-        // Use 20% padding (10% on each side) for better safe zone compliance
-        const paddingPercent = 0.1;
-        const actualSize = Math.floor(size.width * (1 - paddingPercent * 2));
-        const padding = Math.floor(size.width * paddingPercent);
-
-        processedImage = image.clone()
-          .resize(actualSize, actualSize, {
-            fit: 'contain',
-            background: { r: 0, g: 0, b: 0, alpha: 0 }
-          })
-          .extend({
-            top: padding,
-            bottom: padding,
-            left: padding,
-            right: padding,
-            background: { r: 0, g: 0, b: 0, alpha: 0 } // Transparent padding
-          });
-      } else {
-        // Regular icon - resize with contain to preserve aspect ratio
-        processedImage = processedImage.resize(size.width, size.height, {
-          fit: 'contain',
-          background: { r: 0, g: 0, b: 0, alpha: 0 } // Transparent background
-        });
-      }
-
-      await processedImage.png().toFile(outputPath);
-      console.log(`Generated ${size.name} (${size.width}x${size.height})`);
-    }
-
-    // Generate favicon.ico using png-to-ico
-    // First generate a 256x256 PNG for the ico file
-    console.log('Generating favicon.ico...');
-    const faviconPngPath = path.join(publicPath, 'favicon-256.png');
-    await sharp(logoPath)
-      .resize(256, 256, {
-        fit: 'contain',
-        background: { r: 0, g: 0, b: 0, alpha: 0 }
-      })
-      .png()
-      .toFile(faviconPngPath);
-
-    const icoBuffer = await pngToIco(faviconPngPath);
-    fs.writeFileSync(path.join(publicPath, 'favicon.ico'), icoBuffer);
-    fs.unlinkSync(faviconPngPath); // Clean up temp file
-    console.log('Generated favicon.ico');
-
-    // Copy the original logo to public/images as logo.png
-    await sharp(logoPath)
-      .png()
-      .toFile(path.join(imagesPath, 'logo.png'));
-    console.log('Copied original logo to public/images/logo.png');
-
-    // Generate Apple launch screen backgrounds (if needed)
-    const launchScreenSizes = [
-      { width: 1125, height: 2436, name: 'apple-launch-1125x2436.png' },
-      { width: 1242, height: 2688, name: 'apple-launch-1242x2688.png' },
-      { width: 2732, height: 2732, name: 'apple-launch-2732x2732.png' }
-    ];
-
-    console.log('Generating Apple launch screens...');
-    for (const launch of launchScreenSizes) {
-      const outputPath = path.join(imagesPath, launch.name);
-
-      // Create a centered logo on a colored background for launch screens
-      await sharp({
-        create: {
-          width: launch.width,
-          height: launch.height,
-          channels: 4,
-          background: { r: 40, g: 44, b: 52, alpha: 1 } // Match your theme color
-        }
-      })
-        .composite([{
-          input: await sharp(logoPath)
-            .resize(Math.floor(Math.min(launch.width * 0.3, launch.height * 0.3)), null, {
-              fit: 'inside',
-              withoutEnlargement: true
-            })
-            .png()
-            .toBuffer(),
-          gravity: 'center'
-        }])
+  const manifest = JSON.parse(await fs.readFile(path.join(publicPath, 'manifest.webmanifest'), 'utf8'));
+  const icons = new Map(manifest.icons.map(icon => [icon.src, icon]));
+  for (const icon of icons.values()) {
+    const [width, height] = icon.sizes.split('x').map(Number);
+    const destination = path.join(publicPath, icon.src.replace(/^\//, ''));
+    if (icon.purpose?.includes('maskable')) {
+      // Keep the mark inside the mask's central safe circle, with an opaque background.
+      const inset = Math.ceil(width * 0.2);
+      await sharp(source)
+        .resize(width - inset * 2, height - inset * 2, { fit: 'contain' })
+        .extend({ top: inset, bottom: inset, left: inset, right: inset, background: '#fff8cc' })
         .png()
-        .toFile(outputPath);
-
-      console.log(`Generated ${launch.name}`);
+        .toFile(destination);
+    } else if (/apple|ios/.test(icon.src)) {
+      // iOS rounds touch icons itself and fills transparent pixels with black, so they stay square.
+      await sharp(source).resize(width, height).png().toFile(destination);
+    } else {
+      // Browsers and desktop systems show these as drawn.
+      await fs.writeFile(destination, await rounded(width));
     }
-
-    console.log('\n✅ All icons generated successfully!');
-    console.log(`📱 Total icons created: ${sizes.length + icoSizes.length + launchScreenSizes.length + 1}`);
-    console.log('🔍 Icons include support for:');
-    console.log('   - All iOS devices (including iPhone 12 mini, Pro, Max)');
-    console.log('   - Android devices (all DPI ranges)');
-    console.log('   - Windows PWA tiles');
-    console.log('   - Maskable icons with proper safe zones');
-    console.log('   - High-DPI displays');
-    console.log('   - Apple launch screens');
-
-  } catch (err) {
-    console.error('❌ Error generating icons:', err);
-    process.exit(1);
   }
+  await fs.writeFile(path.join(publicPath, 'favicon.ico'), await pngToIco(await rounded(256)));
+  await fs.copyFile(source, path.join(publicPath, 'images/logo.png'));
+
+  // Linux and Windows desktop builds (Tauri and Electron) show these as drawn too. The iOS and
+  // Android sets stay square: those launchers apply their own mask.
+  for (const [name, size] of [
+    ['32x32.png', 32],
+    ['64x64.png', 64],
+    ['128x128.png', 128],
+    ['128x128@2x.png', 256],
+    ['icon.png', 512],
+  ])
+    await fs.writeFile(path.join(desktopPath, name), await rounded(size));
+  await fs.writeFile(path.join(desktopPath, 'icon.ico'), await pngToIco(await rounded(256)));
+  await fs.writeFile(path.join(desktopPath, 'icon.icns'), await icns());
+  console.log(`Generated ${icons.size} web icons, favicon.ico and the desktop icons from images/logo.png.`);
 }
 
-generateIcons(); 
+(async () => {
+  if (process.argv.includes('--android')) await syncAndroidIcons();
+  else await generateIcons();
+})().catch(error => {
+  console.error(error);
+  process.exitCode = 1;
+});

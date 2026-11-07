@@ -8,6 +8,17 @@ import { render } from '@testing-library/react';
 import type { InspectionSnapshot, Resource } from './types';
 
 describe('inspection data boundaries', () => {
+  it('restores the parameter view and node without accepting parameter drafts from storage', () => {
+    const config = sanitizeExplorerConfig({
+      view: 'parameters',
+      parameterNode: '/robot/controller',
+      drafts: { speed: 2 },
+    });
+    expect(config).toMatchObject({ view: 'parameters', parameterNode: '/robot/controller' });
+    expect(config).not.toHaveProperty('drafts');
+    expect(sanitizeExplorerConfig({ view: 'parameters', parameterNode: '../controller' }).parameterNode).toBe('');
+    expect(sanitizeExplorerConfig({}).parameterNode).toBe('');
+  });
   it('bounds large binary messages and circular objects without copying their payload', () => {
     const cloud = { data: new Uint8Array(8_000_000), header: { frame_id: 'map' } };
     const result = boundedPreview(cloud);

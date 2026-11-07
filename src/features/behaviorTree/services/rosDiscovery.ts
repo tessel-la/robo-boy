@@ -288,22 +288,22 @@ const discoverAllROSResourcesUnserialized = async (ros: Ros): Promise<ROSDiscove
 };
 
 /** Maps the inspector's graph resources to what the behavior-tree palette offers. */
-export const resourcesToDiscovery = (resources: readonly Resource[]): ROSDiscoveryResult => {
+export const resourcesToDiscovery = (resources: readonly Resource[], catalogOnly = false): ROSDiscoveryResult => {
   const typed = (kind: Resource['kind']) =>
     resources.filter(resource => resource.kind === kind && resource.name.startsWith('/'));
   return {
     actions: typed('action')
-      .filter(resource => resource.types.length > 0)
+      .filter(resource => catalogOnly || resource.types.length > 0)
       .map(resource => {
         const parts = resource.name.split('/').filter(Boolean);
-        return { name: resource.name, type: resource.types[0], namespace: parts.slice(0, -1).join('/') || '/' };
+        return { name: resource.name, type: resource.types[0] ?? 'unknown', namespace: parts.slice(0, -1).join('/') || '/' };
       }),
     services: typed('service')
-      .filter(resource => isUserService(resource.name))
+      .filter(resource => catalogOnly || isUserService(resource.name))
       .map(resource => ({ name: resource.name, type: resource.types[0] ?? 'unknown' })),
     topics: typed('topic')
       .map(resource => ({ name: resource.name, type: resource.types.length === 1 ? resource.types[0] : '' }))
-      .filter(isUserTopic),
+      .filter(topic => catalogOnly || isUserTopic(topic)),
   };
 };
 
@@ -314,7 +314,7 @@ export const resourcesToDiscovery = (resources: readonly Resource[]): ROSDiscove
  * the calls queue behind all other rosbridge traffic. Null when the robot has no inspector (the
  * session's first topic listing lacks its graph topic) or it does not answer in time.
  */
-const discoverFromInspectionGraph = (ros: Ros, signal?: AbortSignal): Promise<ROSDiscoveryResult | null> =>
+const discoverFromInspectionGraph = (ros: Ros, signal?: AbortSignal, catalogOnly = false): Promise<ROSDiscoveryResult | null> =>
   new Promise(resolve => {
     const client = ros as Ros & { on?: unknown; callOnConnection?: unknown };
     if (typeof client.on !== 'function' || typeof client.callOnConnection !== 'function') {
@@ -339,7 +339,7 @@ const discoverFromInspectionGraph = (ros: Ros, signal?: AbortSignal): Promise<RO
     const onAbort = () => finish(null);
     const accept = (snapshot: ReturnType<typeof session.getSnapshot>) => {
       if (snapshot.truncated) console.warn('[BT] The ROS graph exceeds the inspector budget; some resources are missing.');
-      finish(resourcesToDiscovery(snapshot.resources));
+      finish(resourcesToDiscovery(snapshot.resources, catalogOnly));
     };
     const check = () => {
       const snapshot = session.getSnapshot();
@@ -371,8 +371,8 @@ const discoverFromInspectionGraph = (ros: Ros, signal?: AbortSignal): Promise<RO
     check();
   });
 
-export const discoverAllROSResources = async (ros: Ros, signal?: AbortSignal): Promise<ROSDiscoveryResult> => {
-  const graph = await discoverFromInspectionGraph(ros, signal);
+export const discoverAllROSResources = async (ros: Ros, signal?: AbortSignal, options?: { catalogOnly?: boolean }): Promise<ROSDiscoveryResult> => {
+  const graph = await discoverFromInspectionGraph(ros, signal, options?.catalogOnly);
   if (graph) {
     console.log(
       `[BT] Discovered ${graph.actions.length} action(s), ${graph.services.length} service(s) and ` +
@@ -381,8 +381,28 @@ export const discoverAllROSResources = async (ros: Ros, signal?: AbortSignal): P
     return graph;
   }
   if (signal?.aborted) throw new DOMException('ROS context request cancelled.', 'AbortError');
+  if (options?.catalogOnly) return runSerializedRosapi(ros, async () => {
+    const topics = await settleWithin<{ topics: string[]; types: string[] }>(CALL_TIMEOUT_MS, { topics: [], types: [] }, done => ros.getTopics(done, () => done({ topics: [], types: [] })));
+    signal?.throwIfAborted();
+    const services = await settleWithin<string[]>(CALL_TIMEOUT_MS, [], done => (ros as any).getServices(done, () => done([])));
+    signal?.throwIfAborted();
+    const servers = await settleWithin<string[]>(CALL_TIMEOUT_MS, [], done => new ROSLIB.Service({ ros, name: '/rosapi/action_servers', serviceType: 'rosapi_msgs/srv/GetActionServers' }).callService({}, result => done((result as { action_servers?: string[] }).action_servers ?? []), () => done([])));
+    signal?.throwIfAborted();
+    const actions = new Map<string, string>(servers.filter(name => typeof name === 'string' && name.startsWith('/')).map(name => [name, 'unknown']));
+    topics.topics.forEach((name, index) => { if (name.endsWith('/_action/feedback')) actions.set(name.slice(0, -'/_action/feedback'.length), (topics.types[index] ?? 'unknown').replace(/_FeedbackMessage$|_Feedback$/, '')); });
+    return { topics: topics.topics.map((name, index) => ({ name, type: topics.types[index] ?? 'unknown' })), services: services.map(name => ({ name, type: 'unknown' })), actions: [...actions].map(([name, type]) => ({ name, type, namespace: name.slice(0, name.lastIndexOf('/')) || '/' })) };
+  }, signal);
   return runSerializedRosapi(ros, () => discoverAllROSResourcesUnserialized(ros), signal);
 };
+
+/** Resolve one catalog resource, at the shared rosapi boundary, without eagerly probing all
+ * interfaces. Empty/missing types are explicit failures, never invented schema names. */
+export const resolveResourceType = (ros: Ros, kind: 'topic' | 'service' | 'action', name: string, signal?: AbortSignal): Promise<string | null> =>
+  runSerializedRosapi(ros, () => settleWithin<string | null>(CALL_TIMEOUT_MS, null, done => {
+    if (kind === 'service') (ros as any).getServiceType(name, done, () => done(null));
+    else if (kind === 'topic') ros.getTopicType(name, done, () => done(null));
+    else new ROSLIB.Service({ ros, name: '/rosapi/action_type', serviceType: 'rosapi_msgs/srv/ActionType' }).callService({ action: name }, result => done((result as { type?: string }).type || null), () => done(null));
+  }), signal);
 
 /**
  * Get service type for a specific service
@@ -700,9 +720,10 @@ function buildSchemaFields(
     const rosType = types[i] ?? 'float64';
     const arrayLen = lens[i] !== undefined ? lens[i] : -1;
 
-    // Attempt to expand nested message types (not arrays, not primitives)
+    // Arrays need their element schema too: JointTrajectory.points otherwise loses positions
+    // and time_from_start, leaving the assistant unable to construct a complete action goal.
     let subfields: ActionFieldSchema[] | undefined;
-    if (depth < 3 && arrayLen === -1 && !SCHEMA_PRIMITIVES.has(rosType)) {
+    if (depth < 3 && !SCHEMA_PRIMITIVES.has(rosType)) {
       const nested = allTypedefs.find(t => t.type === rosType || t.type.split('/').pop() === rosType.split('/').pop());
       if (nested?.fieldnames?.length) {
         const sub = buildSchemaFields(nested, allTypedefs, true, depth + 1);

@@ -1,5 +1,10 @@
 # Application
 
+An optional [enterprise build](enterprise.md) adds company branding and system-browser OIDC
+sign-in. Those builds use the configured HTTPS enterprise gateway instead of the direct robot
+ports described below. Authentication is independent of robot ownership; ordinary builds keep
+the existing direct-host workflow.
+
 Robo-Boy's packaged application is a thin Tauri shell around the same React application used by the web deployment. It runs on Linux, macOS, Windows and iPhone, and the runtime contract below is the same on all of them. It does not bundle, install, start, or stop ROS. Run the ROS stack separately on the local computer or on a reachable robot computer.
 
 Everything past the runtime contract is about the desktop build. See [iOS application](ios.md) for building, signing and installing on a phone.
@@ -53,8 +58,12 @@ default. Localhost, remote hosts, VPN addresses, IPv6, and custom ports follow t
 The transport only performs HTTP(S) GETs within the selected resource-server origin and path,
 checks redirects against that scope, and sends no cookies or authorization headers. Assets on an
 unrelated absolute URL keep using normal browser fetching and need that server's CORS support.
-The web app continues to use `/mesh_resources` through Caddy, or ordinary CORS when configured to
-connect directly. Other services such as Ollama retain their existing origin requirements.
+The web app uses `/mesh_resources` through Caddy and its internal mesh relay, which also reaches
+servers bound only to host loopback. `BACKEND_HOST` and `MESH_RESOURCES_PORT` select the relay's
+backend; remote hosts remain supported. The relay exposes no host TCP listener and carries only
+GET/HEAD requests. Direct browser connections still require ordinary CORS. Other services such
+as Ollama retain their existing origin requirements. See [Development](development.md) for updating
+an existing deployment and testing the proxy transport.
 
 Meshes are cached but checked on every load. The Electron transport asks the server with
 `cache: 'no-cache'`, and Caddy marks `/mesh_resources` responses `Cache-Control: no-cache`, so an
@@ -290,6 +299,19 @@ app behaves as the same code does over http. Tauri solves this the same way, wit
 `data-runtime`, which names the shell, and `data-desktop`, which only says the app is in a packaged
 window; the rules working around WebKitGTK stay keyed to the former so Chromium does not inherit
 them.
+
+## Licenses and microphone access
+
+The repository's [third-party notices](../THIRD_PARTY_NOTICES.md) document icon attribution.
+Production builds carry `licenses.txt` with the project license, icon credits, and upstream
+license/NOTICE text for their bundled JavaScript.
+Electron also ships a shell-side `licenses.txt`; keep both files when redistributing it. Native
+runtime and system-library licenses remain separate obligations.
+
+Electron asks before granting microphone access to the main app. The grant ends on a page reload
+or navigation. Panel capture also requires the host's manifest-derived permissions and a separate
+native approval; grants are not shared across panels. Arbitrary embedded pages cannot request
+capture. Playback of robot camera streams does not require access to this device's camera.
 
 ## Build An Installer
 

@@ -1,0 +1,792 @@
+/** Optional enterprise boundary. OIDC is delegated to openid-client; robot ownership stays in the ROS gateway. */
+import http from 'node:http';
+import { randomBytes, createHash, timingSafeEqual } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import { pathToFileURL } from 'node:url';
+import * as oidc from 'openid-client';
+import httpProxy from 'http-proxy';
+import { WebSocket, WebSocketServer } from 'ws';
+import { secureOrigin, loadBranding, enabled, robots } from './config.mjs';
+import { allowedAccount, memberOf, normalizeProviders, providersFromEnvironment } from './providers.mjs';
+import { openSessionStore, SessionStoreError } from './session-store.mjs';
+
+const random = () => randomBytes(32).toString('base64url');
+const hash = value => createHash('sha256').update(value).digest('hex');
+const equal = (a, b) =>
+  typeof a === 'string' &&
+  typeof b === 'string' &&
+  a.length === b.length &&
+  timingSafeEqual(Buffer.from(a), Buffer.from(b));
+const escape = value =>
+  String(value).replace(
+    /[&<>"']/g,
+    char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]
+  );
+const cookie = (request, name) =>
+  request.headers.cookie
+    ?.split(';')
+    .map(v => v.trim())
+    .find(v => v.startsWith(name + '='))
+    ?.slice(name.length + 1);
+const mediaPath = path =>
+  /^\/(?:robots\/[a-z][a-z0-9-]{0,63}\/)?(video_stream|mesh_resources|recordings)(\/|$)/.test(path);
+const publicPath = path =>
+  ['/', '/index.html', '/favicon.ico', '/manifest.webmanifest'].includes(path) ||
+  /^\/(assets|branding|panels)\//.test(path);
+
+async function jsonBody(request) {
+  let data = '';
+  for await (const chunk of request) {
+    data += chunk;
+    if (data.length > 8192) throw new Error('Request too large');
+  }
+  return JSON.parse(data || '{}');
+}
+
+/** One broker per deployment. A private durable store can preserve completed sign-ins across restarts. */
+export async function createEnterpriseGateway(options) {
+  const origin = secureOrigin(options.origin);
+  const secure = origin.startsWith('https:');
+  const sessionCookie = secure ? '__Host-roboboy_session' : 'roboboy_session';
+  const loginCookie = secure ? '__Host-roboboy_login' : 'roboboy_login';
+  const nativeOrigins = new Set(
+    options.nativeOrigins ?? [
+      'app://robo-boy',
+      'tauri://localhost',
+      'http://tauri.localhost',
+      'https://tauri.localhost',
+    ]
+  );
+  const clock = options.clock ?? Date.now;
+  const ttl = options.sessionSeconds ?? 3600;
+  if (!Number.isSafeInteger(ttl) || ttl < 60 || ttl > 86400)
+    throw new Error('Session lifetime must be 60–86400 seconds.');
+  const upstream = new URL(options.upstream);
+  if (!['127.0.0.1', 'localhost', '[::1]'].includes(upstream.hostname) || upstream.protocol !== 'http:')
+    throw new Error('Enterprise upstream must be private loopback HTTP.');
+  const brand = options.branding ?? loadBranding();
+  const registry = robots(options.robots, upstream.origin);
+  const publicRobots = registry.map(({ id, name }) => ({ id, name }));
+  const robotRoute = path => {
+    const match = /^\/robots\/([a-z][a-z0-9-]{0,63})(\/.*)$/.exec(path);
+    if (!match) return path.startsWith('/robots/') ? null : { target: upstream.origin, path };
+    const robot = registry.find(robot => robot.id === match[1]);
+    // Only robot-facing routes can be addressed in a robot namespace.
+    if (
+      !robot ||
+      !/^\/(websocket|video_stream|mesh_resources|recordings|ollama|webrtc|[0-9]{1,5})(\/|$)/.test(match[2])
+    )
+      return null;
+    return { target: robot.upstream, path: match[2] };
+  };
+  if (options.enabled === false) {
+    const transport = httpProxy.createProxyServer({ target: upstream.origin, ws: true, changeOrigin: true });
+    transport.on('proxyRes', (result, request) => {
+      delete result.headers['set-cookie'];
+      if (nativeOrigins.has(request.headers.origin)) {
+        result.headers['access-control-allow-origin'] = request.headers.origin;
+        result.headers['access-control-expose-headers'] = 'Accept-Ranges, Content-Range, ETag, Location, Link';
+        result.headers.vary = 'Origin';
+      }
+    });
+    transport.on('error', (_error, _request, response) => {
+      response.writeHead?.(502);
+      response.end?.('Robot backend unavailable.');
+      response.destroy?.();
+    });
+    const connections = new Set();
+    const server = http.createServer((request, response) => {
+      if (request.method === 'OPTIONS' && nativeOrigins.has(request.headers.origin)) {
+        response.writeHead(204, {
+          'Access-Control-Allow-Origin': request.headers.origin,
+          'Access-Control-Allow-Headers': 'Authorization, Content-Type, Range',
+          'Access-Control-Allow-Methods': 'GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS',
+          Vary: 'Origin',
+        });
+        response.end();
+        return;
+      }
+      if (new URL(request.url, origin).pathname.startsWith('/auth/')) {
+        response.writeHead(404);
+        response.end();
+        return;
+      }
+      delete request.headers.cookie;
+      delete request.headers['x-roboboy-session'];
+      const route = robotRoute(new URL(request.url, origin).pathname);
+      if (!route) {
+        response.writeHead(404);
+        response.end();
+        return;
+      }
+      const url = new URL(request.url, origin);
+      request.url = route.path + url.search;
+      transport.web(request, response, { target: route.target });
+    });
+    server.on('connection', socket => {
+      connections.add(socket);
+      socket.once('close', () => connections.delete(socket));
+    });
+    server.on('upgrade', (request, socket, head) => {
+      delete request.headers.cookie;
+      delete request.headers['x-roboboy-session'];
+      const url = new URL(request.url, origin);
+      const route = robotRoute(url.pathname);
+      if (!route || !route.path.startsWith('/websocket')) {
+        socket.destroy();
+        return;
+      }
+      request.url = route.path + url.search;
+      transport.ws(request, socket, head, { target: route.target });
+    });
+    return {
+      server,
+      sweep() {},
+      close: async () => {
+        for (const socket of connections) socket.destroy();
+        transport.close();
+        await new Promise(resolve => server.close(resolve));
+      },
+    };
+  }
+  const providers = normalizeProviders(options);
+  await Promise.all(
+    providers.map(async provider => {
+      provider.config =
+        provider.oidc ??
+        (await oidc.discovery(new URL(provider.issuer), provider.clientId, provider.clientSecret, undefined, {
+          timeout: 10,
+        }));
+      oidc.enableNonRepudiationChecks(provider.config);
+    })
+  );
+  const providerById = new Map(providers.map(provider => [provider.id, provider]));
+  const publicProviders = providers.map(({ id, label }) => ({ id, label }));
+  const sessions = new Map();
+  const media = new Map();
+  const disconnect = session => {
+    for (const connection of session.connections) connection.close();
+    session.connections.clear();
+  };
+  // Bind saved sessions to the deployment and verified provider/access policy, never just a subject label.
+  const policy = hash(JSON.stringify({
+    origin, ttl,
+    providers: providers.map(provider => ({
+      id: provider.id,
+      issuer: provider.config.serverMetadata().issuer,
+      client: provider.config.clientMetadata().client_id,
+      requiredGroup: provider.requiredGroup,
+      groupsClaim: provider.groupsClaim,
+      allowedDomains: [...provider.allowedDomains].sort(),
+      allowedEmails: [...provider.allowedEmails].sort(),
+    })).sort((a, b) => a.id.localeCompare(b.id)),
+  }));
+  const store = await openSessionStore({
+    file: options.sessionFile, policy, clock,
+    onFailure: () => { for (const session of sessions.values()) disconnect(session); },
+  });
+  for (const saved of store.sessions) {
+    const session = { ...saved, durable: true, connections: new Set() };
+    sessions.set(session.key, session);
+    media.set(session.mediaKey, session);
+  }
+  const persist = () => store.save([...sessions.values()].filter(session => session.durable));
+  const transactions = new Map();
+  const pending = new Map();
+  const sockets = new Set();
+  const proxy = httpProxy.createProxyServer({
+    target: upstream.origin,
+    ws: true,
+    xfwd: false,
+    changeOrigin: true,
+    proxyTimeout: 30000,
+  });
+  proxy.on('error', (_error, _request, response) => {
+    if (response?.writeHead && !response.headersSent) response.writeHead(502);
+    response?.end?.('Robot backend unavailable.');
+    response?.destroy?.();
+  });
+  proxy.on('proxyRes', (upstreamResponse, request) => {
+    delete upstreamResponse.headers['set-cookie'];
+    if (request.enterpriseProtected) upstreamResponse.headers['cache-control'] = 'private, no-store';
+    upstreamResponse.headers['referrer-policy'] = 'no-referrer';
+    const location = upstreamResponse.headers.location;
+    if (request.robotPrefix && typeof location === 'string' && location.startsWith('/') && !location.startsWith('//'))
+      upstreamResponse.headers.location = request.robotPrefix + location;
+    delete upstreamResponse.headers['access-control-allow-origin'];
+    delete upstreamResponse.headers['access-control-allow-credentials'];
+    if (nativeOrigins.has(request.headers.origin)) {
+      upstreamResponse.headers['access-control-allow-origin'] = request.headers.origin;
+      upstreamResponse.headers['access-control-expose-headers'] = 'Accept-Ranges, Content-Range, ETag, Location, Link';
+      upstreamResponse.headers.vary = 'Origin';
+    }
+  });
+  const wsServer = new WebSocketServer({ noServer: true, maxPayload: 10000000, perMessageDeflate: false });
+  const setCookie = (name, value, age) =>
+    `${name}=${value}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${age}${secure ? '; Secure' : ''}`;
+  const valid = session => !store.failed && session && session.expires > clock();
+  const identify = request => {
+    const authorization = request.headers['x-roboboy-session'];
+    if (authorization !== undefined)
+      return typeof authorization === 'string' && /^[A-Za-z0-9_-]{43}$/.test(authorization)
+        ? sessions.get(hash(authorization))
+        : undefined;
+    const value = cookie(request, sessionCookie);
+    return value ? sessions.get(hash(value)) : undefined;
+  };
+  const reply = (response, status, body, headers = {}) => {
+    response.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...headers });
+    response.end(JSON.stringify(body));
+  };
+  /** Login and callback are top-level browser navigations; show a page, not raw JSON. */
+  const page = (response, status, title, message, native, headers = {}) => {
+    response.writeHead(status, {
+      'Content-Type': 'text/html; charset=utf-8',
+      'Cache-Control': 'no-store',
+      'Content-Security-Policy':
+        "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'",
+      ...headers,
+    });
+    response.end(
+      `<!doctype html><meta name="viewport" content="width=device-width, initial-scale=1"><title>${escape(brand.name)}</title><main style="font:18px system-ui;max-width:35rem;margin:15vh auto;padding:24px"><h1>${escape(title)}</h1><p>${escape(message)}</p><p>${native ? `Return to ${escape(brand.name)} and start again. You can close this browser tab.` : `<a href="/">Return to ${escape(brand.name)}</a>`}</p></main>`
+    );
+  };
+  const complete = (response, session, next, cookies) => {
+    response.writeHead(200, {
+      'Content-Type': 'text/html; charset=utf-8',
+      'Cache-Control': 'no-store',
+      'Set-Cookie': cookies,
+      'Content-Security-Policy':
+        "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'",
+    });
+    response.end(
+      `<!doctype html><meta name="viewport" content="width=device-width, initial-scale=1"><title>${escape(brand.name)}</title><main style="font:18px system-ui;max-width:35rem;margin:15vh auto;padding:24px"><h1>Sign-in complete</h1><p>Signed in as ${escape(session.user.name)}. Return to ${escape(brand.name)} ${next}.</p><p>You can close this browser tab.</p></main>`
+    );
+  };
+  /** Reached when a client did not name a provider, for example an older packaged app. */
+  const chooser = (response, nativeId, renew) => {
+    const links = providers
+      .map(provider => {
+        const target = new URLSearchParams({
+          provider: provider.id,
+          ...(nativeId ? { native: nativeId } : {}),
+          ...(renew ? { renew: '1' } : {}),
+        });
+        return `<p><a style="display:block;padding:14px;border:1px solid #888;border-radius:8px;text-align:center;color:inherit;text-decoration:none" href="/auth/login?${escape(target)}">Sign in with ${escape(provider.label)}</a></p>`;
+      })
+      .join('');
+    response.writeHead(200, {
+      'Content-Type': 'text/html; charset=utf-8',
+      'Cache-Control': 'no-store',
+      'Content-Security-Policy':
+        "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'",
+    });
+    response.end(
+      `<!doctype html><meta name="viewport" content="width=device-width, initial-scale=1"><title>${escape(brand.name)}</title><main style="font:18px system-ui;max-width:35rem;margin:15vh auto;padding:24px"><h1>Sign in to ${escape(brand.name)}</h1>${links}</main>`
+    );
+  };
+  const remove = session => {
+    sessions.delete(session.key);
+    media.delete(session.mediaKey);
+    disconnect(session);
+  };
+  const track = (session, resource, rebind) => {
+    const connection = {
+      owner: session,
+      close: () => (resource.terminate ? resource.terminate() : resource.destroy()),
+      rebind,
+    };
+    session.connections.add(connection);
+    resource.once('close', () => connection.owner.connections.delete(connection));
+  };
+  /** A fresh sign-in by the same subject keeps live robot sockets and streams under the new expiry. */
+  const migrate = (previous, next) => {
+    if (previous === next || !valid(previous) || previous.user.id !== next.user.id) return;
+    for (const connection of previous.connections) {
+      connection.owner = next;
+      next.connections.add(connection);
+      connection.rebind?.(next);
+    }
+    previous.connections.clear();
+  };
+  const sweep = () => {
+    if (store.failed) return;
+    let changed = false;
+    for (const session of sessions.values()) if (!valid(session)) {
+      changed ||= session.durable;
+      remove(session);
+    }
+    for (const collection of [transactions, pending]) {
+      for (const [key, value] of collection)
+        if (value.expires <= clock()) {
+          if (value.session) remove(value.session);
+          collection.delete(key);
+        }
+    }
+    if (changed) persist();
+  };
+  const timer = setInterval(() => {
+    try { sweep(); } catch { /* Storage failure has already fenced access and closed live connections. */ }
+  }, 1000);
+  timer.unref();
+  const failHandoff = id => {
+    const attempt = pending.get(id);
+    if (attempt) attempt.failed = true;
+  };
+
+  const server = http.createServer(async (request, response) => {
+    response.setHeader('Referrer-Policy', 'no-referrer');
+    response.setHeader('X-Content-Type-Options', 'nosniff');
+    const requestOrigin = request.headers.origin;
+    const native = nativeOrigins.has(requestOrigin);
+    if (native) {
+      response.setHeader('Access-Control-Allow-Origin', requestOrigin);
+      response.setHeader('Vary', 'Origin');
+      response.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type, Range, X-RoboBoy-Session');
+      response.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS');
+    }
+    let nativeCallback;
+    let browserPage = false;
+    try {
+      if (store.failed) throw new SessionStoreError();
+      sweep();
+      const url = new URL(request.url, origin);
+      if (
+        url.pathname === '/' ||
+        url.pathname === '/index.html' ||
+        (url.pathname.startsWith('/auth/') && !url.pathname.startsWith('/auth/media/'))
+      )
+        response.setHeader('X-Frame-Options', 'DENY');
+      if (url.origin !== origin || /%(2f|5c|25)|\\/i.test(url.pathname))
+        return reply(response, 400, { error: 'Invalid request path.' });
+      if (request.method === 'OPTIONS') return reply(response, native || requestOrigin === origin ? 204 : 403, null);
+      // Cookie-authenticated mutations require the exact public origin. Native clients use a bearer.
+      if (
+        !['GET', 'HEAD'].includes(request.method) &&
+        !request.headers['x-roboboy-session'] &&
+        requestOrigin !== origin &&
+        !(native && url.pathname.startsWith('/auth/native/'))
+      )
+        return reply(response, 403, { error: 'Request origin rejected.' });
+      if (url.pathname === '/auth/native/start' && request.method === 'POST') {
+        if (!native) return reply(response, 403, { error: 'Native origin required.' });
+        if (pending.size >= 128) return reply(response, 429, { error: 'Too many pending sign-ins.' });
+        const { challenge, provider } = await jsonBody(request);
+        if (typeof challenge !== 'string' || !/^[a-f0-9]{64}$/.test(challenge))
+          return reply(response, 400, { error: 'Invalid sign-in challenge.' });
+        if (provider !== undefined && !providerById.has(provider))
+          return reply(response, 400, { error: 'Unknown sign-in provider.' });
+        const id = random();
+        // A signed-in app renewing before expiry identifies its current session for migrate().
+        const previous = identify(request);
+        pending.set(id, {
+          challenge,
+          provider,
+          origin: requestOrigin,
+          expires: clock() + 300000,
+          previous: valid(previous) ? previous : undefined,
+        });
+        const browserUrl = new URL('/auth/login', origin);
+        browserUrl.searchParams.set('native', id);
+        if (provider) browserUrl.searchParams.set('provider', provider);
+        return reply(response, 200, { id, browserUrl: browserUrl.href });
+      }
+      if (url.pathname === '/auth/native/poll' && request.method === 'POST') {
+        const { id, secret } = await jsonBody(request);
+        const attempt = pending.get(id);
+        if (
+          !native ||
+          !attempt ||
+          attempt.origin !== requestOrigin ||
+          typeof secret !== 'string' ||
+          secret.length !== 43 ||
+          !equal(hash(secret), attempt.challenge)
+        )
+          return reply(response, 403, { error: 'Sign-in handoff rejected.' });
+        if (attempt.failed) {
+          pending.delete(id);
+          return reply(response, 401, { error: 'Sign-in was cancelled or rejected. Start again.' });
+        }
+        if (!attempt.session) return reply(response, 202, { pending: true });
+        pending.delete(id);
+        // Only a redeemed handoff is a durable session; pending login credentials never reach disk.
+        attempt.session.durable = true;
+        persist();
+        // The previous credential stays valid until its own expiry in case this response is lost.
+        if (attempt.previous) migrate(attempt.previous, attempt.session);
+        return reply(response, 200, {
+          user: attempt.session.user,
+          expires: attempt.session.expires,
+          token: attempt.token,
+          media: attempt.media,
+          robots: publicRobots,
+        });
+      }
+      if (url.pathname === '/auth/providers' && request.method === 'GET')
+        return reply(response, 200, { providers: publicProviders });
+      if (url.pathname === '/auth/login' && request.method === 'GET') {
+        browserPage = true;
+        const nativeId = url.searchParams.get('native');
+        // A web workspace renews in a second tab and keeps running; that tab must not load another workspace.
+        const renew = !nativeId && url.searchParams.get('renew') === '1';
+        nativeCallback = nativeId;
+        if (transactions.size >= 128)
+          return page(
+            response,
+            429,
+            'Too many sign-ins',
+            'Too many sign-ins are in progress. Try again shortly.',
+            nativeId
+          );
+        if (nativeId && (!pending.has(nativeId) || pending.get(nativeId).started))
+          return page(response, 400, 'Sign-in expired', 'This sign-in link has expired or was already used.', true);
+        // Renewal reuses the provider of the session it replaces.
+        const requested =
+          url.searchParams.get('provider') ??
+          (nativeId ? (pending.get(nativeId).provider ?? pending.get(nativeId).previous?.provider) : undefined) ??
+          (renew ? identify(request)?.provider : undefined) ??
+          (providers.length === 1 ? providers[0].id : undefined);
+        if (requested === undefined) return chooser(response, nativeId, renew);
+        const provider = providerById.get(requested);
+        if (!provider) return page(response, 400, 'Unknown sign-in method', 'Choose a sign-in method again.', nativeId);
+        const verifier = oidc.randomPKCECodeVerifier();
+        const state = oidc.randomState();
+        const nonce = oidc.randomNonce();
+        const browser = random();
+        transactions.set(state, {
+          verifier,
+          nonce,
+          browser: hash(browser),
+          nativeId,
+          renew,
+          provider: provider.id,
+          expires: clock() + 300000,
+        });
+        if (nativeId) pending.get(nativeId).started = true;
+        const target = oidc.buildAuthorizationUrl(provider.config, {
+          redirect_uri: `${origin}/auth/callback`,
+          scope: provider.scope,
+          ...(provider.prompt === 'off' ? {} : { prompt: provider.prompt }),
+          // A hint only; allowedAccount enforces the Workspace domain on the verified token.
+          ...(provider.allowedDomains.length === 1 && !provider.allowedEmails.length
+            ? { hd: provider.allowedDomains[0] }
+            : {}),
+          code_challenge: await oidc.calculatePKCECodeChallenge(verifier),
+          code_challenge_method: 'S256',
+          state,
+          nonce,
+        });
+        response.writeHead(302, {
+          Location: target.href,
+          'Set-Cookie': setCookie(loginCookie, browser, 300),
+          'Cache-Control': 'no-store',
+        });
+        return response.end();
+      }
+      if (url.pathname === '/auth/callback' && request.method === 'GET') {
+        browserPage = true;
+        const state = url.searchParams.get('state');
+        const attempt = transactions.get(state);
+        nativeCallback = attempt?.nativeId;
+        transactions.delete(state);
+        if (!attempt || !equal(hash(cookie(request, loginCookie) ?? ''), attempt.browser)) {
+          failHandoff(nativeCallback);
+          return page(
+            response,
+            400,
+            'Sign-in could not be verified',
+            'This sign-in was already used, expired, or was started in another browser.',
+            nativeCallback
+          );
+        }
+        // For example access_denied when the employee cancels or the application is not assigned.
+        if (url.searchParams.has('error')) {
+          failHandoff(nativeCallback);
+          return page(
+            response,
+            403,
+            'Sign-in was not completed',
+            'Your identity provider cancelled or denied this sign-in. Contact your administrator if you need access.',
+            nativeCallback,
+            { 'Set-Cookie': setCookie(loginCookie, '', 0) }
+          );
+        }
+        const provider = providerById.get(attempt.provider);
+        const config = provider.config;
+        const tokens = await oidc.authorizationCodeGrant(config, url, {
+          pkceCodeVerifier: attempt.verifier,
+          expectedState: state,
+          expectedNonce: attempt.nonce,
+          idTokenExpected: true,
+        });
+        const claims = tokens.claims();
+        let groups = claims?.[provider.groupsClaim];
+        // Okta and some Keycloak mappers release groups only from userinfo, verified against the same subject.
+        if (provider.requiredGroup && groups === undefined && claims?.sub && config.serverMetadata().userinfo_endpoint)
+          groups = (await oidc.fetchUserInfo(config, tokens.access_token, claims.sub))[provider.groupsClaim];
+        if (
+          typeof claims?.sub !== 'string' || !claims.sub || claims.sub.length > 255 ||
+          (provider.requiredGroup && !memberOf(groups, provider.requiredGroup)) ||
+          !allowedAccount(provider, claims)
+        ) {
+          failHandoff(nativeCallback);
+          return page(
+            response,
+            403,
+            'Access not assigned',
+            'Your account is not assigned access to this deployment. Contact your administrator.',
+            nativeCallback,
+            { 'Set-Cookie': setCookie(loginCookie, '', 0) }
+          );
+        }
+        if (sessions.size >= 1024) {
+          failHandoff(nativeCallback);
+          return page(response, 503, 'Service busy', 'Session capacity reached. Try again later.', nativeCallback);
+        }
+        const token = random();
+        const mediaToken = random();
+        // The ID token only proves this sign-in; openid-client already rejected it if expired.
+        // Provider token lifetimes (Keycloak defaults to 5 minutes) must not end the workspace session.
+        const session = {
+          key: hash(token),
+          mediaKey: hash(mediaToken),
+          // Subjects are only unique per issuer, so non-company providers are namespaced.
+          user: {
+            id: provider.id === 'company' ? claims.sub : `${provider.id}:${claims.sub}`,
+            name: String(claims.name || claims.preferred_username || claims.email || claims.sub).slice(0, 128),
+          },
+          provider: provider.id,
+          expires: clock() + ttl * 1000,
+          durable: !attempt.nativeId,
+          connections: new Set(),
+        };
+        if (attempt.nativeId) {
+          const handoff = pending.get(attempt.nativeId);
+          if (!handoff || handoff.session)
+            return page(response, 400, 'Sign-in expired', 'The app stopped waiting for this sign-in.', true);
+          handoff.session = session;
+          handoff.token = token;
+          handoff.media = mediaToken;
+        } else {
+          const previous = identify(request);
+          if (previous) {
+            migrate(previous, session);
+            remove(previous);
+          }
+        }
+        sessions.set(session.key, session);
+        media.set(session.mediaKey, session);
+        if (attempt.nativeId)
+          return complete(response, session, 'and confirm this account', setCookie(loginCookie, '', 0));
+        persist();
+        const cookies = [setCookie(sessionCookie, token, ttl), setCookie(loginCookie, '', 0)];
+        if (attempt.renew) return complete(response, session, 'to continue', cookies);
+        response.writeHead(303, { Location: '/', 'Cache-Control': 'no-store', 'Set-Cookie': cookies });
+        return response.end();
+      }
+      const session = identify(request);
+      if (url.pathname === '/auth/session' && request.method === 'GET')
+        return reply(
+          response,
+          valid(session) ? 200 : 401,
+          valid(session)
+            ? { user: session.user, expires: session.expires, robots: publicRobots }
+            : { error: 'Sign in to continue.' }
+        );
+      if (url.pathname === '/auth/logout' && request.method === 'POST') {
+        if (session) {
+          remove(session);
+          persist();
+        }
+        return reply(response, 200, {}, { 'Set-Cookie': setCookie(sessionCookie, '', 0) });
+      }
+      if (url.pathname.startsWith('/auth/') && !url.pathname.startsWith('/auth/media/'))
+        return reply(response, 404, { error: 'Unknown authentication endpoint.' });
+      let authorization = session;
+      const mediaRequest = /^\/auth\/media\/([A-Za-z0-9_-]{43})(\/.*)$/.exec(url.pathname);
+      if (mediaRequest) {
+        authorization = media.get(hash(mediaRequest[1]));
+        if (!['GET', 'HEAD'].includes(request.method) || !mediaPath(mediaRequest[2]))
+          return reply(response, 403, { error: 'This credential only allows robot media reads.' });
+        url.pathname = mediaRequest[2];
+      }
+      const developmentAsset =
+        options.developmentAssets &&
+        (/^\/(src|node_modules|@id)\//.test(url.pathname) ||
+          ['/@vite/client', '/@react-refresh', '/package.json'].includes(url.pathname));
+      if (
+        !valid(authorization) &&
+        !(request.method === 'GET' && !mediaRequest && (publicPath(url.pathname) || developmentAsset))
+      )
+        return reply(response, 401, { error: 'Sign in to continue.' });
+      const route = robotRoute(url.pathname);
+      if (!route) return reply(response, 404, { error: 'Unknown robot or robot route.' });
+      request.robotPrefix = /^\/robots\/[a-z][a-z0-9-]{0,63}/.exec(url.pathname)?.[0];
+      request.url = route.path + url.search;
+      // Enterprise credentials never reach backends. Feature-owned Authorization headers
+      // (Panel Manager admin token, media-gateway credentials) remain independent.
+      delete request.headers.cookie;
+      for (const key of Object.keys(request.headers))
+        if (key.startsWith('x-auth-') || key.startsWith('x-forwarded-') || key.startsWith('x-roboboy-'))
+          delete request.headers[key];
+      if (valid(authorization)) {
+        request.enterpriseProtected = true;
+        response.setHeader('Cache-Control', 'private, no-store');
+        track(authorization, response);
+      }
+      proxy.web(request, response, { target: route.target });
+    } catch (error) {
+      failHandoff(nativeCallback);
+      // Provider errors can contain codes and credentials. Never return or log their raw text.
+      if (response.headersSent) response.destroy();
+      else if (error instanceof SessionStoreError)
+        reply(response, 503, { error: 'Sign-in storage is unavailable. Contact your administrator.' });
+      else if (browserPage)
+        page(
+          response,
+          400,
+          'Sign-in failed',
+          'The identity provider response could not be verified. Start again or contact your administrator.',
+          nativeCallback
+        );
+      else reply(response, 400, { error: 'Sign-in or request failed. Start again or contact your administrator.' });
+    }
+  });
+
+  server.on('upgrade', (request, socket, head) => {
+    const url = new URL(request.url, origin);
+    const route = robotRoute(url.pathname);
+    if (
+      store.failed || !route ||
+      route.path !== '/websocket' ||
+      sockets.size >= 1024 ||
+      url.search ||
+      (request.headers.origin && request.headers.origin !== origin && !nativeOrigins.has(request.headers.origin))
+    ) {
+      socket.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n');
+      return;
+    }
+    wsServer.handleUpgrade(request, socket, head, client => {
+      sockets.add(client);
+      client.once('close', () => sockets.delete(client));
+      let upstreamSocket;
+      let activeSession;
+      let authorized = false;
+      const queued = [];
+      let queuedBytes = 0;
+      const deadline = setTimeout(() => client.close(1008, 'Sign-in required'), 10000);
+      const connect = session => {
+        if (!valid(session)) return client.close(1008, 'Sign-in required');
+        authorized = true;
+        activeSession = session;
+        clearTimeout(deadline);
+        track(session, client, next => {
+          activeSession = next;
+        });
+        upstreamSocket = new WebSocket(new URL('/websocket', route.target).href.replace('http:', 'ws:'), {
+          maxPayload: 10000000,
+        });
+        upstreamSocket.on('open', () => {
+          if (!valid(activeSession) || client.readyState !== WebSocket.OPEN) return upstreamSocket.close();
+          for (const [data, binary] of queued) upstreamSocket.send(data, { binary });
+          queued.length = 0;
+        });
+        upstreamSocket.on('message', (data, binary) => {
+          if (!valid(activeSession) || client.bufferedAmount > 20000000) return client.terminate();
+          if (client.readyState === WebSocket.OPEN) client.send(data, { binary });
+        });
+        upstreamSocket.on('error', () => client.close(1011, 'Robot backend unavailable'));
+        upstreamSocket.on('close', () => client.close(1001, 'Robot backend disconnected'));
+      };
+      client.on('message', (data, binary) => {
+        if (!authorized) {
+          if (binary || data.length > 4096) return client.close(1009, 'Authentication frame rejected');
+          try {
+            const message = JSON.parse(data.toString());
+            const session =
+              message.op === 'roboboy_auth' && typeof message.token === 'string' && message.token.length === 43
+                ? sessions.get(hash(message.token))
+                : undefined;
+            if (!valid(session)) return client.close(1008, 'Sign-in required');
+            return connect(session);
+          } catch {
+            return client.close(1008, 'Sign-in required');
+          }
+        }
+        if (!valid(activeSession) || upstreamSocket?.bufferedAmount > 20000000) return client.terminate();
+        if (upstreamSocket?.readyState === WebSocket.OPEN) upstreamSocket.send(data, { binary });
+        else {
+          queuedBytes += data.length;
+          if (queuedBytes > 1000000) return client.close(1009, 'Connection queue full');
+          queued.push([data, binary]);
+        }
+      });
+      client.once('close', () => {
+        clearTimeout(deadline);
+        upstreamSocket?.close();
+      });
+      client.on('error', () => client.close());
+      const session = identify(request);
+      if (valid(session)) connect(session);
+    });
+  });
+  return {
+    server,
+    sweep,
+    close: async () => {
+      clearInterval(timer);
+      // Shutdown drops transports, not durable access sessions or their original expiry.
+      for (const session of sessions.values()) disconnect(session);
+      for (const socket of sockets) socket.terminate();
+      wsServer.close();
+      proxy.close();
+      await new Promise(resolve => server.close(resolve));
+      await store.close();
+    },
+  };
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  try {
+    const required = key => {
+      if (!process.env[key]) throw new Error(`Missing ${key}`);
+      return process.env[key];
+    };
+    const authentication = enabled(process.env.ROBOBOY_ENTERPRISE_LOGIN ?? 'true');
+    const gateway = await createEnterpriseGateway({
+      origin: required('ROBOBOY_ENTERPRISE_ORIGIN'),
+      upstream: process.env.ROBOBOY_ENTERPRISE_UPSTREAM || 'http://127.0.0.1:4181',
+      enabled: authentication,
+      robots: process.env.ROBOBOY_ROBOTS_FILE
+        ? JSON.parse(readFileSync(process.env.ROBOBOY_ROBOTS_FILE, 'utf8'))
+        : undefined,
+      ...(authentication
+        ? { providers: providersFromEnvironment(process.env, file => readFileSync(file, 'utf8')) }
+        : {}),
+      sessionSeconds: Number(process.env.ROBOBOY_AUTH_SESSION_SECONDS || '3600'),
+      sessionFile: process.env.ROBOBOY_AUTH_SESSION_FILE,
+      branding: loadBranding(process.env.ROBOBOY_BRANDING_FILE),
+      ...(process.env.ROBOBOY_AUTH_NATIVE_ORIGINS
+        ? {
+            nativeOrigins: process.env.ROBOBOY_AUTH_NATIVE_ORIGINS.split(',')
+              .map(value => value.trim())
+              .filter(Boolean),
+          }
+        : {}),
+    });
+    gateway.server.listen(4180, '127.0.0.1');
+    for (const signal of ['SIGTERM', 'SIGINT'])
+      process.once(signal, () => void gateway.close().then(() => process.exit(0)));
+    console.log(
+      authentication
+        ? 'Enterprise authentication gateway started on loopback.'
+        : 'Enterprise gateway started with login explicitly disabled.'
+    );
+  } catch (error) {
+    // Startup handles no employee tokens; the reason names the setting or issuer to fix.
+    console.error(
+      `Enterprise authentication could not start: ${error instanceof Error ? error.message : 'unknown error'}. Check the issuer, client registration, secret file and deployment configuration.`
+    );
+    process.exitCode = 1;
+  }
+}
