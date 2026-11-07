@@ -427,7 +427,12 @@ class Authority:
         if message.get('op') == 'call_service':
             self.clients[client_id]['send'](dict(op='service_response', service=message.get('service'), result=False, values=reason, **common))
         elif message.get('op') == 'send_action_goal':
-            self.clients[client_id]['send'](dict(op='action_result', action=message.get('action'), result=False, status=0, values=reason, **common))
+            response = dict(op='action_result', action=message.get('action'), result=False, status=0, values=reason, **common)
+            # Refusing a new goal proves it never started. A reused ID or failure after
+            # admission must not make an already pending goal look safe to forget.
+            if isinstance(message.get('id'), str) and (client_id, message['id']) not in self.pending:
+                response['roboboyWorkOutcome'] = 'not_started'
+            self.clients[client_id]['send'](response)
         else:
             self.clients[client_id]['send'](dict(op='status', level='error', msg=reason, **common))
 

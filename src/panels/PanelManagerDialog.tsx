@@ -91,6 +91,8 @@ const permissionSummary = (panel: RoboBoyPanelManifest): string[] => {
   if (ros?.subscribe?.length) summary.push(`subscribe ROS: ${ros.subscribe.join(', ')}`);
   if (ros?.publish?.length) summary.push(`publish ROS: ${ros.publish.join(', ')}`);
   if (ros?.services?.length) summary.push(`call ROS services: ${ros.services.join(', ')}`);
+  if (ros?.actions?.length) summary.push(`send ROS action goals: ${ros.actions.join(', ')}`);
+  if (ros?.control) summary.push('request robot control from a user gesture');
   if (network?.hostEndpoints?.length) summary.push(`host endpoints: ${network.hostEndpoints.join(', ')}`);
   if (network?.origins?.length) summary.push(`network origins: ${network.origins.join(', ')}`);
   for (const capability of panel.capabilities || []) {

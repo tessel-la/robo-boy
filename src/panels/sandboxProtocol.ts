@@ -5,6 +5,7 @@ import type {
   RoboBoyPanelRuntime,
   RoboBoyPanelThemeSnapshot,
   RoboBoyPanelViewportSnapshot,
+  RoboBoyRosActionResult,
 } from './types';
 
 export interface PanelSandboxInitialization {
@@ -41,4 +42,6 @@ export type PanelHostToSandboxMessage =
   | { type: 'theme'; value: RoboBoyPanelThemeSnapshot }
   | { type: 'response'; requestId: string; value?: unknown; error?: string }
   | { type: 'ros-message'; subscriptionId: string; value: RoboBoyJsonObject }
+  | { type: 'ros-action-feedback'; requestId: string; value: RoboBoyJsonObject }
+  | { type: 'ros-action-result'; requestId: string; value?: RoboBoyRosActionResult; error?: string }
   | { type: 'dispose' };

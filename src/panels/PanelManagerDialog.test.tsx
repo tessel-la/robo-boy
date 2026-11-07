@@ -105,11 +105,15 @@ describe('PanelManagerDialog', () => {
   });
 
   it('shows requested permissions in the review', async () => {
+    const actionPanel = {
+      ...panel,
+      permissions: { ros: { ...panel.permissions?.ros, actions: ['/robot/move'], control: true } },
+    };
     api.preview.mockResolvedValue({
       planId: 'sha256-plan',
       expiresInSeconds: 600,
-      panels: [panel],
-      changes: [{ type: 'add', panel }],
+      panels: [actionPanel],
+      changes: [{ type: 'add', panel: actionPanel }],
     });
     render(
       <PanelManagerDialog
@@ -127,6 +131,8 @@ describe('PanelManagerDialog', () => {
     expect(await screen.findByText('discover approved ROS topics')).toBeInTheDocument();
     expect(screen.getByText('ask you to select individual ROS topics')).toBeInTheDocument();
     expect(screen.getByText('subscribe ROS: /telemetry/**')).toBeInTheDocument();
+    expect(screen.getByText('send ROS action goals: /robot/move')).toBeInTheDocument();
+    expect(screen.getByText('request robot control from a user gesture')).toBeInTheDocument();
   });
 
   it('keeps consecutive planned removals instead of restoring an earlier one', async () => {

@@ -500,6 +500,27 @@ class AuthorityTests(unittest.TestCase):
         self.command(self.a, 'call_service', id='service', service='/reset')
         self.assertEqual(len(self.forwarded[self.a]), 1)
 
+    def test_action_admission_refusal_confirms_goal_never_started(self):
+        self.goal(self.a)
+        response = self.sent[self.a][-1]
+        self.assertEqual(response, dict(op='action_result', id='goal', action='/move',
+                                        result=False, status=0, values=self.authority.clients[self.a]['error'],
+                                        roboboyWorkOutcome='not_started'))
+        self.assertFalse(self.forwarded[self.a])
+        self.assertFalse(self.authority.pending)
+
+    def test_rejected_duplicate_goal_does_not_attest_pending_work_never_started(self):
+        self.control(self.a, 'acquire')
+        self.goal(self.a)
+        self.goal(self.a)
+        response = self.sent[self.a][-1]
+        self.assertEqual(response['op'], 'action_result')
+        self.assertEqual(response['status'], 0)
+        self.assertFalse(response['result'])
+        self.assertNotIn('roboboyWorkOutcome', response)
+        self.assertEqual(len(self.forwarded[self.a]), 1)
+        self.assertIn((self.a, 'goal'), self.authority.pending)
+
     def test_not_started_action_recovers_before_or_after_owner_loss_and_cleans_journal(self):
         for loss in ('release', 'disconnect', 'expiry'):
             for outcome_first in (False, True):

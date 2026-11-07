@@ -73,6 +73,29 @@ const sendJson = (response, value) => {
   response.end(JSON.stringify(value));
 };
 
+test('validates action and control grants through the local installer', async () => {
+  const temporaryRoot = await mkdtemp(join(tmpdir(), 'roboboy-action-permissions-'));
+  try {
+    const repository = join(temporaryRoot, 'local-panel');
+    await mkdir(join(repository, 'dist'), { recursive: true });
+    const panel = panelFixture('com.example.actions', '1.0.0', 'https://example.com', 'unused', ['ros']);
+    await writeFile(join(repository, 'dist/index.js'), panel.bundle);
+    const configValue = { schemaVersion: 2, sources: [{ type: 'local', name: 'local', root: '.', repositories: ['./local-panel'] }], selection: { mode: 'all' } };
+    const options = { config: join(temporaryRoot, 'sources.json'), configValue, output: join(temporaryRoot, 'output') };
+    panel.manifest.permissions = { ros: { actions: ['/robot/*'], control: true } };
+    await writeFile(join(repository, 'roboboy.panel.json'), JSON.stringify(panel.manifest));
+    const preview = await previewPanelInstallation(options);
+    assert.deepEqual(preview.registry.panels[0].permissions, panel.manifest.permissions);
+    for (const ros of [{ actions: 'all' }, { actions: ['relative'] }, { actions: ['/move', '/move'] }, { control: 'true' }]) {
+      panel.manifest.permissions = { ros };
+      await writeFile(join(repository, 'roboboy.panel.json'), JSON.stringify(panel.manifest));
+      await assert.rejects(previewPanelInstallation(options), /invalid ROS/);
+    }
+  } finally {
+    await rm(temporaryRoot, { recursive: true, force: true });
+  }
+});
+
 test('installs public and authenticated private inventories into one registry', async () => {
   const temporaryRoot = await mkdtemp(join(tmpdir(), 'roboboy-panel-installer-'));
   let server;
