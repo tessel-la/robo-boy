@@ -8,7 +8,7 @@ export one default `RoboBoyPanelDefinition` from their ESM entry point:
 
 ```sh
 npm install --save-dev \
-  https://github.com/tessel-la/robo-boy/releases/download/panel-sdk-v2.2.0/tessel-la-roboboy-panel-sdk-2.2.0.tgz
+  https://github.com/tessel-la/robo-boy/releases/download/panel-sdk-v2.3.0/tessel-la-roboboy-panel-sdk-2.3.0.tgz
 ```
 
 The SDK is distributed as an npm-compatible tarball attached to the matching versioned GitHub release. It is not
@@ -16,7 +16,7 @@ published to the npm registry. Release assets are treated as append-only, and a 
 tarball integrity so replacement bytes fail installation.
 
 The complete authoring and deployment guide lives in the
-[Robo-Boy repository](https://github.com/tessel-la/robo-boy/blob/main/docs/external-panels.md).
+[Robo-Boy repository](https://github.com/tessel-la/robo-boy/blob/panel-sdk-v2.3.0/docs/external-panels.md).
 
 API `2.0.0` is the source contract in the Robo-Boy repository. Package `2.1.0` adds the `webrtcWhep` and
 `webrtcDiscovery` host endpoints, so a panel that wants the stream gateway can ask for it by name instead of
@@ -39,13 +39,14 @@ changes theme. Use variables such as `--background-color`, `--card-bg`, `--text-
 ## Shared robot control
 
 ROS operations use the host connection’s robot-wide control lease. Observers can subscribe and
-inspect, but topic publishes and robot service calls require the session to request
-control in Robo-Boy’s top bar. Do not acquire automatically or retry/queue rejected commands.
+inspect, but topic publishes, robot service calls and action goals require the session to have
+control. Request it in Robo-Boy’s top bar or through the explicit in-panel API below.
+Do not acquire automatically or retry/queue rejected commands.
 Use absolute canonical names. SDK `2.3.0` adds tracked ROS 2 actions and explicit in-panel
-control requests. These require the matching host implementation, not only newer type definitions.
-Until that host and SDK tarball are released, use a coordinated local checkout; existing published
-SDK `2.2.0` panels and their manifest permissions continue to work unchanged.
-See [the concurrency contract](../docs/robot-control.md#panel-and-integration-contract) for
+control requests, available in Robo-Boy `0.20.0-alpha` and newer. Upgrade the frontend and
+rebuild the ROS stack together; newer type definitions alone do not add runtime support.
+Existing SDK `2.2.0` panels and their manifest permissions continue to work unchanged.
+See [the concurrency contract](https://github.com/tessel-la/robo-boy/blob/panel-sdk-v2.3.0/docs/robot-control.md#panel-and-integration-contract) for
 handover, disconnects, and robot-side watchdog requirements.
 
 Declare `permissions.ros.actions` with the allowed action names and use
@@ -65,6 +66,6 @@ It requests the existing connection's lease or asks its current owner for consen
 authorize a command. Missing activation support requires the top-bar workflow instead. Never request
 on mount or a timer, adopt persistent work, or automatically replay a refused command when control arrives.
 
-Panel API remains `2.0.0`: the additions are backward compatible for existing panels. New panels
-must set their `compatibility.roboboy` minimum to the first released host containing these additions;
-the SDK package version alone cannot establish runtime compatibility.
+Panel API remains `2.0.0`: the additions are backward compatible for existing panels. Panels using
+the new action/control APIs must set `compatibility.roboboy` to `>=0.20.0-alpha <1.0.0` or a
+stricter range. The SDK package version alone cannot establish runtime compatibility.

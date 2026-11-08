@@ -358,7 +358,7 @@ Install the type-only SDK directly from its versioned GitHub release:
 ```bash
 cd my-roboboy-panel
 npm install --save-dev \
-  https://github.com/tessel-la/robo-boy/releases/download/panel-sdk-v2.2.0/tessel-la-roboboy-panel-sdk-2.2.0.tgz
+  https://github.com/tessel-la/robo-boy/releases/download/panel-sdk-v2.3.0/tessel-la-roboboy-panel-sdk-2.3.0.tgz
 ```
 
 After building `dist/index.js`, calculate its SRI value and copy the complete `sha256-...` value into the panel
@@ -517,13 +517,17 @@ it before the next request is made, so an approved host cannot redirect the mana
 
 ## ROS 2 Actions And Control Requests
 
-SDK package 2.3.0 adds these operations to Panel API 2.0.0. It needs the matching host runtime,
-including the sandbox, broker and installer. During coordinated development use the local SDK
-checkout; after release pin the SDK tarball and set `compatibility.roboboy` to require the first
-host release providing it. Existing 2.2.0 panels remain compatible.
+SDK package 2.3.0 adds these operations to Panel API 2.0.0, supported by Robo-Boy 0.20.0-alpha
+and newer. Upgrade the frontend and rebuild the ROS stack together. Pin the SDK tarball and set
+`compatibility.roboboy` to `>=0.20.0-alpha <1.0.0` or a stricter range for panels using these APIs.
+Existing 2.2.0 panels remain compatible.
 
 ```json
 {
+  "compatibility": {
+    "panelApi": "^2.0.0",
+    "roboboy": ">=0.20.0-alpha <1.0.0"
+  },
   "capabilities": ["ros"],
   "permissions": {
     "ros": {
