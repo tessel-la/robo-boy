@@ -152,21 +152,33 @@ export function RobotControl({ ros }: { ros: Ros | null }) {
           </p>
         )}
         {status?.reason && status.reason !== description && <p>{status.reason}</p>}
-        <section className="robot-control-section" aria-label="Backend compatibility">
-          <strong role="status" className={versionWarning ? 'robot-control-version-warning' : undefined}>
-            {compatibility.label}
-          </strong>
+        <section className="robot-control-backend" aria-label="Backend compatibility">
+          <div className="robot-control-backend-heading">
+            <strong>Backend</strong>
+            <span role="status" className={`robot-control-version-badge is-${compatibility.state}`}>
+              {versionWarning ? <FiAlertCircle aria-hidden="true" /> : <FiCheck aria-hidden="true" />}
+              {compatibility.label}
+            </span>
+          </div>
           <dl className="robot-control-versions">
-            <dt>App</dt>
-            <dd>{appVersion}</dd>
-            <dt>ROS stack</dt>
-            <dd>{status?.backend?.stackVersion ?? 'Not reported'}</dd>
-            <dt>ROS distribution</dt>
-            <dd>{status?.backend?.rosDistro ?? 'Not reported'}</dd>
-            <dt>rosbridge</dt>
-            <dd>{status?.backend?.rosbridgeVersion ?? 'Not reported'}</dd>
+            <div>
+              <dt>App</dt>
+              <dd>{appVersion}</dd>
+            </div>
+            <div>
+              <dt>ROS stack</dt>
+              <dd>{status?.backend?.stackVersion ?? 'Not reported'}</dd>
+            </div>
+            <div>
+              <dt>ROS</dt>
+              <dd>{status?.backend?.rosDistro ?? 'Not reported'}</dd>
+            </div>
+            <div>
+              <dt>rosbridge</dt>
+              <dd>{status?.backend?.rosbridgeVersion ?? 'Not reported'}</dd>
+            </div>
           </dl>
-          <p>{compatibility.message}</p>
+          {versionWarning && <p className="robot-control-version-hint">{compatibility.message}</p>}
         </section>
         {status?.external?.enabled && (
           <p className="robot-control-request-message" role="status" aria-live="polite">

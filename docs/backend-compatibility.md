@@ -5,8 +5,8 @@ Robo-Boy version, its ROS distribution, and its installed rosbridge version. A w
 toolbar marks differing or unverified versions. Each connection reports its own backend.
 
 Use the same Robo-Boy release for the app and the ROS stack. The app compares the complete release
-version, including prerelease suffixes. Matching releases show **App and ROS stack versions match**.
-Different releases show **App and ROS stack versions differ**, with guidance to align them. This is
+version, including prerelease suffixes. Matching releases show **Versions match**.
+Different releases show **Version mismatch**, with guidance to align them. This is
 an advisory check: it does not acquire control or change the gateway's command authorization.
 
 ## Deployment
@@ -34,8 +34,8 @@ Backend metadata expires with connection status and is cleared on disconnect or 
 
 ## Limitations
 
-Older stacks do not report these fields. Missing or malformed release metadata shows **Backend
-version unverified**; missing runtime fields show **Not reported**. Diagnostics never invalidate
+Older stacks do not report these fields. Missing or malformed release metadata shows **Unverified**;
+missing runtime fields show **Not reported**. Diagnostics never invalidate
 otherwise valid control status. An unreachable gateway also leaves the existing command block in
 place.
 

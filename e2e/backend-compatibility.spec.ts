@@ -26,7 +26,7 @@ for (const runtime of ['web', 'desktop'] as const) {
     await expect(control.locator('summary')).toHaveText('Read-only');
     await control.locator('summary').click();
     const info = control.getByRole('region', { name: 'Backend compatibility' });
-    await expect(info.getByRole('status')).toHaveText('App and ROS stack versions match');
+    await expect(info.getByRole('status')).toHaveText('Versions match');
     await expect(info.locator('dd').nth(1)).toHaveText(appVersion);
     await expect(info.locator('dd').nth(2)).toHaveText(process.env.ROBOBOY_TEST_ROS_DISTRO ?? 'jazzy');
     await expect(info.locator('dd').nth(3)).toHaveText(/^\d+\.\d+\.\d+/);
@@ -58,8 +58,9 @@ for (const width of [320, 1280]) {
       await expect(summary.locator('.robot-control-version-warning')).toHaveCount(scenario === 'matched' ? 0 : 1);
       await summary.click();
       const info = control.getByRole('region', { name: 'Backend compatibility' });
-      await expect(info.getByRole('status')).toHaveText(scenario === 'matched' ? 'App and ROS stack versions match' :
-        scenario === 'mismatch' ? 'App and ROS stack versions differ' : 'Backend version unverified');
+      await expect(info.getByRole('status')).toHaveText(scenario === 'matched' ? 'Versions match' :
+        scenario === 'mismatch' ? 'Version mismatch' : 'Unverified');
+      await expect(info.locator('.robot-control-version-hint')).toHaveCount(scenario === 'matched' ? 0 : 1);
       await expect(info.locator('dd').nth(0)).toHaveText(appVersion);
       await expect(info.locator('dd').nth(1)).toHaveText(scenario === 'legacy' ? 'Not reported' : scenario === 'matched' ? appVersion : '0.1.0-alpha');
       await expect(info.locator('dd').nth(2)).toHaveText(scenario === 'legacy' ? 'Not reported' : 'jazzy');

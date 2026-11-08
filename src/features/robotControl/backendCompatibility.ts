@@ -27,20 +27,20 @@ export function backendCompatibility(info: BackendInfo | undefined, frontendVers
   if (!stack || !valid(stack) || !valid(frontendVersion)) {
     return {
       state: 'unknown' as const,
-      label: 'Backend version unverified',
-      message: 'The backend does not report a valid Robo-Boy version. Update the ROS stack to verify compatibility.',
+      label: 'Unverified',
+      message: 'Update the ROS stack to report its version.',
     };
   }
   if (stack !== frontendVersion) {
     return {
       state: 'mismatch' as const,
-      label: 'App and ROS stack versions differ',
-      message: 'Some features may be incompatible. Use the same Robo-Boy release for the app and ROS stack.',
+      label: 'Version mismatch',
+      message: 'Use the same release for the app and ROS stack.',
     };
   }
   return {
     state: 'matched' as const,
-    label: 'App and ROS stack versions match',
-    message: 'The app and ROS stack report the same Robo-Boy release.',
+    label: 'Versions match',
+    message: '',
   };
 }
