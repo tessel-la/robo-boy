@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.21.0-alpha](https://github.com/tessel-la/robo-boy/compare/robo-boy-v0.20.0-alpha...robo-boy-v0.21.0-alpha) (2026-11-08)
+
+
+### Features
+
+* show backend versions and warn about release mismatches ([#257](https://github.com/tessel-la/robo-boy/issues/257)) ([4b72486](https://github.com/tessel-la/robo-boy/commit/4b72486b9d2e837ec1cb6364c723746371aa7c92))
+
 ## [0.20.0-alpha](https://github.com/tessel-la/robo-boy/compare/robo-boy-v0.19.0-alpha...robo-boy-v0.20.0-alpha) (2026-11-07)
 
 
