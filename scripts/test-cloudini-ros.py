@@ -35,13 +35,14 @@ async def main():
     socket = None
     late = None
     try:
+        print('Cloudini: starting the isolated relay, rosbridge, and gateway', flush=True)
         commands = [
             ['/opt/roboboy-cloudini/bin/pointcloud-relay'],
             ['ros2', 'launch', '/ros_ws/rosbridge_launch.xml', 'port:=19092', 'address:=127.0.0.1', 'respawn:=false'],
             ['python3', '/ros_ws/control_gateway.py', '--port', '19090', '--upstream-port', '19092'],
         ]
         for command in commands:
-            processes.append(subprocess.Popen(command, start_new_session=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL))
+            processes.append(subprocess.Popen(command, start_new_session=True))
         for _ in range(100):
             if '/roboboy/cloudini/fixture/points' in dict(node.get_topic_names_and_types()):
                 break
@@ -56,6 +57,7 @@ async def main():
             except OSError:
                 await asyncio.sleep(0.1)
         assert socket
+        print('Cloudini: checking compressed data and rosapi response', flush=True)
         await socket.write_message(json.dumps(dict(op='subscribe', topic='/roboboy/cloudini/fixture/points',
             type='point_cloud_interfaces/msg/CompressedPointCloud2', compression='cbor', queue_length=1)))
         await socket.write_message(json.dumps(dict(op='call_service', id='probe', service='/rosapi/topics', args={})))
@@ -82,20 +84,25 @@ async def main():
         # A second viewer must receive a retained static cloud without another raw publish.
         publishing = False
         await asyncio.sleep(0.3)
+        print('Cloudini: checking a retained cloud for a late viewer', flush=True)
         late = await websocket_connect('ws://127.0.0.1:19090', connect_timeout=2)
         await late.write_message(json.dumps(dict(op='subscribe', topic='/roboboy/cloudini/fixture/points',
             type='point_cloud_interfaces/msg/CompressedPointCloud2', compression='cbor', queue_length=1)))
-        while True:
-            raw = await asyncio.wait_for(late.read_message(), 5)
-            assert raw is not None
-            data = cbor2.loads(raw) if isinstance(raw, bytes) else json.loads(raw)
-            if data.get('op') == 'publish' and data.get('topic') == '/roboboy/cloudini/fixture/points':
-                assert data['msg']['header'] == cloud['header']
-                break
+        # Gateway status arrives every second, even if the cached cloud never does.
+        # Bound the whole wait rather than resetting a timeout for every message.
+        async with asyncio.timeout(15):
+            while True:
+                raw = await late.read_message()
+                assert raw is not None, 'Gateway disconnected before the retained cloud'
+                data = cbor2.loads(raw) if isinstance(raw, bytes) else json.loads(raw)
+                if data.get('op') == 'publish' and data.get('topic') == '/roboboy/cloudini/fixture/points':
+                    assert data['msg']['header'] == cloud['header']
+                    break
         late.close()
         late = None
         socket.close()
         socket = None
+        print('Cloudini: checking subscription cleanup', flush=True)
         for _ in range(100):
             if not publisher.get_subscription_count():
                 break
