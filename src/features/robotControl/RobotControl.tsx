@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState, useSyncExternalStore } from 'react'
 import { FiAlertCircle, FiBell, FiCheck, FiChevronDown, FiLock, FiUnlock, FiX } from 'react-icons/fi';
 import type { Ros } from 'roslib';
 import { controlSessionFor } from './ControlSession';
+import { appVersion, backendCompatibility } from './backendCompatibility';
 import './RobotControl.css';
 
 const emptySubscribe = () => () => {};
@@ -49,6 +50,8 @@ export function RobotControl({ ros }: { ros: Ros | null }) {
     };
   }, []);
   if (!ros) return null;
+  const compatibility = backendCompatibility(status?.backend);
+  const versionWarning = compatibility.state !== 'matched';
   const lockingEnabled = status?.enabled !== false;
   const owned = Boolean(status?.owner === status?.selfId && status?.token);
   const description = !status
@@ -102,12 +105,13 @@ export function RobotControl({ ros }: { ros: Ros | null }) {
   return (
     <details ref={detailsRef} className={`robot-control ${owned ? 'has-control' : ''} ${blocked ? 'is-blocked' : ''}`}>
       <summary
-        aria-label={`Robot control: ${status?.error || description}${requests.length ? `, ${requests.length} control request(s)` : ''}`}
-        title={status?.error || description}
+        aria-label={`Robot control: ${status?.error || description}. ${compatibility.label}${requests.length ? `, ${requests.length} control request(s)` : ''}`}
+        title={`${status?.error || description}. ${compatibility.label}`}
         aria-haspopup="dialog"
         aria-controls={menuId}
       >
         <StatusIcon aria-hidden="true" />
+        {versionWarning && <FiAlertCircle className="robot-control-version-warning" aria-label={compatibility.label} />}
         <span className="robot-control-label" role="status" aria-live="polite">
           {summary}
         </span>
@@ -148,6 +152,22 @@ export function RobotControl({ ros }: { ros: Ros | null }) {
           </p>
         )}
         {status?.reason && status.reason !== description && <p>{status.reason}</p>}
+        <section className="robot-control-section" aria-label="Backend compatibility">
+          <strong role="status" className={versionWarning ? 'robot-control-version-warning' : undefined}>
+            {compatibility.label}
+          </strong>
+          <dl className="robot-control-versions">
+            <dt>App</dt>
+            <dd>{appVersion}</dd>
+            <dt>ROS stack</dt>
+            <dd>{status?.backend?.stackVersion ?? 'Not reported'}</dd>
+            <dt>ROS distribution</dt>
+            <dd>{status?.backend?.rosDistro ?? 'Not reported'}</dd>
+            <dt>rosbridge</dt>
+            <dd>{status?.backend?.rosbridgeVersion ?? 'Not reported'}</dd>
+          </dl>
+          <p>{compatibility.message}</p>
+        </section>
         {status?.external?.enabled && (
           <p className="robot-control-request-message" role="status" aria-live="polite">
             {!status.external.ready

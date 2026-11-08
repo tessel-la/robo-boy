@@ -73,6 +73,8 @@ jobs:
             - '.github/workflows/test.yml'
             - '.github/scripts/**'
           ros:
+            # The ROS image reports the root package's release identity.
+            - 'package.json'
             - 'infra/cloudini/**'
             - 'scripts/test-cloudini-ros.py'
             - 'infra/docker/ros_entrypoint.sh'

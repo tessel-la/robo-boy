@@ -51,6 +51,22 @@
   flex-basis: 12px;
   opacity: 0.62;
 }
+.robot-control .robot-control-version-warning {
+  color: var(--warning-color, #ffc107);
+}
+.robot-control-versions {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 4px 12px;
+  margin: 0;
+}
+.robot-control-versions dt {
+  color: var(--text-color-secondary);
+}
+.robot-control-versions dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
 .robot-control[open] .robot-control-chevron {
   transform: rotate(180deg);
 }
@@ -265,9 +281,17 @@
 }
 @media (max-width: 900px) {
   .robot-control summary {
+    position: relative;
     width: 32px;
     padding: 0;
     justify-content: center;
+  }
+  .robot-control summary > .robot-control-version-warning {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 11px;
+    height: 11px;
   }
   .robot-control-label {
     position: absolute;

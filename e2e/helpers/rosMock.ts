@@ -1,4 +1,7 @@
 import type { Page } from '@playwright/test';
+import { readFileSync } from 'node:fs';
+
+const { version: appVersion } = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8'));
 
 /** One scripted goal: feedback messages, then a result (or nothing, for a goal that never ends). */
 export type ScriptedActionGoal = {
@@ -22,6 +25,7 @@ export type ScriptedServiceCall = {
 };
 
 type MockRosResources = {
+  backend?: { stackVersion: string; rosDistro: string; rosbridgeVersion: string } | null;
   /** Existing feature tests start as an established controller. Ownership UX tests opt into observer. */
   controlMode?: 'owner' | 'observer' | 'shared';
   idleSeconds?: number;
@@ -39,6 +43,7 @@ type MockRosResources = {
 };
 
 const defaultResources: Required<MockRosResources> = {
+  backend: { stackVersion: appVersion, rosDistro: 'jazzy', rosbridgeVersion: '2.3.0' },
   topics: [{ name: '/cmd_vel', type: 'geometry_msgs/msg/Twist' }],
   services: [{ name: '/set_bool', type: 'std_srvs/srv/SetBool' }],
   actionServers: [{ name: '/navigate_to_pose', type: 'nav2_msgs/action/NavigateToPose' }],
@@ -51,6 +56,7 @@ const defaultResources: Required<MockRosResources> = {
 
 export async function installRosMock(page: Page, resources: MockRosResources = {}): Promise<void> {
   const mockResources = {
+    backend: resources.backend === undefined ? defaultResources.backend : resources.backend,
     controlMode: resources.controlMode ?? 'owner',
     idleSeconds: resources.idleSeconds ?? 120,
     topics: resources.topics ?? defaultResources.topics,
@@ -102,7 +108,7 @@ export async function installRosMock(page: Page, resources: MockRosResources = {
       private controlTimer?: ReturnType<typeof setInterval>;
       private controlStatus(error = '') {
         setTimeout(() => this.emit('message', { data: JSON.stringify({ op: 'publish', topic: '/roboboy/control/status', msg: { data: JSON.stringify({
-          version: 1, enabled: initResources.controlMode !== 'shared', idleMs: initResources.idleSeconds * 1000,
+          version: 1, backend: initResources.backend, enabled: initResources.controlMode !== 'shared', idleMs: initResources.idleSeconds * 1000,
           selfId: 'test-session', owner: this.controlOwner ? 'test-session' : null,
           ownerLabel: this.controlLabel, token: this.controlOwner ? 'test-lease' : null,
           state: this.controlOwner ? 'owned' : 'available', ready: true, pending: 0,
