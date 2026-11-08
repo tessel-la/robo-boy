@@ -87,14 +87,18 @@ RUN source /opt/ros/${ROS_DISTRO}/setup.bash && \
     sed -i 's|from ros2action.api import get_action_names_and_types|from rclpy.action import get_action_names_and_types|' "${proxy_path}"
 
 # Report proven pre-submission failures and rejected goals separately from uncertain
-# transport failures. Fail the build if upstream no longer matches this safety patch.
+# transport failures. Keep retained relay QoS independent of publisher discovery.
+# Fail the build if upstream no longer matches either patch.
 COPY infra/ros/rosbridge_action_outcomes.patch /tmp/rosbridge_action_outcomes.patch
+COPY infra/ros/rosbridge_cloudini_qos.patch /tmp/rosbridge_cloudini_qos.patch
 COPY infra/ros/test_rosbridge_action_outcomes.py /tmp/rosbridge-tests/test_rosbridge_action_outcomes.py
+COPY infra/ros/test_rosbridge_cloudini_qos.py /tmp/rosbridge-tests/test_rosbridge_cloudini_qos.py
 RUN source /opt/ros/${ROS_DISTRO}/setup.bash && \
     rosbridge_path="$(python3 -c 'import importlib.util; print(next(iter(importlib.util.find_spec("rosbridge_library").submodule_search_locations)))')" && \
     patch --batch --fuzz=0 -p1 -d "${rosbridge_path}" < /tmp/rosbridge_action_outcomes.patch && \
+    patch --batch --fuzz=0 -p1 -d "${rosbridge_path}" < /tmp/rosbridge_cloudini_qos.patch && \
     python3 -m unittest discover -s /tmp/rosbridge-tests -v && \
-    rm -rf /tmp/rosbridge-tests /tmp/rosbridge_action_outcomes.patch
+    rm -rf /tmp/rosbridge-tests /tmp/rosbridge_action_outcomes.patch /tmp/rosbridge_cloudini_qos.patch
 
 # Pre-create the conventional mount point for robot interface overlays.
 RUN mkdir -p /overlay_ws
@@ -112,6 +116,9 @@ COPY infra/ros/recording_runner.py /ros_ws/recording_runner.py
 COPY infra/ros/inspection_runner.py /ros_ws/inspection_runner.py
 COPY infra/ros/tf_relay.py /ros_ws/tf_relay.py
 COPY infra/ros/control_gateway.py /ros_ws/control_gateway.py
+COPY infra/ros/backend_info.py /ros_ws/backend_info.py
+# Keep the backend identity tied to the built image, independently of the app.
+COPY package.json /ros_ws/package.json
 COPY infra/ros/external_control_lock.py /ros_ws/external_control_lock.py
 COPY infra/ros/external_control_protocol.py /ros_ws/external_control_protocol.py
 COPY infra/ros/robot_work.py /ros_ws/robot_work.py

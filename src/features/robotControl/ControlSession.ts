@@ -1,10 +1,12 @@
 import type { Ros } from 'roslib';
 import { defaultSessionName, rememberSessionName } from './sessionName';
 import { enterpriseSocketToken } from '../enterprise/session';
+import { parseBackendInfo, type BackendInfo } from './backendCompatibility';
 
 export const CONTROL_STATUS_TOPIC = '/roboboy/control/status';
 export interface ControlStatus {
   version: 1;
+  backend?: BackendInfo;
   enabled?: boolean;
   idleMs?: number;
   selfId: string;
@@ -133,7 +135,7 @@ export class ControlSession {
         !status.clients.every(client => typeof client?.id === 'string' && typeof client?.label === 'string')
       )
         return;
-      this.status = status;
+      this.status = { ...status, backend: parseBackendInfo(status.backend) };
       if (
         this.pendingName &&
         status.clients.find(client => client.id === status.selfId)?.label === this.pendingName.label

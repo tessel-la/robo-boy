@@ -18,6 +18,7 @@ import tornado.ioloop
 import tornado.web
 import tornado.websocket
 from external_control_protocol import EXTERNAL_PREFIX, EXTERNAL_STATE
+from backend_info import backend_info
 
 STATUS_TOPIC = '/roboboy/control/status'
 BT_COMMAND = '/robo_boy/behavior_tree/command'
@@ -85,6 +86,7 @@ class Authority:
         if not math.isfinite(idle_seconds * 1000) or idle_seconds < 0:
             raise ValueError('Control idle timeout must be finite and nonnegative; 0 disables idle expiry.')
         self.observer_services = service_patterns(observer_services)
+        self.backend = backend_info()
         self.locking_enabled = locking_enabled
         self.idle_seconds = idle_seconds
         self.clock = clock
@@ -245,7 +247,7 @@ class Authority:
 
     def snapshot(self, client_id, error=''):
         busy = len(self.pending) + int(self.runner_busy or bool(self.runner_waiting))
-        return dict(version=1, selfId=client_id, owner=self.owner,
+        return dict(version=1, backend=self.backend, selfId=client_id, owner=self.owner,
                     enabled=self.locking_enabled, idleMs=self.idle_seconds * 1000,
                     ownerLabel=self.clients.get(self.owner, {}).get('label', self.owner_label) if self.owner else None,
                     token=self.token if self.owner == client_id and not self.draining and not self.fault else None,

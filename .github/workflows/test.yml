@@ -73,6 +73,8 @@ jobs:
             - '.github/workflows/test.yml'
             - '.github/scripts/**'
           ros:
+            # The ROS image reports the root package's release identity.
+            - 'package.json'
             - 'infra/cloudini/**'
             - 'scripts/test-cloudini-ros.py'
             - 'infra/docker/ros_entrypoint.sh'
@@ -410,6 +412,7 @@ jobs:
     name: ROS host services
     runs-on: ubuntu-latest
     needs: changes
+    timeout-minutes: 30
     permissions:
       contents: read
 
@@ -436,26 +439,34 @@ jobs:
         python -m unittest discover -s infra/ros -v
 
     - name: Verify the pinned worker codec matches its source
+      timeout-minutes: 5
       if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.ros == 'true'
       run: |
         sh scripts/build-cloudini.sh
         git diff --exit-code -- src/utils/cloudini/vendor
 
-    - name: Build and test point-cloud compression through the ROS gateway
+    - name: Build the ROS integration image
+      timeout-minutes: 15
       if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.ros == 'true'
       run: |
         docker build -f infra/docker/Dockerfile.ros -t roboboy-cloudini:ci .
+
+    - name: Test point-cloud compression through the ROS gateway
+      timeout-minutes: 2
+      if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.ros == 'true'
+      run: |
         docker run --rm --network none --entrypoint bash \
           -e ROS_DOMAIN_ID=157 -e ROS_LOCALHOST_ONLY=1 \
           -e RMW_IMPLEMENTATION=rmw_fastrtps_cpp -e FASTDDS_BUILTIN_TRANSPORTS=UDPv4 \
           -v "$PWD/scripts/test-cloudini-ros.py:/test.py:ro" roboboy-cloudini:ci \
-          -c 'source /opt/ros/jazzy/setup.bash && python3 /test.py'
+          -c 'source /opt/ros/jazzy/setup.bash && timeout --kill-after=10s 90s python3 -u /test.py'
 
     - name: Test native and readable camera stream responses
+      timeout-minutes: 2
       if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.ros == 'true'
       run: |
         docker run --rm --network none --entrypoint bash \
           -e ROS_DOMAIN_ID=158 -e ROS_LOCALHOST_ONLY=1 \
           -e RMW_IMPLEMENTATION=rmw_fastrtps_cpp -e FASTDDS_BUILTIN_TRANSPORTS=UDPv4 \
           -v "$PWD/scripts/test-camera-streamer.py:/test.py:ro" roboboy-cloudini:ci \
-          -c 'source /opt/ros/jazzy/setup.bash && source /opt/roboboy-video/share/web_video_server/local_setup.bash && python3 /test.py'
+          -c 'source /opt/ros/jazzy/setup.bash && source /opt/roboboy-video/share/web_video_server/local_setup.bash && timeout --kill-after=10s 90s python3 -u /test.py'
