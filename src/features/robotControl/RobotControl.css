@@ -51,6 +51,77 @@
   flex-basis: 12px;
   opacity: 0.62;
 }
+.robot-control .robot-control-version-warning {
+  color: var(--warning-color, #ffc107);
+}
+.robot-control-backend {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--text-color) 3%, transparent);
+}
+.robot-control-backend-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 0.72rem;
+}
+.robot-control-version-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  color: var(--text-color);
+  background: color-mix(in srgb, var(--warning-color, #ffc107) 10%, transparent);
+  font-size: 0.65rem;
+  font-weight: 650;
+}
+.robot-control-version-badge.is-matched {
+  background: color-mix(in srgb, var(--success-color) 10%, transparent);
+}
+.robot-control-version-badge svg {
+  flex: 0 0 12px;
+  width: 12px;
+  height: 12px;
+  color: var(--warning-color, #ffc107);
+}
+.robot-control-version-badge.is-matched svg {
+  color: var(--success-color);
+}
+.robot-control-versions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+.robot-control-versions > div:nth-child(-n + 2) {
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: var(--card-bg);
+}
+.robot-control-versions dt {
+  color: var(--text-color-secondary);
+  font-size: 0.65rem;
+}
+.robot-control-versions dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.robot-control-versions > div:nth-child(n + 3) {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 2px 5px;
+  font-size: 0.65rem;
+}
+.robot-control-version-hint {
+  color: var(--text-color-secondary);
+  font-size: 0.7rem;
+}
 .robot-control[open] .robot-control-chevron {
   transform: rotate(180deg);
 }
@@ -265,9 +336,17 @@
 }
 @media (max-width: 900px) {
   .robot-control summary {
+    position: relative;
     width: 32px;
     padding: 0;
     justify-content: center;
+  }
+  .robot-control summary > .robot-control-version-warning {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 11px;
+    height: 11px;
   }
   .robot-control-label {
     position: absolute;

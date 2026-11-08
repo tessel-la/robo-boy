@@ -170,6 +170,16 @@ export default defineConfig(({ mode }) => {
     build: {
       outDir: process.env.ROBOBOY_DIST_DIR || 'dist',
       chunkSizeWarningLimit: 1600,
+      rollupOptions: {
+        output: {
+          // Keep connection/control code together and the workspace below Workbox's
+          // per-file precache limit. This stays statically loaded with the workspace.
+          onlyExplicitManualChunks: true,
+          manualChunks(id) {
+            if (id.includes('/src/features/robotControl/')) return 'robot-control';
+          },
+        },
+      },
     },
   };
 });

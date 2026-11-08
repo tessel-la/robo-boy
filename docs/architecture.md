@@ -68,6 +68,11 @@ acquisition, release, transfer, and persistent-run management. The gateway owns 
 and outstanding-work reservation. See [Shared robot control](robot-control.md) for the protocol,
 timeouts, fail-closed recovery, and panel contract.
 
+The control status includes the backend image's Robo-Boy version, active ROS distribution, and
+installed rosbridge version. The app shows these in **Robot control → Backend compatibility** and
+warns when app and stack releases differ or the backend version is unavailable. See
+[Backend compatibility](backend-compatibility.md) for the comparison and deployment rules.
+
 The connection object is passed to feature components. Code that creates a `ROSLIB.Topic`, `Service`, or action request must:
 
 - Require an active connection.

@@ -42,6 +42,39 @@ export function fakeControlRos() {
 }
 
 describe('ControlSession', () => {
+  it('keeps versions separate across simultaneous connections and replacement sessions', () => {
+    const a = fakeControlRos();
+    const b = fakeControlRos();
+    const first = new ControlSession(a.ros);
+    const second = new ControlSession(b.ros);
+    a.status({ backend: { stackVersion: '0.20.0-alpha', rosDistro: 'jazzy', rosbridgeVersion: '2.3.0' } });
+    b.status({ backend: { stackVersion: '0.19.0-alpha', rosDistro: 'humble', rosbridgeVersion: '2.2.0' } });
+    expect(first.getSnapshot()?.backend?.rosDistro).toBe('jazzy');
+    expect(second.getSnapshot()?.backend?.rosDistro).toBe('humble');
+    first.dispose();
+    const replacement = new ControlSession(a.ros);
+    expect(replacement.getSnapshot()).toBeNull();
+    expect(second.getSnapshot()?.backend?.stackVersion).toBe('0.19.0-alpha');
+    replacement.dispose();
+    second.dispose();
+  });
+  it('scopes backend metadata to fresh status without invalidating legacy control', () => {
+    vi.useFakeTimers();
+    const { ros, status } = fakeControlRos();
+    const session = new ControlSession(ros);
+    status({ backend: { stackVersion: '0.20.0-alpha', rosDistro: 'jazzy', rosbridgeVersion: '2.3.0' } });
+    expect(session.getSnapshot()?.backend?.rosDistro).toBe('jazzy');
+    status({ backend: { stackVersion: 5 } } as unknown as Partial<ControlStatus>);
+    expect(session.getSnapshot()?.backend?.stackVersion).toBeNull();
+    expect(session.getSnapshot()?.ready).toBe(true);
+    status();
+    expect(session.getSnapshot()?.backend).toBeUndefined();
+    status({ backend: { stackVersion: '0.20.0-alpha', rosDistro: 'jazzy', rosbridgeVersion: '2.3.0' } });
+    vi.advanceTimersByTime(10000);
+    expect(session.getSnapshot()).toBeNull();
+    session.dispose();
+    expect(controlSessionFor(ros)).toBeUndefined();
+  });
   beforeEach(() => {
     vi.mocked(defaultSessionName).mockReset().mockResolvedValue(undefined);
     vi.mocked(rememberSessionName).mockClear();

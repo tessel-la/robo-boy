@@ -185,6 +185,12 @@ derived cloud to the first 1,000,000 points. Raw topics and recordings retain al
 fields and precision. The 3D view prefers the derived topic when discovery advertises it;
 saved topic names and backends without the relay continue to use raw PointCloud2.
 
+The relay's reserved `/roboboy/cloudini/` streams default to reliable, transient-local
+subscriptions in rosbridge, including when a viewer subscribes before DDS discovers the relay.
+This preserves the retained cloud for later viewers after raw publishing stops. Other topics
+keep rosbridge's normal QoS inference. The ROS image applies and tests this narrow patch at build
+time; the integration test covers subscription before publisher startup and late viewers.
+
 Decoding runs in one shared worker per connection/topic, with one active frame and one
 newest pending frame. The decoder checks embedded/outer layouts and output capacity before
 writing, accepts at most 8 MiB encoded/32 MiB decoded data, and releases the WASM heap after

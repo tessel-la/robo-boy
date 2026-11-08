@@ -1067,6 +1067,21 @@ class SocketFixture(tornado.testing.AsyncHTTPTestCase):
 
 class SocketTests(SocketFixture):
     @tornado.testing.gen_test
+    async def test_backend_identity_is_available_to_observers_and_cannot_be_spoofed(self):
+        self.authority.backend = dict(stackVersion='0.21.0-alpha', rosDistro='jazzy', rosbridgeVersion='2.3.0')
+        observer, client_id = await self.connect()
+        await observer.write_message(json.dumps(dict(op='subscribe', topic=STATUS_TOPIC)))
+        status = await self.status(observer)
+        self.assertEqual(status['backend'], self.authority.backend)
+        self.assertIsNone(status['owner'])
+        self.assertIsNone(status['token'])
+        await observer.write_message(json.dumps(dict(op='publish', topic=STATUS_TOPIC,
+                                                     msg=dict(data=json.dumps(dict(backend=dict(stackVersion='fake')))))))
+        status = await self.status(observer, lambda value: bool(value['error']))
+        self.assertEqual(status['backend'], self.authority.backend)
+        self.assertFalse(self.received)
+
+    @tornado.testing.gen_test
     async def test_parameter_reads_verify_the_actual_upstream_type_and_hide_probes(self):
         observer, _ = await self.connect()
         for request_id, service, expected in (('read', '/controller/get_parameters', True), ('spoof', '/custom/get_parameters', False)):
