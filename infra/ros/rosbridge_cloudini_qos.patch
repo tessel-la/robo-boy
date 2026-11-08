@@ -1,0 +1,19 @@
+--- a/internal/subscribers.py
++++ b/internal/subscribers.py
+@@ -167,6 +167,16 @@
+         - https://github.com/RobotWebTools/rosbridge_suite/issues/551
+         - https://github.com/RobotWebTools/rosbridge_suite/issues/769
+         """
++        # Robo-Boy's reserved relay namespace always publishes retained, reliable
++        # clouds. Discovery may still be empty on first subscribe; do not pin that
++        # stream to volatile QoS and lose the cached cloud for later viewers.
++        if topic.startswith("/roboboy/cloudini/"):
++            return QoSProfile(
++                depth=1,
++                durability=DurabilityPolicy.TRANSIENT_LOCAL,
++                reliability=ReliabilityPolicy.RELIABLE,
++            )
++
+         qos = QoSProfile(
+             depth=10,
+             durability=DurabilityPolicy.VOLATILE,

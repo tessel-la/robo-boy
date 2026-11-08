@@ -11,7 +11,7 @@ import time
 
 import cbor2
 import rclpy
-from rclpy.qos import qos_profile_sensor_data
+from rclpy.qos import DurabilityPolicy, ReliabilityPolicy, qos_profile_sensor_data
 from sensor_msgs.msg import PointCloud2, PointField
 from tornado.websocket import websocket_connect
 
@@ -20,6 +20,7 @@ async def main():
     rclpy.init()
     node = rclpy.create_node('cloudini_fixture')
     publisher = node.create_publisher(PointCloud2, '/fixture/points', qos_profile_sensor_data)
+    unused = node.create_publisher(PointCloud2, '/fixture/unused', qos_profile_sensor_data)
     message = PointCloud2()
     message.header.frame_id = 'laser'
     message.header.stamp.sec, message.header.stamp.nanosec = 123, 456789
@@ -37,19 +38,20 @@ async def main():
     try:
         print('Cloudini: starting the isolated relay, rosbridge, and gateway', flush=True)
         commands = [
-            ['/opt/roboboy-cloudini/bin/pointcloud-relay'],
             ['ros2', 'launch', '/ros_ws/rosbridge_launch.xml', 'port:=19092', 'address:=127.0.0.1', 'respawn:=false'],
             ['python3', '/ros_ws/control_gateway.py', '--port', '19090', '--upstream-port', '19092'],
         ]
         for command in commands:
             processes.append(subprocess.Popen(command, start_new_session=True))
         for _ in range(100):
-            if '/roboboy/cloudini/fixture/points' in dict(node.get_topic_names_and_types()):
+            try:
+                bridge_probe = await websocket_connect('ws://127.0.0.1:19092', connect_timeout=1)
+                bridge_probe.close()
                 break
-            await asyncio.sleep(0.1)
+            except OSError:
+                await asyncio.sleep(0.1)
         else:
-            raise AssertionError('Derived topic was not discovered')
-        assert publisher.get_subscription_count() == 0, 'Relay must not consume unused clouds'
+            raise AssertionError('Private rosbridge did not start')
         for _ in range(100):
             try:
                 socket = await websocket_connect('ws://127.0.0.1:19090', connect_timeout=1)
@@ -60,6 +62,28 @@ async def main():
         print('Cloudini: checking compressed data and rosapi response', flush=True)
         await socket.write_message(json.dumps(dict(op='subscribe', topic='/roboboy/cloudini/fixture/points',
             type='point_cloud_interfaces/msg/CompressedPointCloud2', compression='cbor', queue_length=1)))
+
+        # Reproduce the cold-start ordering: rosbridge subscribes before the relay
+        # exists. Inferring QoS from an empty graph used to pin this to volatile.
+        for _ in range(100):
+            subscriptions = node.get_subscriptions_info_by_topic('/roboboy/cloudini/fixture/points')
+            if subscriptions:
+                break
+            await asyncio.sleep(0.1)
+        else:
+            raise AssertionError('Early rosbridge subscription was not discovered')
+        assert all(info.qos_profile.durability == DurabilityPolicy.TRANSIENT_LOCAL
+                   and info.qos_profile.reliability == ReliabilityPolicy.RELIABLE
+                   for info in subscriptions), 'Early Cloudini subscriptions must retain clouds for later viewers'
+        processes.append(subprocess.Popen(['/opt/roboboy-cloudini/bin/pointcloud-relay'], start_new_session=True))
+        for _ in range(100):
+            if ('/roboboy/cloudini/fixture/points' in dict(node.get_topic_names_and_types())
+                    and '/rosapi/topics' in dict(node.get_service_names_and_types())):
+                break
+            await asyncio.sleep(0.1)
+        else:
+            raise AssertionError('Relay and rosapi were not discovered')
+        assert unused.get_subscription_count() == 0, 'Relay must not consume unused clouds'
         await socket.write_message(json.dumps(dict(op='call_service', id='probe', service='/rosapi/topics', args={})))
         cloud, probe = None, False
         deadline = time.monotonic() + 15
@@ -68,11 +92,17 @@ async def main():
             assert raw is not None, 'Gateway disconnected'
             data = cbor2.loads(raw) if isinstance(raw, bytes) else json.loads(raw)
             if data.get('op') == 'service_response' and data.get('id') == 'probe':
-                assert data.get('result') is True
-                probe = True
+                if data.get('result') is True:
+                    probe = True
+                else:
+                    # Each ROS process discovers services independently. A fixture's
+                    # graph does not prove that rosbridge can already see rosapi.
+                    assert 'does not exist' in str(data.get('values')), data
+                    await asyncio.sleep(0.1)
+                    await socket.write_message(json.dumps(dict(op='call_service', id='probe', service='/rosapi/topics', args={})))
             if data.get('op') == 'publish' and data.get('topic') == '/roboboy/cloudini/fixture/points':
                 cloud = data['msg']
-        assert cloud and probe
+        assert cloud and probe, 'Compressed cloud or rosapi response did not arrive before the deadline'
         if isinstance(cloud['compressed_data'], cbor2.CBORTag):
             cloud['compressed_data'] = cloud['compressed_data'].value
         assert cloud['format'] == 'cloudini'
