@@ -42,6 +42,11 @@ describe('EntrySection connection target', () => {
     setEnterpriseSession(null);
   });
 
+  it('keeps the connection form focused on connecting', () => {
+    render(<EntrySection onConnect={vi.fn()} />);
+    expect(screen.queryByRole('button', { name: /Catalog|recordings/i })).not.toBeInTheDocument();
+  });
+
   it('explains multiple workspaces and labels the host form disclosure', () => {
     render(<EntrySection onConnect={vi.fn()} />);
     expect(screen.getByText('Each connection has its own workspace. Add more as you go.')).toBeVisible();

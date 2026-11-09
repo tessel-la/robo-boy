@@ -1,3 +1,4 @@
+import { useImportSession } from '../../library/useImportSession';
 import React, { useState, useRef, useEffect } from 'react';
 import { MdSelectAll } from 'react-icons/md';
 import TreePanelMenu from '../../treePanel/components/TreePanelMenu';
@@ -5,7 +6,7 @@ import BlackboardEditor from './BlackboardEditor';
 import { BehaviorNodeType, BehaviorTree, BlackboardValueType } from '../types';
 import {
   BEHAVIOR_TREE_STORAGE_EVENT,
-  listBehaviorTrees,
+  listAvailableBehaviorTrees,
   loadBehaviorTree,
   deleteBehaviorTree,
   importBehaviorTree,
@@ -81,8 +82,9 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
   blackboardTypes,
   onBlackboardDefaultsChange,
 }) => {
+  const startImport = useImportSession(currentTree?.id, !isEditingLocked);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [savedTrees, setSavedTrees] = useState(listBehaviorTrees());
+  const [savedTrees, setSavedTrees] = useState(listAvailableBehaviorTrees());
   const [nameValue, setNameValue] = useState(currentTree?.name ?? '');
   const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null);
   const [pendingNew, setPendingNew] = useState(false);
@@ -101,13 +103,13 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
   }, [isEditingLocked]);
 
   useEffect(() => {
-    const handleSavedTreesChanged = () => setSavedTrees(listBehaviorTrees());
+    const handleSavedTreesChanged = () => setSavedTrees(listAvailableBehaviorTrees());
     window.addEventListener(BEHAVIOR_TREE_STORAGE_EVENT, handleSavedTreesChanged);
     return () => window.removeEventListener(BEHAVIOR_TREE_STORAGE_EVENT, handleSavedTreesChanged);
   }, []);
 
   const openMenu = () => {
-    setSavedTrees(listBehaviorTrees());
+    setSavedTrees(listAvailableBehaviorTrees());
     setMenuOpen(true);
   };
 
@@ -119,7 +121,7 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
 
   const handleSave = () => {
     onSave();
-    setSavedTrees(listBehaviorTrees());
+    setSavedTrees(listAvailableBehaviorTrees());
   };
 
   const handleLoad = (treeId: string) => {
@@ -152,7 +154,7 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
   const confirmDelete = () => {
     if (!pendingDelete) return;
     deleteBehaviorTree(pendingDelete.id);
-    setSavedTrees(listBehaviorTrees());
+    setSavedTrees(listAvailableBehaviorTrees());
     setPendingDelete(null);
   };
 
@@ -179,7 +181,10 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const tree = await importBehaviorTree(file);
+      e.target.value = '';
+      const signal = startImport();
+      const tree = await importBehaviorTree(file, signal);
+      if (signal.aborted) return;
       if (tree) {
         onLoad(tree);
         closeMenu();
@@ -282,7 +287,7 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
           {savedTrees.length === 0 ? (
             <div className="bt-menu-empty">No saved trees yet</div>
           ) : (
-            savedTrees.map(({ tree }) => (
+            savedTrees.map(({ tree, imported }) => (
               <div
                 key={tree.id}
                 className={`bt-menu-tree-row${tree.id === currentTree?.id ? ' active' : ''}`}
@@ -295,16 +300,20 @@ const BehaviorTreeToolbar: React.FC<BehaviorTreeToolbarProps> = ({
               >
                 <div className="bt-menu-tree-info">
                   <span className="bt-menu-tree-name">{tree.name}</span>
-                  <span className="bt-menu-tree-date">{new Date(tree.updatedAt).toLocaleDateString()}</span>
+                  <span className="bt-menu-tree-date">
+                    {imported ? 'Imported' : new Date(tree.updatedAt).toLocaleDateString()}
+                  </span>
                 </div>
-                <button
-                  className="bt-menu-tree-delete"
-                  onClick={event => handleDelete(tree, event)}
-                  title="Delete"
-                  aria-label="Delete tree"
-                >
-                  ×
-                </button>
+                {!imported && (
+                  <button
+                    className="bt-menu-tree-delete"
+                    onClick={event => handleDelete(tree, event)}
+                    title="Delete"
+                    aria-label="Delete tree"
+                  >
+                    ×
+                  </button>
+                )}
               </div>
             ))
           )}

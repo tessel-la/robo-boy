@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 1,
+  "title": "Robo-Boy Catalog",
+  "items": [
+    {
+      "id": "la.tessel.panda.inspection",
+      "title": "Panda inspection",
+      "description": "Inspection workspace, a passive joint readout Pad and a readiness BT example. Adapt topics and frames to your robot before use. No hardware validation is claimed.",
+      "kind": "collection",
+      "kinds": [
+        "workspace",
+        "pad",
+        "behaviorTree"
+      ],
+      "version": "1.0.0",
+      "url": "generic/panda-inspection/1.0.0.json",
+      "sha256": "a9151861b1521e402e7ebefee3ba343dce142e23bd6f532952e6b59cee90b448",
+      "tags": [
+        "generic",
+        "panda",
+        "inspection"
+      ]
+    },
+    {
+      "id": "la.tessel.generic.inspection",
+      "title": "Robot inspection",
+      "description": "Inspection workspace, a passive joint readout Pad and a readiness BT example. Adapt topics and frames to your robot before use. No hardware validation is claimed.",
+      "kind": "collection",
+      "kinds": [
+        "workspace",
+        "pad",
+        "behaviorTree"
+      ],
+      "version": "1.0.0",
+      "url": "generic/inspection/1.0.0.json",
+      "sha256": "b3fcdd57fff4f7ad2c58fd59e79775f2abe117577291d51089d553f6cb323aae",
+      "tags": [
+        "generic",
+        "inspection"
+      ]
+    },
+    {
+      "id": "la.tessel.genesis.control",
+      "title": "Genesis control",
+      "description": "Genesis workspace with 3D, TF tree, Camera and the three-joystick Genesis Control Pad, plus an X/Y twist BT example. Adapt topics and frames to your setup before use; no hardware validation is claimed.",
+      "kind": "collection",
+      "kinds": [
+        "workspace",
+        "pad",
+        "behaviorTree"
+      ],
+      "version": "1.0.0",
+      "url": "genesis-manipulator/control/1.0.0.json",
+      "sha256": "5548a8bee3b25424cf4011e96e88015bcaa8285f19dad0d0a227ecb07c95c11f",
+      "tags": [
+        "genesis-manipulator",
+        "genesis",
+        "simulator",
+        "manipulator",
+        "servo"
+      ]
+    }
+  ]
+}

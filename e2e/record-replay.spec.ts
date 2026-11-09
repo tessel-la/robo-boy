@@ -1,3 +1,4 @@
+import { openAppTool } from './helpers/navigation';
 import { expect, test } from '@playwright/test';
 import { McapWriter, TempBuffer } from '@mcap/core';
 import { getPublishedRosMessages, installRosMock } from './helpers/rosMock';
@@ -99,7 +100,7 @@ async function sampleMcap(): Promise<Uint8Array> {
 test('opens a local MCAP through the replay worker without a ROS connection', async ({ page }) => {
   const bytes = await sampleMcap();
   await page.goto('/');
-  await page.getByRole('button', { name: 'Open local recordings', exact: true }).click();
+  await openAppTool(page, 'Recordings');
   const panel = page.getByRole('region', { name: 'Record & Replay', exact: true });
   await panel
     .getByLabel('Open MCAP recording')

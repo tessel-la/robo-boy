@@ -1,3 +1,4 @@
+import { copyTree } from '../portableTree';
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import ReactFlow, {
   Background,
@@ -108,6 +109,7 @@ import {
 import './BehaviorTreePanel.css';
 
 interface BehaviorTreePanelProps {
+  initialTree?: BehaviorTree;
   ros: Ros | null;
   isConnected: boolean;
   isActive: boolean;
@@ -533,6 +535,7 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
   ros,
   isConnected,
   isActive,
+  initialTree,
   onExecutionChange,
   onExecutionControlsChange,
   panelId = 'primary',
@@ -983,9 +986,9 @@ const BehaviorTreePanelInner: React.FC<BehaviorTreePanelProps> = ({
         createdAt: Date.now(),
         updatedAt: Date.now(),
       };
-      loadRootTree(newTree);
+      loadRootTree(initialTree?copyTree(initialTree):newTree);
     }
-  }, [loadRootTree, rootTree]);
+  }, [loadRootTree, rootTree, initialTree]);
 
   useEffect(() => {
     return () => {

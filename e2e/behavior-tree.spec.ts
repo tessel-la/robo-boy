@@ -231,6 +231,9 @@ async function importTreeFromMenu(page: Page, tree: Record<string, unknown>) {
     mimeType: 'application/json',
     buffer: Buffer.from(JSON.stringify({ tree, version: '1.0.0' })),
   });
+  const review = page.getByRole('dialog', { name: 'Import Behavior Tree', exact: true });
+  await expect(review).toContainText(String(tree.name));
+  await review.getByRole('button', { name: 'Import', exact: true }).click();
 }
 
 test.describe('Behavior Tree panel', () => {

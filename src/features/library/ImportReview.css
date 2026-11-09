@@ -1,0 +1,71 @@
+.content-import-dialog {
+  box-sizing: border-box;
+  width: min(560px, calc(100vw - 24px));
+  max-height: calc(100dvh - 24px);
+  padding: 0;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--card-bg);
+  color: var(--text-color);
+  font-family: var(--font-family-ui);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.content-import-dialog::backdrop {
+  background: var(--background-color);
+  opacity: 0.75;
+}
+.content-import-dialog header {
+  padding: 16px;
+  border-bottom: 1px solid var(--border-color);
+}
+.content-import-dialog h2 {
+  margin: 0;
+  font-size: 15px;
+}
+.content-import-body {
+  padding: 4px 16px;
+  max-height: 60dvh;
+  overflow: auto;
+  overflow-wrap: anywhere;
+}
+.content-import-body ul {
+  padding-left: 20px;
+}
+.content-import-body li {
+  margin: 10px 0;
+}
+.content-import-body p {
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+.content-import-dialog footer {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border-color);
+}
+.content-import-dialog button {
+  min-height: 44px;
+  padding: 8px 16px;
+  background: var(--background-secondary);
+  color: var(--text-color);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  font: inherit;
+  cursor: pointer;
+}
+.content-import-dialog button:focus-visible {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 2px;
+}
+.content-import-dialog button:hover {
+  border-color: var(--primary-color);
+}
+.content-import-dialog .content-import-primary {
+  background: var(--primary-color);
+  color: var(--button-text-color);
+  border-color: var(--primary-color);
+}

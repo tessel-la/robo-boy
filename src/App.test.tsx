@@ -92,6 +92,20 @@ describe('App connection sessions', () => {
     expect(lifecycle.mounted).toHaveBeenCalledTimes(2);
   });
 
+  it('opens one local replay session from the menu while preserving a live robot session', async () => {
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Connect alpha' }));
+    await screen.findByRole('button', { name: /Switch connections.*alpha\.local.*Connected/ });
+    fireEvent.click(screen.getByRole('button', { name: /Switch connections/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Recordings' }));
+    await screen.findByText('localhost:active');
+    expect(lifecycle.unmounted).not.toHaveBeenCalled();
+    expect(lifecycle.mounted).toHaveBeenCalledTimes(2);
+    fireEvent.click(screen.getByRole('button', { name: /Switch connections/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Recordings' }));
+    expect(lifecycle.mounted).toHaveBeenCalledTimes(2);
+  });
+
   it('deactivates a tab before removing its connection owner', async () => {
     render(<App />);
     fireEvent.click(screen.getByRole('button', { name: 'Connect alpha' }));

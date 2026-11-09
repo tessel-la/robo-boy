@@ -1,0 +1,271 @@
+{
+  "schemaVersion": 1,
+  "id": "la.tessel.genesis.control",
+  "version": "1.0.0",
+  "title": "Genesis control",
+  "description": "Genesis workspace with 3D, TF tree, Camera and the three-joystick Genesis Control Pad, plus an X/Y twist BT example. Adapt topics and frames to your setup before use; no hardware validation is claimed.",
+  "tags": [
+    "genesis",
+    "manipulator",
+    "servo"
+  ],
+  "compatibility": {
+    "roboboy": ">=0.19.0-0 <1.0.0"
+  },
+  "entryDocument": "workspace/control",
+  "documents": [
+    {
+      "id": "pad/genesis-control",
+      "kind": "pad",
+      "formatVersion": 1,
+      "data": {
+        "id": "genesis-control-pad",
+        "name": "Genesis Control",
+        "description": "Control Genesis robot with two joysticks for linear and angular motion.",
+        "components": [
+          {
+            "id": "linear-joystick",
+            "type": "joystick",
+            "position": {
+              "x": 0,
+              "y": 1,
+              "width": 3,
+              "height": 3
+            },
+            "label": "Linear Motion",
+            "action": {
+              "topic": "/arm_1/servo_node/delta_twist_cmds",
+              "messageType": "geometry_msgs/msg/TwistStamped",
+              "field": "twist"
+            },
+            "config": {
+              "min": -1,
+              "max": 1,
+              "axes": [
+                "linear.x",
+                "linear.y"
+              ],
+              "axisScales": [
+                1,
+                1
+              ],
+              "sliderMin": -1,
+              "sliderMax": 1
+            }
+          },
+          {
+            "id": "angular-joystick",
+            "type": "joystick",
+            "position": {
+              "x": 5,
+              "y": 1,
+              "width": 3,
+              "height": 3
+            },
+            "label": "Angular Motion",
+            "action": {
+              "topic": "/arm_1/servo_node/delta_twist_cmds",
+              "messageType": "geometry_msgs/msg/TwistStamped",
+              "field": "twist"
+            },
+            "config": {
+              "min": -1,
+              "max": 1,
+              "axes": [
+                "angular.x",
+                "angular.y"
+              ],
+              "axisScales": [
+                1,
+                1
+              ]
+            }
+          },
+          {
+            "id": "linear-z-joystick",
+            "type": "joystick",
+            "position": {
+              "x": 3,
+              "y": 1,
+              "width": 2,
+              "height": 3
+            },
+            "label": "Linear Z",
+            "action": {
+              "topic": "/arm_1/servo_node/delta_twist_cmds",
+              "messageType": "geometry_msgs/msg/TwistStamped",
+              "field": "twist"
+            },
+            "config": {
+              "min": -1,
+              "max": 1,
+              "axes": [
+                "linear.z"
+              ],
+              "axisScales": [
+                1
+              ],
+              "sliderMin": -1,
+              "sliderMax": 1
+            }
+          }
+        ],
+        "gridSize": {
+          "width": 8,
+          "height": 4
+        },
+        "cellSize": 80,
+        "rosConfig": {
+          "defaultTopic": "/arm_1/servo_node/delta_twist_cmds",
+          "defaultMessageType": "geometry_msgs/msg/TwistStamped"
+        },
+        "metadata": {
+          "created": "2026-01-01T00:00:00.000Z",
+          "modified": "2026-09-09T19:59:03.116Z",
+          "version": "1.0.0"
+        }
+      }
+    },
+    {
+      "id": "bt/move-xy",
+      "kind": "behaviorTree",
+      "formatVersion": 1,
+      "data": {
+        "id": "2c99041f-0ed5-4f64-9eb9-4555fe355bbb",
+        "name": "Move Genesis X Y",
+        "description": "Publishes one TwistStamped command with linear X/Y velocities of 0.1 m/s to the Genesis servo topic. This is a velocity command, not a 0.1 m displacement. Review frame and timestamp requirements before running.",
+        "createdAt": 1789079576895,
+        "updatedAt": 1789079578366,
+        "blackboardDefaults": {},
+        "nodes": [
+          {
+            "id": "move-genesis-xy-01",
+            "type": "topic",
+            "position": {
+              "x": 0,
+              "y": 0
+            },
+            "data": {
+              "label": "Publish X/Y twist (0.1 m/s)",
+              "topicName": "/arm_1/servo_node/delta_twist_cmds",
+              "messageType": "geometry_msgs/msg/TwistStamped",
+              "message": {
+                "header": {
+                  "stamp": {
+                    "sec": 0,
+                    "nanosec": 0
+                  },
+                  "frame_id": ""
+                },
+                "twist": {
+                  "linear": {
+                    "x": 0.1,
+                    "y": 0.1,
+                    "z": 0
+                  },
+                  "angular": {
+                    "x": 0,
+                    "y": 0,
+                    "z": 0
+                  }
+                }
+              },
+              "publishOnce": true,
+              "inputBindings": []
+            }
+          }
+        ],
+        "edges": []
+      }
+    },
+    {
+      "id": "workspace/control",
+      "kind": "workspace",
+      "formatVersion": 1,
+      "data": {
+        "id": "genesis-control",
+        "title": "Genesis control",
+        "panels": [
+          {
+            "id": "workspace-panel-y0n0k77-1789825516314",
+            "type": "3d",
+            "title": "3D view",
+            "visualization": {
+              "visualizations": [],
+              "fixedFrame": "world",
+              "displayedTfFrames": [],
+              "showAllTfFrames": true,
+              "showTfAxes": true,
+              "showTfFrameLabels": false,
+              "showTfConnections": true,
+              "tfAxesScale": 0.1,
+              "tfAxesWidth": 0.004,
+              "tfLabelScale": 0.12,
+              "tfAxesOpacity": 1,
+              "tfLabelOpacity": 1,
+              "showTfLabelBackground": false
+            }
+          },
+          {
+            "id": "workspace-panel-nryzci8-1789825527124",
+            "type": "tfTree",
+            "title": "TF tree"
+          },
+          {
+            "id": "workspace-panel-0k47f4l-1791408511215",
+            "type": "camera",
+            "title": "Camera"
+          },
+          {
+            "id": "workspace-panel-af4kk9i-1791408567364",
+            "type": "pad",
+            "title": "Pad controls",
+            "layoutId": "pad/genesis-control"
+          }
+        ],
+        "tileOrder": [
+          "workspace-panel-y0n0k77-1789825516314",
+          "workspace-panel-nryzci8-1789825527124",
+          "workspace-panel-0k47f4l-1791408511215",
+          "workspace-panel-af4kk9i-1791408567364"
+        ],
+        "layout": {
+          "version": 2,
+          "root": {
+            "type": "split",
+            "axis": "y",
+            "ratio": 0.5,
+            "first": {
+              "type": "split",
+              "axis": "x",
+              "ratio": 0.5,
+              "first": {
+                "type": "tile",
+                "id": "workspace-panel-y0n0k77-1789825516314"
+              },
+              "second": {
+                "type": "tile",
+                "id": "workspace-panel-nryzci8-1789825527124"
+              }
+            },
+            "second": {
+              "type": "split",
+              "axis": "x",
+              "ratio": 0.5,
+              "first": {
+                "type": "tile",
+                "id": "workspace-panel-0k47f4l-1791408511215"
+              },
+              "second": {
+                "type": "tile",
+                "id": "workspace-panel-af4kk9i-1791408567364"
+              }
+            }
+          }
+        },
+        "createdAt": "1970-01-01T00:00:00.000Z",
+        "updatedAt": "1970-01-01T00:00:00.000Z"
+      }
+    }
+  ]
+}
