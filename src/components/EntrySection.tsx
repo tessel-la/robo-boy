@@ -308,11 +308,11 @@ const EntrySection: React.FC<EntrySectionProps> = ({ onConnect, embedded = false
             </h1>
           ) : (
             <h1 className="app-title">
-              <span className="title-robo">Robo</span>
+              <span className="title-robo">robo</span>
               <span className="title-dash" ref={dashRef}>
                 -
               </span>
-              <span className="title-boy">Boy</span>
+              <span className="title-boy">boy</span>
             </h1>
           )}
         </div>
