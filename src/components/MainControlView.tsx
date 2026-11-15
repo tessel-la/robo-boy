@@ -1,3 +1,11 @@
+import { useLibrary } from '../features/library/LibraryProvider';
+import { getLibraryTree, openLibraryWorkspace, type LibraryOpenRequest } from '../features/library/runtime';
+import {
+  normalizeWorkspacePanel, normalizeSavedWorkspaceLayout, normalizeWorkspaceTileOrder,
+  withoutApprovedRosTopics, visualizationStorageKey,
+  type WorkspacePanel, type SavedWorkspaceLayout, type ExportedWorkspacePanel, type WorkspaceBundleV2,
+} from '../features/workspace/documents';
+import { useImportSession } from '../features/library/useImportSession';
 import TimeSeriesPanel from '../features/timeSeries/TimeSeriesPanel';
 import { flushSync } from 'react-dom';
 import DataExplorerPanel, { type ExplorerOpenRequest } from '../features/dataExplorer/DataExplorerPanel';
@@ -35,7 +43,6 @@ import { generateUniqueId } from '../utils/helpers'; // Assuming a helper exists
 import ControlPanelTabs from './ControlPanelTabs'; // Import the new tabs component
 import AddPanelMenu from './AddPanelMenu'; // Import the AddPanelMenu component
 import { GamepadType } from './gamepads/GamepadInterface';
-import GamepadEditor from '../features/customGamepad/components/GamepadEditor';
 import { CustomGamepadLayout } from '../features/customGamepad/types';
 import {
   cloneGamepadTemplate,
@@ -43,7 +50,6 @@ import {
   downloadGamepadLayout,
   getGamepadLayout,
   importGamepadFile,
-  importGamepadLayouts,
   loadGamepadLibrary,
   GAMEPAD_STORAGE_EVENT,
 } from '../features/customGamepad/gamepadStorage';
@@ -60,16 +66,11 @@ import { useRuntimeConfig } from '../runtime/runtimeConfig';
 import anime from 'animejs';
 import ExternalPanelHost from '../panels/ExternalPanelHost';
 import PanelManagerDialog from '../panels/PanelManagerDialog';
-import { BUILT_IN_PANELS, createPanelCatalog, isBuiltInPanelId, LEGACY_TIME_SERIES_ID } from '../panels/builtInPanels';
+import { BUILT_IN_PANELS, createPanelCatalog, isBuiltInPanelId } from '../panels/builtInPanels';
 import {
-  isJsonObject,
-  isStoredPanelState,
   type PanelHostRuntime,
   type PanelCatalogEntry,
-  type RoboBoyRosTopic,
-  type StoredPanelState,
 } from '../panels/types';
-import { validatePanelState } from '../panels/storage';
 import { APP_VERSION } from '../features/appUpdate/releases';
 import { CAMERA_STREAM_PRESETS, CAMERA_STREAM_QUALITIES, isCameraStreamQuality } from '../utils/cameraStreamQuality';
 import { isValidPanelId } from '../panels/registry';
@@ -92,6 +93,8 @@ import GlobalAssistant, { type GlobalAssistantHandle } from '../features/assista
 import { buildWorkspaceSnapshot } from '../features/assistant/context/workspaceSnapshot';
 import type { BehaviorTreeAssistantBridge, PanelSettingsBridge } from '../features/assistant/types';
 import { resolvePanelType, type WorkspaceEditOperation, type WorkspaceEditResult } from '../features/assistant/tools/workspaceTool';
+
+const GamepadEditor = React.lazy(() => import('../features/customGamepad/components/GamepadEditor'));
 
 // --- Top Bar Icons ---
 const IconMCVCamera = () => (
@@ -390,6 +393,8 @@ export interface ActivePanel {
 }
 
 interface MainControlViewProps {
+  libraryRequest?: LibraryOpenRequest;
+  onLibraryRequestHandled?: () => void;
   connectionParams: ConnectionParams;
   onDisconnect: () => void;
   isActive?: boolean;
@@ -418,18 +423,6 @@ type WorkspacePadMenuState = {
   panelId: string;
 };
 
-interface WorkspacePanel {
-  id: string;
-  type: WorkspacePanelType;
-  title: string;
-  cameraTopic?: string;
-  layoutId?: string;
-  panelState?: StoredPanelState;
-  approvedRosTopics?: RoboBoyRosTopic[];
-  /** Set when the Data Explorer configures this tile, so a tile that already shows the same panel
-   * type remounts and reads its new configuration instead of keeping the old one. */
-  openedAt?: number;
-}
 
 type WorkspaceTile =
   | { kind: 'view'; id: 'base-view' }
@@ -507,62 +500,6 @@ const createWorkspacePanel = (
     type: draft.type,
     cameraTopic: draft.type === 'camera' ? options.cameraTopic : undefined,
     layoutId: draft.type === 'pad' ? options.layoutId : undefined,
-  };
-};
-
-const normalizeApprovedRosTopics = (value: unknown): RoboBoyRosTopic[] | undefined => {
-  if (!Array.isArray(value)) return undefined;
-  const topics = new Map<string, string>();
-  value.slice(0, 32).forEach(candidate => {
-    if (!candidate || typeof candidate !== 'object') return;
-    const { name, messageType } = candidate as Partial<RoboBoyRosTopic>;
-    if (
-      typeof name !== 'string' ||
-      !name.startsWith('/') ||
-      name.length > 512 ||
-      /\s/.test(name) ||
-      typeof messageType !== 'string' ||
-      !messageType ||
-      messageType.length > 512 ||
-      /\s/.test(messageType)
-    ) {
-      return;
-    }
-    topics.set(name, messageType);
-  });
-  return topics.size ? [...topics.entries()].map(([name, messageType]) => ({ name, messageType })) : undefined;
-};
-
-const withoutApprovedRosTopics = ({
-  approvedRosTopics: _approvedRosTopics,
-  ...panel
-}: WorkspacePanel): WorkspacePanel => panel;
-
-const normalizeWorkspacePanel = (panel: unknown, allowApprovedRosTopics = true): WorkspacePanel | null => {
-  if (!panel || typeof panel !== 'object') return null;
-  const candidate = panel as Partial<WorkspacePanel>;
-  if (typeof candidate.id !== 'string' || !isValidPanelId(candidate.type) || typeof candidate.title !== 'string') {
-    return null;
-  }
-
-  const storedPanelState =
-    isStoredPanelState(candidate.panelState, candidate.type) && validatePanelState(candidate.panelState.values)
-      ? candidate.panelState
-      : isJsonObject(candidate.panelState) && validatePanelState(candidate.panelState)
-        ? { schemaVersion: 1 as const, panelId: candidate.type, values: candidate.panelState }
-        : undefined;
-
-  return {
-    id: candidate.id,
-    type: (candidate.type === LEGACY_TIME_SERIES_ID ? 'timeSeries' : candidate.type) as WorkspacePanelType,
-    title: candidate.type === 'pad' ? getWorkspaceTitle('pad') : candidate.title,
-    cameraTopic: candidate.cameraTopic,
-    layoutId: candidate.layoutId,
-    panelState:
-      storedPanelState && candidate.type === LEGACY_TIME_SERIES_ID
-        ? { ...storedPanelState, panelId: 'timeSeries' }
-        : storedPanelState,
-    approvedRosTopics: allowApprovedRosTopics ? normalizeApprovedRosTopics(candidate.approvedRosTopics) : undefined,
   };
 };
 
@@ -644,33 +581,6 @@ const loadUnifiedWorkspacePanels = (storageScope?: string): WorkspacePanel[] | n
   }
 };
 
-type SavedWorkspaceLayout = {
-  id: string;
-  title: string;
-  panels: WorkspacePanel[];
-  tileOrder: string[];
-  layout: WorkspaceLayoutState;
-  createdAt: string;
-  updatedAt: string;
-};
-
-/** A 3D panel keeps its scene settings in visualization storage keyed by panel id, not on the
- * panel record; a portable bundle carries them next to the panel so a layout imported elsewhere
- * brings its frames, fixed frame and frame display along. */
-type ExportedWorkspacePanel = WorkspacePanel & { visualization?: VisualizationPanelState };
-type ExportedWorkspaceLayout<T extends { panels: WorkspacePanel[] }> = Omit<T, 'panels'> & { panels: ExportedWorkspacePanel[] };
-
-type WorkspaceBundleV2 = {
-  version: 2;
-  exportedAt: string;
-  currentWorkspace: ExportedWorkspaceLayout<Omit<SavedWorkspaceLayout, 'id' | 'title' | 'createdAt' | 'updatedAt'>>;
-  layouts: ExportedWorkspaceLayout<SavedWorkspaceLayout>[];
-  gamepads: CustomGamepadLayout[];
-};
-
-const visualizationStorageKey = (panelId: string, storageScope?: string) =>
-  getConnectionStorageKey(`roboboy_3d_visualization_state_${panelId}`, storageScope);
-
 type WorkspaceSnapTemplate = {
   id: string;
   title: string;
@@ -707,32 +617,6 @@ const loadWorkspaceLayout = (storageScope?: string): WorkspaceLayoutState => {
 
 const normalizeWorkspaceLayoutState = (layout: unknown, tileOrder: string[]): WorkspaceLayoutState =>
   normalizeWorkspaceLayout(layout, tileOrder);
-
-const normalizeSavedWorkspaceLayout = (layout: unknown, allowApprovedRosTopics = true): SavedWorkspaceLayout | null => {
-  if (!layout || typeof layout !== 'object') return null;
-  const candidate = layout as Partial<SavedWorkspaceLayout>;
-  if (typeof candidate.id !== 'string' || typeof candidate.title !== 'string') return null;
-
-  const panels = Array.isArray(candidate.panels)
-    ? candidate.panels.map(panel => normalizeWorkspacePanel(panel, allowApprovedRosTopics)).filter(isWorkspacePanel)
-    : [];
-  const tileOrder = normalizeWorkspaceTileOrder(
-    Array.isArray(candidate.tileOrder)
-      ? candidate.tileOrder.filter(item => typeof item === 'string')
-      : BASE_WORKSPACE_TILE_IDS,
-    panels.map(panel => panel.id)
-  );
-
-  return {
-    id: candidate.id,
-    title: candidate.title.trim() || 'Workspace layout',
-    panels,
-    tileOrder,
-    layout: normalizeWorkspaceLayoutState(candidate.layout, tileOrder),
-    createdAt: typeof candidate.createdAt === 'string' ? candidate.createdAt : new Date().toISOString(),
-    updatedAt: typeof candidate.updatedAt === 'string' ? candidate.updatedAt : new Date().toISOString(),
-  };
-};
 
 const loadSavedWorkspaceLayouts = (storageScope?: string): SavedWorkspaceLayout[] => {
   try {
@@ -836,13 +720,6 @@ const loadWorkspaceTileOrder = (storageScope?: string): string[] => {
     console.error('Failed to load desktop workspace tile order:', error);
     return [];
   }
-};
-
-const normalizeWorkspaceTileOrder = (order: string[], panelIds: string[]) => {
-  const validIds = panelIds;
-  const orderedIds = order.filter((id, index) => validIds.includes(id) && order.indexOf(id) === index);
-  const missingPanelIds = panelIds.filter(id => !orderedIds.includes(id));
-  return [...orderedIds, ...missingPanelIds];
 };
 
 const getWorkspaceColumnCount = (panelCount: number) => {
@@ -971,6 +848,8 @@ const WORKSPACE_MENU_COMFORT = 320;
 
 const MainControlView: React.FC<MainControlViewProps> = ({
   connectionParams,
+  libraryRequest,
+  onLibraryRequestHandled,
   onDisconnect,
   isActive = true,
   storageScope,
@@ -1033,6 +912,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({
   const [savedWorkspaceLayouts, setSavedWorkspaceLayouts] = useState<SavedWorkspaceLayout[]>(() =>
     loadSavedWorkspaceLayouts(storageScope)
   );
+  const savedLayoutsStorageValue = useRef<string | null>(null);
   const [activeWorkspaceLayoutId, setActiveWorkspaceLayoutId] = useState<string | null>(() =>
     loadActiveWorkspaceLayoutId(storageScope)
   );
@@ -1100,11 +980,16 @@ const MainControlView: React.FC<MainControlViewProps> = ({
     document.addEventListener('visibilitychange', visibility);
     return () => document.removeEventListener('visibilitychange', visibility);
   }, [isActive, replaySession]);
+  const { workspaces: libraryWorkspaces } = useLibrary();
+  const libraryHandled = useRef<string>();
+  const treeReaders = useRef(new Map<string, BehaviorTreeAssistantBridge>());
   const assistantRef = useRef<GlobalAssistantHandle>(null);
   const handleOpenAssistant = useCallback((context: { panelId: string }) => {
     assistantRef.current?.open({ pinBehaviorTreePanelId: context.panelId });
   }, []);
   const handleRegisterAssistantBridge = useCallback((panelId: string, bridge: BehaviorTreeAssistantBridge | null) => {
+    if (bridge) treeReaders.current.set(panelId, bridge);
+    else treeReaders.current.delete(panelId);
     assistantRef.current?.registerBehaviorTreeBridge(panelId, bridge);
   }, []);
   const handleRegisterPadDraftReader = useCallback((reader: (() => CustomGamepadLayout) | null) => {
@@ -1364,8 +1249,32 @@ const MainControlView: React.FC<MainControlViewProps> = ({
   }, [customWorkspaceSnapTemplates, storageScope]);
 
   useEffect(() => {
-    writeConnectionStorage(WORKSPACE_SAVED_LAYOUTS_KEY, JSON.stringify(savedWorkspaceLayouts), storageScope);
+    const raw = JSON.stringify(savedWorkspaceLayouts);
+    savedLayoutsStorageValue.current = raw;
+    writeConnectionStorage(WORKSPACE_SAVED_LAYOUTS_KEY, raw, storageScope);
+    window.dispatchEvent(new Event('robo-boy-workspaces-changed'));
   }, [savedWorkspaceLayouts, storageScope]);
+
+  useEffect(() => {
+    const changed = () => {
+      const raw = readConnectionStorage(WORKSPACE_SAVED_LAYOUTS_KEY, storageScope);
+      if (raw === savedLayoutsStorageValue.current) return;
+      try {
+        const parsed = JSON.parse(raw ?? '[]');
+        if (!Array.isArray(parsed)) return;
+        const layouts = parsed.map(layout => normalizeSavedWorkspaceLayout(layout, false));
+        if (layouts.some(layout => layout === null)) return;
+        savedLayoutsStorageValue.current = raw;
+        setSavedWorkspaceLayouts(layouts as SavedWorkspaceLayout[]);
+      } catch { /* Leave unrecognized storage untouched. */ }
+    };
+    window.addEventListener('robo-boy-workspaces-changed', changed);
+    window.addEventListener('storage', changed);
+    return () => {
+      window.removeEventListener('robo-boy-workspaces-changed', changed);
+      window.removeEventListener('storage', changed);
+    };
+  }, [storageScope]);
 
   useEffect(() => {
     if (activeWorkspaceLayoutId) {
@@ -1940,6 +1849,22 @@ const MainControlView: React.FC<MainControlViewProps> = ({
     return newPanel.id;
   };
 
+  useEffect(() => {
+    if (!isActive || !libraryRequest || libraryHandled.current === libraryRequest.id) return;
+    libraryHandled.current = libraryRequest.id;
+    if (libraryRequest.kind === 'workspace' && libraryRequest.workspace) {
+      applyLibraryWorkspace(libraryRequest);
+    } else if (libraryRequest.kind === 'pad' && libraryRequest.padId) {
+      handleAddWorkspacePanel('pad', undefined, undefined, { layoutId: libraryRequest.padId });
+    } else if (libraryRequest.kind === 'behaviorTree' && libraryRequest.tree) {
+      const id = handleAddWorkspacePanel('behaviorTree');
+      if (id) setWorkspacePanels(previous => previous.map(panel =>
+        panel.id === id ? { ...panel, initialTree: libraryRequest.tree! } : panel
+      ));
+    }
+    onLibraryRequestHandled?.();
+  }, [libraryRequest, isActive]);
+
   const handleWorkspaceDragStart = (event: React.DragEvent<HTMLButtonElement>, type: WorkspacePanelType) => {
     if (isWorkspaceStacked && workspacePanels.length >= 2) {
       event.preventDefault();
@@ -2411,12 +2336,16 @@ const MainControlView: React.FC<MainControlViewProps> = ({
     }));
   };
 
+  const startContentImport = useImportSession(storageScope, isActive);
+
   const handleImportWorkspacePad = async (panelId: string, event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     event.target.value = '';
     if (!file) return;
 
-    const result = await importGamepadFile(file);
+    const signal = startContentImport();
+    const result = await importGamepadFile(file, signal);
+    if (signal.aborted || (!result.success && !result.errors.length)) return;
     if (!result.success) {
       setWorkspacePadTransferNotice(prev => ({
         ...prev,
@@ -2428,15 +2357,6 @@ const MainControlView: React.FC<MainControlViewProps> = ({
       return;
     }
 
-    const importedLayoutId = Object.values(result.idMap)[0];
-    if (importedLayoutId) {
-      setWorkspacePanels(prev =>
-        prev.map(panel => (panel.id === panelId ? { ...panel, layoutId: importedLayoutId } : panel))
-      );
-      setMobileWorkspacePanels(prev =>
-        prev.map(panel => (panel.id === panelId ? { ...panel, layoutId: importedLayoutId } : panel))
-      );
-    }
     setCustomGamepadRefreshKey(prev => prev + 1);
     setWorkspacePadTransferNotice(prev => ({
       ...prev,
@@ -2524,7 +2444,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({
       return;
     }
 
-    const gamepad = gamepadLibrary.find(item => item.id === layoutId || item.layout.id === layoutId);
+    const gamepad = getGamepadLayout(layoutId);
     if (gamepad?.isDefault) {
       handleOpenTemplate(gamepad.id);
       return;
@@ -2535,7 +2455,12 @@ const MainControlView: React.FC<MainControlViewProps> = ({
 
   const createSavedWorkspaceSnapshot = (title: string, existingLayout?: SavedWorkspaceLayout): SavedWorkspaceLayout => {
     const now = new Date().toISOString();
-    const panels = workspacePanels.map(withoutApprovedRosTopics);
+    const panels = workspacePanels.map(panel => ({
+      ...withoutApprovedRosTopics(panel),
+      initialTree: panel.type === 'behaviorTree'
+        ? treeReaders.current.get(panel.id)?.getCurrentTree() ?? panel.initialTree
+        : undefined,
+    }));
     const tileOrder = normalizeWorkspaceTileOrder(
       normalizedWorkspaceTileOrder,
       panels.map(panel => panel.id)
@@ -2600,6 +2525,14 @@ const MainControlView: React.FC<MainControlViewProps> = ({
     setIsWorkspaceOpen(true);
     setIsWorkspaceTemplateMenuOpen(false);
     setIsWorkspaceAddMenuOpen(false);
+  };
+
+  const applyLibraryWorkspace = (request: LibraryOpenRequest) => {
+    if (!request.workspace) return;
+    for (const scene of request.visualizations ?? []) {
+      saveVisualizationStateForKey(visualizationStorageKey(scene.panelId, storageScope), scene.state);
+    }
+    handleLoadSavedWorkspaceLayout(request.workspace);
   };
 
   /**
@@ -2829,11 +2762,21 @@ const MainControlView: React.FC<MainControlViewProps> = ({
         .filter(panel => panel.type === 'pad' && panel.layoutId)
         .map(panel => panel.layoutId as string)
     );
-    const gamepads = gamepadLibrary
-      .filter(item => !item.isDefault && (referencedLayoutIds.has(item.id) || referencedLayoutIds.has(item.layout.id)))
-      .map(item => item.layout);
+    const referencedPads = new Map<string, CustomGamepadLayout>();
+    for (const id of referencedLayoutIds) {
+      const item = getGamepadLayout(id);
+      if (item) referencedPads.set(item.layout.id, item.layout);
+    }
+    const gamepads = [...referencedPads.values()];
     const exportPanel = (panel: WorkspacePanel): ExportedWorkspacePanel => {
       const portable = withoutApprovedRosTopics(panel);
+      if (panel.type === 'behaviorTree') {
+        portable.initialTree = treeReaders.current.get(panel.id)?.getCurrentTree() ?? panel.initialTree
+          ?? (panel.treeId ? getLibraryTree(panel.treeId) ?? undefined : undefined);
+        portable.treeId = undefined;
+      }
+      if (panel.type === 'pad' && panel.layoutId) portable.layoutId = getGamepadLayout(panel.layoutId)?.layout.id ?? panel.layoutId;
+      if (!isBuiltInPanelId(panel.type)) portable.panelState = undefined;
       return panel.type === '3d'
         ? { ...portable, visualization: getVisualizationStateForKey(visualizationStorageKey(panel.id, storageScope)) }
         : portable;
@@ -2862,71 +2805,16 @@ const MainControlView: React.FC<MainControlViewProps> = ({
     URL.revokeObjectURL(objectUrl);
   };
 
-  const handleImportWorkspaceLayouts = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImportWorkspaceLayouts = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     event.target.value = '';
     if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = () => {
-      try {
-        const parsed = JSON.parse(String(reader.result || ''));
-        const gamepadResult = Array.isArray(parsed?.gamepads)
-          ? importGamepadLayouts(JSON.stringify({ layouts: parsed.gamepads }))
-          : { idMap: {} as Record<string, string> };
-        const remapPanels = (panels: WorkspacePanel[]) =>
-          panels.map(panel => ({
-            ...panel,
-            layoutId: panel.layoutId ? gamepadResult.idMap[panel.layoutId] || panel.layoutId : undefined,
-          }));
-        const candidates = Array.isArray(parsed) ? parsed : parsed?.layouts;
-        if (!Array.isArray(candidates)) return;
-
-        // Panel ids survive import, so a 3D panel's exported scene settings go straight into the
-        // storage slot the panel reads from on this connection.
-        const restoreVisualizationStates = (layout: unknown) => {
-          const panels = (layout as { panels?: unknown })?.panels;
-          if (!Array.isArray(panels)) return;
-          panels.forEach((panel: Partial<ExportedWorkspacePanel>) => {
-            if (panel?.type === '3d' && typeof panel.id === 'string' && panel.visualization && typeof panel.visualization === 'object') {
-              saveVisualizationStateForKey(visualizationStorageKey(panel.id, storageScope), panel.visualization);
-            }
-          });
-        };
-        candidates.forEach(restoreVisualizationStates);
-        if (parsed?.version === 2) restoreVisualizationStates(parsed.currentWorkspace);
-
-        const importedLayouts = candidates
-          .map(layout => normalizeSavedWorkspaceLayout(layout, false))
-          .filter((layout): layout is SavedWorkspaceLayout => layout !== null)
-          .map(layout => ({
-            ...layout,
-            panels: remapPanels(layout.panels),
-            id: `workspace-layout-${Date.now()}-${layout.id}`,
-            title: layout.title,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          }));
-
-        if (parsed?.version === 2 && parsed.currentWorkspace) {
-          const current = normalizeSavedWorkspaceLayout(
-            {
-              ...parsed.currentWorkspace,
-              id: `workspace-layout-${Date.now()}-current`,
-              title: 'Imported workspace',
-            },
-            false
-          );
-          if (current) importedLayouts.unshift({ ...current, panels: remapPanels(current.panels) });
-        }
-        if (importedLayouts.length === 0) return;
-        setSavedWorkspaceLayouts(prev => [...prev, ...importedLayouts]);
-        setCustomGamepadRefreshKey(prev => prev + 1);
-      } catch (error) {
-        console.error('Failed to import workspace layouts:', error);
-      }
-    };
-    reader.readAsText(file);
+    const signal = startContentImport();
+    const { importWorkspaceFile } = await import('../features/workspace/portableWorkspace');
+    const imported = await importWorkspaceFile(file, storageScope, signal);
+    if (!imported || signal.aborted) return;
+    setSavedWorkspaceLayouts(imported);
+    setCustomGamepadRefreshKey(prev => prev + 1);
   };
 
   const handleOpenWorkspaceReplacementMenu = (event: React.MouseEvent<HTMLButtonElement>, panelId: string) => {
@@ -3242,13 +3130,13 @@ const MainControlView: React.FC<MainControlViewProps> = ({
   );
 
   const renderWorkspacePadControls = (panel: WorkspacePanel) => {
-    const matchingGamepad = gamepadLibrary.find(
-      item => item.id === panel.layoutId || item.layout.id === panel.layoutId
-    );
+    const matchingGamepad = panel.layoutId ? getGamepadLayout(panel.layoutId) : undefined;
     const selectedGamepad =
       matchingGamepad ||
       (!panel.layoutId || RETIRED_BUILT_IN_PAD_IDS.has(panel.layoutId) ? gamepadLibrary[0] : undefined);
     const selectedLayoutId = selectedGamepad?.id || panel.layoutId || '';
+    const selectableGamepads = selectedGamepad && !gamepadLibrary.some(item => item.id === selectedGamepad.id)
+      ? [selectedGamepad, ...gamepadLibrary] : gamepadLibrary;
     const canExportSelectedPad = Boolean(selectedGamepad && !selectedGamepad.isDefault);
     const canDeleteSelectedPad = Boolean(selectedGamepad && !selectedGamepad.isDefault);
     const padTransferNotice = workspacePadTransferNotice[panel.id];
@@ -3287,7 +3175,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({
                   <label className="workspace-pad-settings-label" htmlFor={`workspace-pad-layout-${panel.id}`}>
                     Active layout
                   </label>
-                  {gamepadLibrary.length > 0 ? (
+                  {selectableGamepads.length > 0 ? (
                     <div className="workspace-pad-settings-select-wrap">
                       <select
                         id={`workspace-pad-layout-${panel.id}`}
@@ -3295,7 +3183,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({
                         value={selectedLayoutId}
                         onChange={event => handleWorkspacePadLayoutChange(panel.id, event.target.value)}
                       >
-                        {gamepadLibrary.map(item => (
+                        {selectableGamepads.map(item => (
                           <option key={item.id} value={item.id}>
                             {item.name} · {item.isDefault ? 'Template' : 'Custom'}
                           </option>
@@ -3630,6 +3518,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({
           onExecutionControlsChange={controls => {
             btExecutionControls.current = controls;
           }}
+          initialTree={panel.initialTree ?? (panel.treeId ? getLibraryTree(panel.treeId) ?? undefined : undefined)}
           panelId={panel.id}
           onOpenAssistant={handleOpenAssistant}
           onRegisterAssistantBridge={handleRegisterAssistantBridge}
@@ -3921,7 +3810,7 @@ const MainControlView: React.FC<MainControlViewProps> = ({
             onChange={handleImportWorkspaceLayouts}
           />
         </div>
-        {savedWorkspaceLayouts.length > 0 ? (
+        {savedWorkspaceLayouts.length + libraryWorkspaces.length > 0 ? (
           <div className="workspace-template-list">
             {savedWorkspaceLayouts.map(layout => (
               <div
@@ -3952,6 +3841,15 @@ const MainControlView: React.FC<MainControlViewProps> = ({
                   aria-label={`Delete ${layout.title}`}
                 >
                   {icons.trash}
+                </button>
+              </div>
+            ))}
+            {libraryWorkspaces.map(layout => (
+              <div className="workspace-template-item" key={layout.id}>
+                <button type="button" className="workspace-template-load-row" title={`Load ${layout.title}`} aria-label={`Load ${layout.title}`}
+                  onClick={() => { const request = openLibraryWorkspace(layout.id); if (request) applyLibraryWorkspace(request); }}>
+                  <span className="workspace-template-title" title={layout.title}>{layout.title}</span>
+                  <span className="workspace-template-current">Imported</span>
                 </button>
               </div>
             ))}
@@ -4578,14 +4476,16 @@ const MainControlView: React.FC<MainControlViewProps> = ({
 
       {/* Render GamepadEditor modal */}
       {editorSession && ros && (
-        <GamepadEditor
-          isOpen
-          onClose={handleCloseCustomEditor}
-          onSave={handleSaveCustomGamepad}
-          initialLayout={editorSession.initialLayout}
-          onRegisterDraftReader={handleRegisterPadDraftReader}
-          ros={ros}
-        />
+        <React.Suspense fallback={<div role="status">Loading Pad editor…</div>}>
+          <GamepadEditor
+            isOpen
+            onClose={handleCloseCustomEditor}
+            onSave={handleSaveCustomGamepad}
+            initialLayout={editorSession.initialLayout}
+            onRegisterDraftReader={handleRegisterPadDraftReader}
+            ros={ros}
+          />
+        </React.Suspense>
       )}
 
       {/* Global AI assistant — a single top-level mount per docs/architecture.md's "Adding a

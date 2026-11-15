@@ -3,7 +3,7 @@ import type { Ros } from 'roslib';
 import { discoverAllROSResources } from '../services/rosDiscovery';
 import {
   BEHAVIOR_TREE_STORAGE_EVENT,
-  listBehaviorTrees,
+  listAvailableBehaviorTrees,
 } from '../storage/treeStorage';
 import {
   BehaviorTree,
@@ -191,7 +191,7 @@ const NodePalette: React.FC<NodePaletteProps> = ({
     services: false,
     topics: false,
   });
-  const [savedTrees, setSavedTrees] = useState(listBehaviorTrees());
+  const [savedTrees, setSavedTrees] = useState(listAvailableBehaviorTrees());
 
   const [isMobile, setIsMobile] = React.useState(false);
   // Height controlled by drag; null = CSS default
@@ -440,7 +440,7 @@ const NodePalette: React.FC<NodePaletteProps> = ({
 
   useEffect(() => {
     const handleSavedTreesChanged = () => {
-      setSavedTrees(listBehaviorTrees());
+      setSavedTrees(listAvailableBehaviorTrees());
     };
 
     window.addEventListener(BEHAVIOR_TREE_STORAGE_EVENT, handleSavedTreesChanged);

@@ -133,7 +133,7 @@ describe('AddPanelMenu', () => {
     });
 
     await waitFor(() => {
-      expect(importGamepadFile).toHaveBeenCalledWith(expect.any(File));
+      expect(importGamepadFile).toHaveBeenCalledWith(expect.any(File), expect.any(AbortSignal));
       expect(onGamepadLibraryChanged).toHaveBeenCalled();
     });
     expect(screen.getByRole('status')).toHaveTextContent('Imported 1 gamepad');

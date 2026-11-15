@@ -1,3 +1,4 @@
+vi.mock('../library/ImportReview', () => ({ reviewImport: vi.fn().mockResolvedValue(true) }));
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest'
 import {
   loadGamepadLibrary,
@@ -355,7 +356,7 @@ describe('gamepadStorage', () => {
         imported: 1,
         errors: [],
       })
-      expect(getGamepadLayout('shared-pad')?.name).toBe('Shared Pad')
+      expect(loadGamepadLibrary().some(item => !item.isDefault && item.name === 'Shared Pad')).toBe(true)
     })
 
     it('reports malformed gamepad files', async () => {
@@ -400,7 +401,7 @@ describe('gamepadStorage', () => {
       expect(original).toBeDefined()
 
       // Imported layout gets ID from its name "Imported" -> "custom-imported"
-      const imported = library.find((item) => item.id === 'custom-imported')
+      const imported = library.find((item) => !item.isDefault && item.name === 'Imported' && item.id !== 'custom-conflict')
       expect(imported).toBeDefined()
     })
 
@@ -419,7 +420,7 @@ describe('gamepadStorage', () => {
       expect(result.errors).toContain('Invalid import format: missing layouts array')
     })
 
-    it('should skip layouts with invalid structure', () => {
+    it('should reject the entire collection when a layout is invalid', () => {
       const importData = {
         layouts: [
           { id: 'valid', name: 'Valid', components: [] },
@@ -429,7 +430,8 @@ describe('gamepadStorage', () => {
 
       const result = importGamepadLayouts(JSON.stringify(importData))
 
-      expect(result.imported).toBe(1)
+      expect(result.imported).toBe(0)
+      expect(loadGamepadLibrary().filter(item => !item.isDefault)).toHaveLength(0)
       expect(result.errors.length).toBeGreaterThan(0)
     })
   })

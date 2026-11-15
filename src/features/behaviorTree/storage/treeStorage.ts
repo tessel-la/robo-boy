@@ -1,5 +1,8 @@
+import { readContentFile, importError } from '../../library/json';
+import { readTree, copyTree, serializeTree } from '../portableTree';
 import { BehaviorTree, SavedBehaviorTree } from '../types';
 import { syncReferencedSubtrees } from '../subtreeUtils';
+import { getLibraryTree, getLibraryTrees } from '../../library/runtime';
 
 const STORAGE_KEY = 'robo-boy-behavior-trees';
 const STORAGE_VERSION = '1.0.0';
@@ -31,6 +34,12 @@ export const listBehaviorTrees = (): SavedBehaviorTree[] => {
     return [];
   }
 };
+
+/** Imported templates remain in Library; authoring writes only touch saved editor trees. */
+export const listAvailableBehaviorTrees = () => [
+  ...listBehaviorTrees().map(item => ({ ...item, imported: false })),
+  ...getLibraryTrees().map(tree => ({ tree, version: STORAGE_VERSION, imported: true })),
+];
 
 /**
  * Save a behavior tree to localStorage
@@ -109,7 +118,9 @@ export const loadBehaviorTree = (id: string): BehaviorTree | null => {
   try {
     const trees = listBehaviorTrees();
     const found = trees.find((t) => t.tree.id === id);
-    return found ? found.tree : null;
+    if (found) return found.tree;
+    const imported = getLibraryTree(id);
+    return imported ? copyTree(imported) : null;
   } catch (error) {
     console.error('Failed to load behavior tree:', error);
     return null;
@@ -144,12 +155,7 @@ export const deleteBehaviorTree = (id: string): boolean => {
  */
 export const exportBehaviorTree = (tree: BehaviorTree): void => {
   try {
-    const savedTree: SavedBehaviorTree = {
-      tree,
-      version: STORAGE_VERSION,
-    };
-    
-    const dataStr = JSON.stringify(savedTree, null, 2);
+    const dataStr = serializeTree(tree);
     const dataBlob = new Blob([dataStr], { type: 'application/json' });
     const url = URL.createObjectURL(dataBlob);
     
@@ -167,34 +173,32 @@ export const exportBehaviorTree = (tree: BehaviorTree): void => {
 /**
  * Import a behavior tree from JSON file
  */
-export const importBehaviorTree = (file: File): Promise<BehaviorTree | null> => {
-  return new Promise((resolve) => {
-    const reader = new FileReader();
-    
-    reader.onload = (e) => {
-      try {
-        const content = e.target?.result as string;
-        const savedTree: SavedBehaviorTree = JSON.parse(content);
-        
-        // Validate structure
-        if (!savedTree.tree || !savedTree.tree.id || !savedTree.tree.nodes) {
-          throw new Error('Invalid behavior tree file format');
-        }
-
-        resolve(savedTree.tree);
-      } catch (error) {
-        console.error('Failed to import behavior tree:', error);
-        resolve(null);
-      }
-    };
-    
-    reader.onerror = () => {
-      console.error('Failed to read file');
-      resolve(null);
-    };
-    
-    reader.readAsText(file);
-  });
+export const importBehaviorTree = async (file: File, signal?: AbortSignal): Promise<BehaviorTree | null> => {
+  try {
+    const tree = readTree(await readContentFile(file, signal));
+    const { reviewImport } = await import('../../library/ImportReview');
+    const accepted = await reviewImport(
+      {
+        title: 'Import Behavior Tree',
+        items: [`${tree.name} · Behavior tree`],
+        details: [
+          'Unsaved editor changes will be replaced.',
+        ],
+        action: 'Import',
+      },
+      signal
+    );
+    if (!accepted || signal?.aborted) return null;
+    const imported = copyTree(tree);
+    if (!saveBehaviorTree(imported)) throw new Error('Unable to save the imported tree. Check browser storage and retry.');
+    return imported;
+  } catch (error) {
+    if (!signal?.aborted) {
+      const { showImportError } = await import('../../library/ImportReview');
+      await showImportError(importError(error), signal);
+    }
+    return null;
+  }
 };
 
 /**

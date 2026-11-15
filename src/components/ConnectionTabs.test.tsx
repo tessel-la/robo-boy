@@ -133,6 +133,26 @@ describe('ConnectionTabs', () => {
     expect(screen.queryByRole('dialog', { name: 'Switch robot connection' })).not.toBeInTheDocument();
   });
 
+  it('opens local Recordings from the menu before connecting and closes the menu', () => {
+    const onOpenRecordings = vi.fn();
+    render(
+      <ConnectionTabs
+        tabs={[]}
+        activeTabId={null}
+        isAdding
+        onSelect={vi.fn()}
+        onClose={vi.fn()}
+        onAdd={vi.fn()}
+        onOpenRecordings={onOpenRecordings}
+      />
+    );
+    fireEvent.click(screen.getByRole('button', { name: /Switch connections/ }));
+    expect(screen.getByRole('button', { name: 'Catalog' })).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Recordings' }));
+    expect(onOpenRecordings).toHaveBeenCalledOnce();
+    expect(screen.queryByRole('dialog', { name: 'Switch robot connection' })).not.toBeInTheDocument();
+  });
+
   it('hosts the theme setting in the session dropdown', () => {
     render(
       <ConnectionTabs

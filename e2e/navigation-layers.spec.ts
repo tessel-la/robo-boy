@@ -1,3 +1,4 @@
+import { openAppTool } from './helpers/navigation';
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { McapWriter, TempBuffer } from '@mcap/core';
 import sharp from 'sharp';
@@ -172,7 +173,7 @@ test('renders recorded paths/maps and restores them after backward seeks without
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
   await page.goto('/');
-  await page.getByRole('button', { name: 'Open local recordings', exact: true }).click();
+  await openAppTool(page, 'Recordings');
   const replay = page.getByRole('region', { name: 'Record & Replay', exact: true });
   await replay.getByLabel('Open MCAP recording').setInputFiles({
     name: 'navigation.mcap',

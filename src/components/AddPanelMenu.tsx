@@ -1,3 +1,4 @@
+import { useImportSession } from '../features/library/useImportSession';
 import React, { useEffect, useRef, useState, RefObject } from 'react';
 import ReactDOM from 'react-dom'; // Import ReactDOM for Portal
 import './AddPanelMenu.css'; // Create CSS next
@@ -70,6 +71,7 @@ const AddPanelMenu: React.FC<AddPanelMenuProps> = ({
   onCustomGamepadDeleted, // Use the onCustomGamepadDeleted prop
   onGamepadLibraryChanged,
 }) => {
+  const startImport = useImportSession(isOpen, isOpen);
   const menuRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [menuStyle, setMenuStyle] = useState<React.CSSProperties>({});
@@ -211,7 +213,10 @@ const AddPanelMenu: React.FC<AddPanelMenuProps> = ({
     const file = event.target.files?.[0];
     if (!file) return;
 
-    const result = await importGamepadFile(file);
+    event.target.value = '';
+    const signal = startImport();
+    const result = await importGamepadFile(file, signal);
+    if (signal.aborted || (!result.success && !result.errors.length)) return;
     if (result.success) {
       setNotice({
         type: result.errors.length > 0 ? 'error' : 'success',

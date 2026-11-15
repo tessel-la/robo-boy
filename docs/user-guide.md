@@ -151,4 +151,25 @@ Open the theme selector to choose a built-in theme or create a custom palette. C
 
 ## Local Data
 
-Robo-Boy has no user account or application database. Custom themes, gamepads, behavior trees, panel sizing, and visualization settings are stored in `localStorage`. Data is isolated by browser, profile, and site origin. Persistent behavior-tree executions are transient ROS runtime sessions; they are not stored as user data and end if the ROS stack restarts.
+Robo-Boy has no cloud user account or server-side application database. Custom themes, gamepads, behavior trees, panel sizing, and visualization settings are stored in `localStorage`. Reusable Catalog collections and cached sources use IndexedDB. Data is isolated by browser, profile, and site origin. Persistent behavior-tree executions are transient ROS runtime sessions; they are not stored as user data and end if the ROS stack restarts.
+
+### Importing reusable content
+
+Open **Catalog** in the top-left menu, next to **Workspace layouts** and **Manage panels**.
+The same menu is available before connecting and contains **Recordings** for local replay. **Saved** lists layouts, Pads and behavior trees by name; **Browse** shows
+Official and custom sources. **Import** offers a JSON file, folder or online catalog. Review, save,
+then open the content. Imported Pads appear in Pad settings, layouts in **Workspace layouts**,
+and trees in the BT editor’s **Saved Trees** menu, including after reload.
+Export and collection management are under **Saved options** and **Details & collection**.
+Repeated imports of unchanged collections show **Already imported**. Different content may share a name;
+Saved also shows its collection and version. Identical imported items shared by collections, including
+older duplicate imports, appear once in Saved and the normal pickers. Use **×** beside a saved item to remove
+all imported copies represented by that row. Imported items remain available to existing layouts; importing the collection again restores them. A locally authored
+Pad used by a saved or current layout must be removed from that layout before deleting it.
+
+Opening Catalog checks online sources for newer releases and new items. **Review updates** lets you
+choose what to import; updates never replace active controls automatically. Importing a newer release
+hides the older release from pickers while preserving existing layout references. Offline content remains
+available if a check fails. Folder sources require **Refresh** and selecting the folder again.
+The existing Pad, BT and workspace import menus remain available.
+See [Portable content files](portable-content.md) for supported formats and sharing limits.
