@@ -12,6 +12,14 @@
 
 Robo-Boy is a web, desktop, iPhone, and Android interface for controlling and visualizing ROS 2 robots. It includes camera streaming, configurable control pads, 3D visualization, native time-series plotting and signal analysis, behavior-tree editing, and custom themes. All interfaces run the same React codebase and connect to a separately installed ROS stack. The mobile packages are lightweight Tauri shells; the desktop can be built either as one of those or as an Electron shell, which is larger but brings its own Chromium and so has WebRTC wherever it runs.
 
+<p align="center">
+  <a href="https://tessel.la/media/videos/robo-boy/robo-boy-teaser.mp4">
+    <img src="images/teaser.jpg" alt="Play the Robo-Boy teaser" width="720">
+  </a>
+  <br>
+  <a href="https://tessel.la/media/videos/robo-boy/robo-boy-teaser.mp4">Watch the teaser</a>: one minute of the real app driving three simulated robots.
+</p>
+
 ## Start With The App
 
 The shortest route. The app needs only the ROS services, so there is no certificate to create and no
