@@ -1,6 +1,6 @@
 # Shared robot control
 
-By default, Robo-Boy gives one connected **session** control of the entire ROS graph behind a robot endpoint. Other sessions can observe telemetry, inspect the graph, and edit panels and trees. A session means one WebSocket connection, not a browser profile or an authenticated account. Two tabs, two desktop windows, or two connections to the same endpoint are separate contenders.
+By default, robo-boy gives one connected **session** control of the entire ROS graph behind a robot endpoint. Other sessions can observe telemetry, inspect the graph, and edit panels and trees. A session means one WebSocket connection, not a browser profile or an authenticated account. Two tabs, two desktop windows, or two connections to the same endpoint are separate contenders.
 
 ## Configure control at setup
 
@@ -116,7 +116,7 @@ cannot declare its own services observer-safe.
 ## Optional robot-side control switch
 
 Set `ROBOBOY_EXTERNAL_CONTROL_LOCK=true` in the ROS stack environment and rebuild it
-when a native robot operator needs a global switch for Robo-Boy control:
+when a native robot operator needs a global switch for robo-boy control:
 
 ```dotenv
 ROBOBOY_EXTERNAL_CONTROL_LOCK=true
@@ -140,7 +140,7 @@ source /opt/ros/${ROS_DISTRO}/setup.bash
 ros2 param set /roboboy/control/external/controller allow_control true
 ```
 
-With `allow_control=true`, Robo-Boy uses its normal **Request control**, **Release control**,
+With `allow_control=true`, robo-boy uses its normal **Request control**, **Release control**,
 owner **Grant** / **Deny**, **Transfer control**, and **Manage running tree** workflow.
 There is no additional robot-side approval of individual requests. Enabling access neither
 assigns an owner nor retries blocked requests. One session still owns the entire endpoint,
@@ -178,7 +178,7 @@ parameter. The public gateway reads policy state through its private rosbridge c
 
 The public WebSocket gateway permits subscriptions and verified standard parameter reads in the policy namespace,
 but rejects writes, advertisements, mutating services, actions, and rosapi parameter writes in it, including from the owner.
-Robo-Boy shows whether the switch is enabled, disabled, or unavailable. It provides no toggle
+robo-boy shows whether the switch is enabled, disabled, or unavailable. It provides no toggle
 or bypass. Native DDS peers remain trusted; this policy is not authentication or an emergency
 stop, and robot-native watchdogs and stopping tools remain required. For a standalone gateway,
 use `--external-lock true` and start the policy node through the robot's ROS launch/supervision

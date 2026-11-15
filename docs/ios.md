@@ -57,7 +57,7 @@ after changing either of those, and never edit the generated project by hand.
 
 The script also copies `src-tauri/icons/ios/` over the generated icon set. `tauri ios init` fills
 that set from its own template using the same file names, so without the copy the app builds and
-installs carrying the Tauri logo rather than Robo-Boy's. Regenerate the icons themselves with
+installs carrying the Tauri logo rather than robo-boy's. Regenerate the icons themselves with
 `npm run tauri icon -- src-tauri/icons/icon.png` when the logo changes.
 
 ## Run It
@@ -101,9 +101,9 @@ Simulators window (Window → Devices and Simulators → drag the `.ipa` onto In
 it to TestFlight with a paid account.
 
 On first launch, iOS asks for permission to find devices on the local network. **Allow it** — every
-connection Robo-Boy makes is to the ROS computer, so declining leaves the app unable to connect at
+connection robo-boy makes is to the ROS computer, so declining leaves the app unable to connect at
 all. If it was declined, turn it back on under Settings → Privacy & Security → Local Network →
-Robo-Boy. A free-account signature also has to be trusted once, under Settings → General → VPN &
+robo-boy. A free-account signature also has to be trusted once, under Settings → General → VPN &
 Device Management.
 
 ## Connecting To ROS
@@ -192,8 +192,8 @@ chosen host, resolved in `src/runtime/runtimeConfig.tsx`. Only the chrome differ
 The app has been built, installed and launched on an iPhone. These have not been exercised:
 
 - **Status bar contrast.** The system draws the status bar over the app's own themed background and
-  picks its text colour from the phone's light/dark setting, not from the Robo-Boy theme. It reads
-  correctly with a light theme on a light phone; a dark Robo-Boy theme on a light phone may not.
+  picks its text colour from the phone's light/dark setting, not from the robo-boy theme. It reads
+  correctly with a light theme on a light phone; a dark robo-boy theme on a light phone may not.
 - **Panel installation.** External panels install through the same in-app path as desktop, over
   Tauri's native HTTP client. It is untested on iOS.
 - **Voice control** needs iOS 14.3 or later, which is where `getUserMedia` arrived in `WKWebView`.

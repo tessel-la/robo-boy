@@ -1,6 +1,6 @@
-# Robo-Boy Documentation
+# robo-boy Documentation
 
-The root [README](../README.md) contains only the shortest path to running Robo-Boy. The guides here cover operation and development in more detail.
+The root [README](../README.md) contains only the shortest path to running robo-boy. The guides here cover operation and development in more detail.
 
 ## Guides
 

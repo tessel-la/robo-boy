@@ -30,7 +30,7 @@ ROS stack
 Robot or simulation nodes
 ```
 
-Robo-Boy has no database. A robot-host WebSocket gateway arbitrates shared control before forwarding to private rosbridge. The web deployment uses Caddy to provide one origin for the frontend and ROS-facing services. The desktop deployment packages only the frontend in Tauri and connects to an independently installed ROS stack. The `ros-stack` container uses host networking for DDS discovery, while the web frontend and Caddy share the `app-net` bridge network.
+robo-boy has no database. A robot-host WebSocket gateway arbitrates shared control before forwarding to private rosbridge. The web deployment uses Caddy to provide one origin for the frontend and ROS-facing services. The desktop deployment packages only the frontend in Tauri and connects to an independently installed ROS stack. The `ros-stack` container uses host networking for DDS discovery, while the web frontend and Caddy share the `app-net` bridge network.
 
 ## Frontend Composition
 
@@ -68,7 +68,7 @@ acquisition, release, transfer, and persistent-run management. The gateway owns 
 and outstanding-work reservation. See [Shared robot control](robot-control.md) for the protocol,
 timeouts, fail-closed recovery, and panel contract.
 
-The control status includes the backend image's Robo-Boy version, active ROS distribution, and
+The control status includes the backend image's robo-boy version, active ROS distribution, and
 installed rosbridge version. The app shows these in **Robot control → Backend compatibility** and
 warns when app and stack releases differ or the backend version is unavailable. See
 [Backend compatibility](backend-compatibility.md) for the comparison and deployment rules.
@@ -177,7 +177,7 @@ Built-ins retain their existing React adapters and lifecycle behavior. External 
 framework-neutral contract in `panel-sdk/`; `ExternalPanelHost` verifies a deployment-bundled release and transfers
 it into an opaque-origin iframe when its tile mounts. A private message channel supplies permission-checked
 ROS/network operations, per-instance storage, connection/viewport snapshots, logging, and fullscreen. The iframe
-cannot access the parent DOM, cookies, Robo-Boy browser storage, or undeclared runtime endpoints. Compose adds a
+cannot access the parent DOM, cookies, robo-boy browser storage, or undeclared runtime endpoints. Compose adds a
 separate authenticated manager for previewing and applying desired-state changes. Keep application stores and
 feature internals out of the public context. See
 [External panels](external-panels.md) for distribution, compatibility, capabilities, authoring, and inventory boundaries.
@@ -262,7 +262,7 @@ Feature modules should not import application-shell state. Pass connection objec
 
 External panels sit outside this internal dependency graph. They depend only on the versioned panel SDK contract
 (currently source-controlled under `panel-sdk/`) and receive narrow runtime services from the host context.
-Robo-Boy core may import SDK types; it must never import an external panel's source or package directly.
+robo-boy core may import SDK types; it must never import an external panel's source or package directly.
 
 ## Adding A Feature
 

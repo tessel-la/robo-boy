@@ -1,6 +1,6 @@
 # AI Assistant
 
-Robo-Boy has one global AI assistant, reachable from anywhere in the connected app through a launcher button. It replaces the earlier Behavior-Tree-panel-owned assistant. Chats are scoped to the robot connection, with new/fork/search/export controls. Opening it from a panel pins that panel onto the current chat; it does not start a competing agent.
+robo-boy has one global AI assistant, reachable from anywhere in the connected app through a launcher button. It replaces the earlier Behavior-Tree-panel-owned assistant. Chats are scoped to the robot connection, with new/fork/search/export controls. Opening it from a panel pins that panel onto the current chat; it does not start a competing agent.
 
 ## User Workflow
 
@@ -92,7 +92,7 @@ with Pending, In progress, Waiting for approval/input, Blocked and Done states. 
 completion. Agent questions remain in the transcript after the user's answer. Closed activity/context
 disclosures do not render invisible list markers into copied chat text.
 
-The assistant follows the handbook's [Robo-Boy product UI](https://github.com/tessel-la/tessella-handbook/blob/main/design/product-ui.md):
+The assistant follows the handbook's [robo-boy product UI](https://github.com/tessel-la/tessella-handbook/blob/main/design/product-ui.md):
 runtime theme surfaces and fonts, restrained message tinting, shared panel resize controls,
 visible keyboard focus, and 44px touch controls. Settings respond to the panel width, including a
 narrow desktop frame. Provider and extension forms use the same spacing and control treatment.
@@ -125,11 +125,11 @@ credential proxy. Older desktop shells also need an update before the sign-in co
   OAuth/Responses contract, with `jose` for signed identity verification. It does not use private
   ChatGPT endpoints or extract credentials from another application.
 - **Claude:** install the official Claude Code CLI **2.1.278 or newer**, then choose Sign in through
-  Claude Code. Anthropic's own runtime completes login and manages credentials in a Robo-Boy-specific
+  Claude Code. Anthropic's own runtime completes login and manages credentials in a robo-boy-specific
   configuration directory, separate from the user's ordinary Claude Code setup. Choose Sonnet,
-  Opus or Haiku; availability and usage follow the account. Robo-Boy launches the unmodified native
+  Opus or Haiku; availability and usage follow the account. robo-boy launches the unmodified native
   binary without a shell and without API keys or gateway credentials inherited from its environment.
-  Robo-Boy sets `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1` for discovery, login, and inference.
+  robo-boy sets `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1` for discovery, login, and inference.
   The runtime's tools, skills, plugins, hooks, Chrome integration and inherited MCP configuration are
   disabled. It receives the full conversation as JSON context plus the final turn's images, rather
   than adopting a persistent Claude Code project session. Its output goes through the existing
@@ -271,7 +271,7 @@ field names/types and nested arrays. Joint-trajectory goals additionally need di
 names, one finite position per joint, and increasing positive times. These checks do not certify
 joint limits, collision clearance or robot safety; motion remains in the reviewed Pad/BT flow.
 
-Left to general ROS knowledge the model answers app questions from outside the app: asked whether Robo-Boy could measure the distance between two frames, it replied "write a `tf2_ros` node" — for something computed here from live `/tf` before a provider is called.
+Left to general ROS knowledge the model answers app questions from outside the app: asked whether robo-boy could measure the distance between two frames, it replied "write a `tf2_ros` node" — for something computed here from live `/tf` before a provider is called.
 
 So the assistant's self-description is data, not prose. Each capability is an `AssistantCapability` declared beside the code that implements it — `TF_CAPABILITY` next to the phrase parsers, `PAD_CAPABILITY` next to the Pad generator, and so on — collected in `ASSISTANT_CAPABILITIES` and rendered into the prompt by `describeCapabilities`. Delete a feature and its description goes with it.
 
@@ -312,7 +312,7 @@ So the assistant's self-description is data, not prose. Each capability is an `A
 Three tiers, and the assistant never silently crosses from one to the next:
 
 1. **Read-only inspection** — ROS graph discovery, schemas and bounded samples, TF lookups, `/rosout`, workspace/Pad/BT reads. No confirmation needed; every value shown carries its source and fetch time, and is marked stale if a reconnect happened since.
-2. **App functions applied at once** — workspace changes, panel settings, watching topics, health rules, playback, and the recorder on the ROS host. None of them commands the robot: watching and rules use the Robo-Boy inspection companion, and recording uses the Robo-Boy recorder, both on their own topics. Every outcome is listed in the reply, and the assistant is told to record only when the user asks.
+2. **App functions applied at once** — workspace changes, panel settings, watching topics, health rules, playback, and the recorder on the ROS host. None of them commands the robot: watching and rules use the robo-boy inspection companion, and recording uses the robo-boy recorder, both on their own topics. Every outcome is listed in the reply, and the assistant is told to record only when the user asks.
 3. **Proposals** — a Pad, a Behavior Tree, or a ROS operation. Nothing is written, saved, or sent until the user acts in the editor that owns it. Pad and BT proposals are validated (topic/service/action existence and message-type match) against the live ROS graph, and a Pad proposal is normalized, binding-checked and overlap-repaired before it opens in the Pad editor.
 
 **Robot-affecting execution never happens from chat.** A proposed publish, service call, or action goal renders as a review-only card with its target, type, and payload; there is no button that runs it. To act on one, put it into a Pad or a Behavior Tree and run it there, where the existing review, validation, and cancellation behavior applies. The former `tools/rosActionGuard.ts` execution path is removed, not disabled.
@@ -362,7 +362,7 @@ Two deliberate scope reductions relative to the old BT-only chat:
 
 ## Voice Input
 
-Voice uses the Web Speech API where the browser provides it, and otherwise records audio and sends it to the configured provider for transcription. Both need microphone permission, and the browser only grants that on a secure origin: a phone browsing Robo-Boy over plain `http://<LAN-IP>` cannot record, and no frontend code can work around that. Use HTTPS, `localhost`, or the packaged app.
+Voice uses the Web Speech API where the browser provides it, and otherwise records audio and sends it to the configured provider for transcription. Both need microphone permission, and the browser only grants that on a secure origin: a phone browsing robo-boy over plain `http://<LAN-IP>` cannot record, and no frontend code can work around that. Use HTTPS, `localhost`, or the packaged app.
 
 The packaged Android app declares both `RECORD_AUDIO` and `MODIFY_AUDIO_SETTINGS`. The webview asks for the pair in a single request (wry's `RustWebChromeClient.onPermissionRequest`) and an undeclared permission comes back denied, which denies the whole request. `NSMicrophoneUsageDescription` covers the same ground on iOS.
 
@@ -374,11 +374,11 @@ In the updated Electron shell, **Remember API key** has three per-provider choic
   OS-backed `safeStorage` API when available. Missing/locked stores, rejected operations and
   timeouts fall back to native memory for the current app session. Newly entered keys are never
   silently written as plaintext. Settings disclose when the key must be re-entered after quitting.
-- **This session only** bypasses the OS credential store and retains the key until Robo-Boy quits.
+- **This session only** bypasses the OS credential store and retains the key until robo-boy quits.
 - **Save unencrypted on this device** explicitly enables private plaintext persistence and bypasses
   the OS credential store. Someone with access to app files or backups can read this key.
 
-Robo-Boy does not ask for a storage password or require an unlock before using an entered API key.
+robo-boy does not ask for a storage password or require an unlock before using an entered API key.
 The OS can still display a keychain permission/unlock dialog in Automatic mode; Electron cannot
 universally suppress it. Each asynchronous native operation has a three-second timeout, and an
 unavailable store is not retried until the next app start. Late native completions cannot write
@@ -411,7 +411,7 @@ thinking preferences and conversation history remain in browser storage.
 
 Conversation history (role, content, timestamp only — never attachments or settings) persists to `localStorage`, capped at 100 messages, so it survives a reload. This is a new capability the BT-owned assistant did not have.
 
-Anthropic's Messages API has no CORS allowance for a bare `x-api-key` browser call; Robo-Boy has no application server to proxy it (see [Application architecture](architecture.md)), so a direct-from-browser Anthropic call uses the `anthropic-dangerous-direct-browser-access` header with a user-supplied key — the same trust boundary the existing OpenAI/Gemini providers already have, made explicit rather than hidden. Ollama keeps its existing same-origin `/ollama` Caddy proxy.
+Anthropic's Messages API has no CORS allowance for a bare `x-api-key` browser call; robo-boy has no application server to proxy it (see [Application architecture](architecture.md)), so a direct-from-browser Anthropic call uses the `anthropic-dangerous-direct-browser-access` header with a user-supplied key — the same trust boundary the existing OpenAI/Gemini providers already have, made explicit rather than hidden. Ollama keeps its existing same-origin `/ollama` Caddy proxy.
 
 The assistant cannot reach into an external panel's sandboxed iframe. It sees only what the panel registry lists (name, version, origin, offered or not), and installs go through the panel manager's own review.
 
@@ -435,4 +435,4 @@ The assistant cannot reach into an external panel's sandboxed iframe. It sees on
 
 ## Future: External-Agent (MCP) Integration
 
-Not built, deliberately: read/write access to Pads and Behavior Trees from an external agent (Claude Desktop, Codex, ChatGPT) over the Model Context Protocol is a real, credible next step, but Robo-Boy has no backend process to host an MCP server and its state lives in browser `localStorage`. The smallest credible increment is extending the existing manual Pad/BT export/import JSON round-trip into an automatic, watched two-way file sync, with a standard filesystem-flavored MCP server pointed at that directory — reusing `padValidator.ts` and the BT parser as the same validation gate, never a parallel one. See the architecture plan history for the full comparison of that option against a live local bridge.
+Not built, deliberately: read/write access to Pads and Behavior Trees from an external agent (Claude Desktop, Codex, ChatGPT) over the Model Context Protocol is a real, credible next step, but robo-boy has no backend process to host an MCP server and its state lives in browser `localStorage`. The smallest credible increment is extending the existing manual Pad/BT export/import JSON round-trip into an automatic, watched two-way file sync, with a standard filesystem-flavored MCP server pointed at that directory — reusing `padValidator.ts` and the BT parser as the same validation gate, never a parallel one. See the architecture plan history for the full comparison of that option against a live local bridge.

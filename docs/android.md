@@ -1,6 +1,6 @@
 # Android Application
 
-The Android app is the same React controller as Robo-Boy web and desktop, wrapped in Tauri's
+The Android app is the same React controller as robo-boy web and desktop, wrapped in Tauri's
 Android shell. It does not bundle ROS. The phone connects directly to rosbridge, the video server,
 and the optional mesh server running on the robot or ROS computer.
 
@@ -78,13 +78,13 @@ advanced connection options, choose **Host or IP**, and enter the ROS computer's
 | Optional mesh server | `http://HOST:8000` |
 | Optional recordings  | `http://HOST:9091` |
 
-Android blocks plaintext network traffic in release apps by default. Robo-Boy explicitly permits
+Android blocks plaintext network traffic in release apps by default. robo-boy explicitly permits
 it because the standard ROS endpoints above are plaintext and the host is selected at runtime.
 Use a trusted LAN or VPN; do not expose these unauthenticated services directly to the internet.
 The ROS computer's firewall must allow the selected ports from the phone.
 
 The microphone permission supports the hold-to-talk controls. Android asks for it only when a voice
-control is used; denying it leaves the rest of Robo-Boy usable.
+control is used; denying it leaves the rest of robo-boy usable.
 
 ## CI APK
 

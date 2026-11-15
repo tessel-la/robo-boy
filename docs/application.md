@@ -5,7 +5,7 @@ sign-in. Those builds use the configured HTTPS enterprise gateway instead of the
 ports described below. Authentication is independent of robot ownership; ordinary builds keep
 the existing direct-host workflow.
 
-Robo-Boy's packaged application is a thin Tauri shell around the same React application used by the web deployment. It runs on Linux, macOS, Windows and iPhone, and the runtime contract below is the same on all of them. It does not bundle, install, start, or stop ROS. Run the ROS stack separately on the local computer or on a reachable robot computer.
+robo-boy's packaged application is a thin Tauri shell around the same React application used by the web deployment. It runs on Linux, macOS, Windows and iPhone, and the runtime contract below is the same on all of them. It does not bundle, install, start, or stop ROS. Run the ROS stack separately on the local computer or on a reachable robot computer.
 
 Everything past the runtime contract is about the desktop build. See [iOS application](ios.md) for building, signing and installing on a phone.
 
@@ -88,14 +88,14 @@ Use the target connection's actual ports. The check subscribes to `/robot_descri
 assets; it does not publish robot commands. On headless Linux, run it under `xvfb-run -a`.
 
 Panels that frame a robot page, such as a web viewer on the robot's port 8089, use the same-origin
-path `/<port>/` beside their sandbox. In a browser the robot's Robo-Boy proxy serves that path and
+path `/<port>/` beside their sandbox. In a browser the robot's robo-boy proxy serves that path and
 publishes only the ports in `ROBOBOY_EMBED_PORTS`. The packaged app serves itself, so Electron gives
 each connection's panel sandbox its own host, `app://embed-<id>/`, and forwards that host's
 `/<port>/` requests to the connection's robot proxy at `https://<host>` (`VITE_EMBED_PROXY_PORT`,
 default 443). The robot's allowlist still decides which ports are reachable, cookies are not
 forwarded, and hosts the app did not register reach nothing. Tauri keeps the sandbox beside the app.
 
-A robot that runs no Robo-Boy proxy can publish a service on its own port instead, listening on
+A robot that runs no robo-boy proxy can publish a service on its own port instead, listening on
 all interfaces. Build the desktop app with `VITE_EMBED_DIRECT_PORTS` (for example `8089`, or a comma
 separated list): each listed port's `/<port>/` frames are then fetched from `http://<host>:<port>/`
 with the prefix stripped, and every other port is refused, so this list replaces the robot's
@@ -128,7 +128,7 @@ Tauri development and production both execute Vite's frontend entry as an ES mod
 
 ## Desktop Rendering Performance
 
-The Linux desktop shell uses WebKitGTK. Robo-Boy uses WebKit's accelerated DMABUF renderer by default so desktop rendering stays as close as possible to the browser.
+The Linux desktop shell uses WebKitGTK. robo-boy uses WebKit's accelerated DMABUF renderer by default so desktop rendering stays as close as possible to the browser.
 
 The connected workspace is loaded on demand. Inactive mobile camera and 3D panels release their stream and renderer, and inactive TF trees unsubscribe until shown again.
 
@@ -161,7 +161,7 @@ On Windows, the desktop webview keeps Wry's default disabled Edge UI features an
 
 ## WebRTC On The Linux Desktop
 
-The desktop shell renders in the system's WebKitGTK rather than a webview Robo-Boy ships, so whether
+The desktop shell renders in the system's WebKitGTK rather than a webview robo-boy ships, so whether
 WebRTC exists at all is the distribution's build choice. Where it is compiled out there is no
 `RTCPeerConnection`, and a panel that plays a WHEP stream fails on that missing reference rather than
 on the network. Ubuntu 26.04 is one such distribution, in both its GTK3 (`webkit2gtk-4.1`) and GTK4
@@ -187,7 +187,7 @@ This is a WebKitGTK property, not a desktop one: the Windows, macOS, iOS and And
 engines with WebRTC compiled in.
 
 A panel does not have to give up where it is missing. The stream gateway can publish the same H.264
-over HLS -- `hls: true` in its configuration -- and Robo-Boy names that as the `webrtcHls` endpoint,
+over HLS -- `hls: true` in its configuration -- and robo-boy names that as the `webrtcHls` endpoint,
 which a panel may declare alongside `webrtcWhep`. Every one of these engines has Media Source
 Extensions even where it has no WebRTC, so a panel can feed the buffer itself and play the same
 camera; the official WebRTC panel does exactly that when `RTCPeerConnection` is missing. Latency is

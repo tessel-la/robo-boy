@@ -8,9 +8,9 @@
 
 ## Connect To A Robot
 
-Open Robo-Boy and use **Quick Connect** for the current Robo-Boy host's proxy routes, or **Choose another robot** to enter a host or IP address. In the desktop app's first launch, the address field is shown directly. The address identifies the ROS backend for rosbridge, video, and mesh endpoints. Expand **Connection ports** when those services use ports other than the defaults. ROS domain IDs are configured on the robot, not in Robo-Boy's connection form.
+Open robo-boy and use **Quick Connect** for the current robo-boy host's proxy routes, or **Choose another robot** to enter a host or IP address. In the desktop app's first launch, the address field is shown directly. The address identifies the ROS backend for rosbridge, video, and mesh endpoints. Expand **Connection ports** when those services use ports other than the defaults. ROS domain IDs are configured on the robot, not in robo-boy's connection form.
 
-Successful Host or IP connections are saved on the landing page as recent machines, including the service ports used for that machine. Robo-Boy keeps the 20 most recent hosts; scroll the list to reach older entries. Use a recent entry to reconnect, or remove it from the list when it is no longer useful. Existing saved connections are preserved when upgrading; entries already discarded by an older version cannot be recovered.
+Successful Host or IP connections are saved on the landing page as recent machines, including the service ports used for that machine. robo-boy keeps the 20 most recent hosts; scroll the list to reach older entries. Use a recent entry to reconnect, or remove it from the list when it is no longer useful. Existing saved connections are preserved when upgrading; entries already discarded by an older version cannot be recovered.
 
 After rosbridge connects, the main control view discovers available ROS resources and enables the camera, 3D, behavior-tree, and control-pad interfaces.
 
@@ -30,7 +30,7 @@ Once enabled, sessions use the normal Request control workflow.
 
 ### Camera
 
-Robo-Boy discovers image topics and displays the selected stream through `web_video_server`. Camera requests use the active runtime endpoint, either the `/video_stream` proxy route or the selected backend host.
+robo-boy discovers image topics and displays the selected stream through `web_video_server`. Camera requests use the active runtime endpoint, either the `/video_stream` proxy route or the selected backend host.
 
 Use **Refresh** in the camera toolbar when a camera publisher starts after connecting, or to retry a failed stream. It updates the topic list for all camera panels without reopening them and reconnects the refreshed panel's stream. The button remains available when the topic list is empty. Your topic and quality choices are preserved; a selected topic that disappears is marked unavailable instead of silently switching cameras. Refresh failures keep the previous list and display a retry message.
 
@@ -78,7 +78,7 @@ Choose the matching **Updates topic**, such as `/global_costmap/costmap_updates`
 
 ROS 2 update headers have no sequence counter or base-map revision. Unobserved gaps and same-stamp patches from an older rolling window cannot always be detected. Publishers must provide fresh full snapshots to recover after a disconnect or missing updates; a retained initial map alone is insufficient. Unstamped streams cannot prove snapshot freshness. After a ROS clock reset or when restarting an unstamped update chain, choose **Full maps only** and then reselect the updates topic to reset the timestamp watermark. Use periodic full-map publication or the publisher’s full-map mode when that guarantee is needed. This layer does not invoke navigation services or send commands.
 
-A latched ROS 2 map may require compatible transient-local durability in the publisher/rosbridge setup; the browser cannot set ROS 2 QoS through this transport. If the layer stays on “Waiting for map messages”, check those settings. The ROS backend must have `map_msgs` installed; rebuild Robo-Boy’s ROS image for the newly included dependency, or install the matching ROS distribution package on a custom backend. Existing full-map rendering needs no new backend package.
+A latched ROS 2 map may require compatible transient-local durability in the publisher/rosbridge setup; the browser cannot set ROS 2 QoS through this transport. If the layer stays on “Waiting for map messages”, check those settings. The ROS backend must have `map_msgs` installed; rebuild robo-boy’s ROS image for the newly included dependency, or install the matching ROS distribution package on a custom backend. Existing full-map rendering needs no new backend package.
 
 Recorded incremental maps reconstruct the latest full snapshot and every following patch at the cursor, including forward/backward seeks and layers opened late. Record both topics; corrupt chains fail visibly. Reconstructed snapshots are private to each topic pair; raw recorded topic values and full-map-only views keep their original meaning.
 
@@ -118,7 +118,7 @@ submission. See [parameter browsing and editing](data-explorer.md#parameters) fo
 
 The behavior-tree editor provides sequence, selector, and parallel control nodes plus ROS action, service, and topic nodes. Use ROS discovery to populate the palette, configure node parameters, connect nodes from parent to child, and run or stop the tree from the toolbar.
 
-Enable **Keep running** before pressing Run when execution must continue after the browser is closed or disconnected. The ROS stack owns that run, publishes live status, and lets Robo-Boy reattach after login. A running-tree control appears in the app chrome; use it to jump back to the session or stop it. Leave the toggle off for the original browser-owned, session-only execution mode.
+Enable **Keep running** before pressing Run when execution must continue after the browser is closed or disconnected. The ROS stack owns that run, publishes live status, and lets robo-boy reattach after login. A running-tree control appears in the app chrome; use it to jump back to the session or stop it. Leave the toggle off for the original browser-owned, session-only execution mode.
 
 Trees are stored in the current browser and can be imported or exported as JSON.
 
@@ -137,7 +137,7 @@ The lower control area starts empty. Use the `+` button to:
 
 The editor supports virtual joystick, physical gamepad, button, D-pad, toggle, slider, camera, plot, and heartbeat components. Add a physical-gamepad component to an empty or existing custom pad when you want to use an Xbox, PlayStation, or Logitech controller. It publishes its complete axes and button state as `sensor_msgs/Joy`; each of its 17 standard buttons can also run an independent topic publish, service call, or action on press and release. The live controller drawing follows both sticks and highlights active buttons. Browsers expose a newly connected controller only after you press one of its buttons.
 
-Choose automatic controller detection for normal use, or force Xbox, PlayStation, or Logitech labels and stick placement. If the controller reports a non-standard browser mapping, Robo-Boy warns you to verify its indices before driving.
+Choose automatic controller detection for normal use, or force Xbox, PlayStation, or Logitech labels and stick placement. If the controller reports a non-standard browser mapping, robo-boy warns you to verify its indices before driving.
 
 Saved pads belong to the current browser profile. Export important layouts before clearing site data.
 
@@ -151,4 +151,4 @@ Open the theme selector to choose a built-in theme or create a custom palette. C
 
 ## Local Data
 
-Robo-Boy has no user account or application database. Custom themes, gamepads, behavior trees, panel sizing, and visualization settings are stored in `localStorage`. Data is isolated by browser, profile, and site origin. Persistent behavior-tree executions are transient ROS runtime sessions; they are not stored as user data and end if the ROS stack restarts.
+robo-boy has no user account or application database. Custom themes, gamepads, behavior trees, panel sizing, and visualization settings are stored in `localStorage`. Data is isolated by browser, profile, and site origin. Persistent behavior-tree executions are transient ROS runtime sessions; they are not stored as user data and end if the ROS stack restarts.

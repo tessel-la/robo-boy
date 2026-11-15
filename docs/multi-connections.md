@@ -1,6 +1,6 @@
 # Multi-connection architecture
 
-This document defines how Robo-Boy owns multiple live ROS connections. The connection layer is the
+This document defines how robo-boy owns multiple live ROS connections. The connection layer is the
 foundation; the tab bar is only a view over it.
 
 The landing screen offers **Quick Connect** for its suggested target and **Choose another robot**

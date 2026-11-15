@@ -1,6 +1,6 @@
 # Agent Guide
 
-This guide is the entry point for coding agents working on Robo-Boy. It explains how to find authoritative evidence,
+This guide is the entry point for coding agents working on robo-boy. It explains how to find authoritative evidence,
 choose the correct extension path, preserve architectural boundaries, and verify a change. It does not replace the
 task-specific guides or source code.
 
@@ -22,7 +22,7 @@ Before implementation:
 
 | Task                                  | Read first                                                                         | Then inspect                                                                         |
 | ------------------------------------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| Run or connect Robo-Boy               | [User guide](user-guide.md), [Development guide](development.md)                   | `docker-compose.yml`, `infra/`, `src/runtime/`, `src/hooks/useRos.ts`                |
+| Run or connect robo-boy               | [User guide](user-guide.md), [Development guide](development.md)                   | `docker-compose.yml`, `infra/`, `src/runtime/`, `src/hooks/useRos.ts`                |
 | Change application structure          | [Application architecture](architecture.md)                                        | `src/App.tsx`, `src/components/MainControlView.tsx`, owning feature module and tests |
 | Change web/desktop endpoints          | [Application](application.md), [Application architecture](architecture.md)     | `src/runtime/`, `config/vite.config.ts`, Caddy files, Compose files                  |
 | Change enterprise access or branding | [Enterprise login and branding](enterprise.md), [Application architecture](architecture.md) | `src/features/enterprise/`, `infra/enterprise/`, runtime URLs and native browser openers |
@@ -70,7 +70,7 @@ control gateway -> private rosbridge + rosapi; web_video_server
 robot or simulation nodes
 ```
 
-Robo-Boy has no user database. Its robot-host control gateway arbitrates sessions before private rosbridge; see [Shared robot control](robot-control.md). `App` owns connection and global theme state.
+robo-boy has no user database. Its robot-host control gateway arbitrates sessions before private rosbridge; see [Shared robot control](robot-control.md). `App` owns connection and global theme state.
 `MainControlView` coordinates the active ROS connection, workspace, built-in and external panel catalog, primary view,
 control area, and cross-feature controls. Large feature behavior belongs below the shell in its feature module,
 services, hooks, persistence layer, or renderer.
@@ -89,20 +89,20 @@ by the application. This path requires no JavaScript plugin and no panel SDK.
 
 ### New built-in gamepad component
 
-Use this path when every Robo-Boy deployment should gain a new reusable control primitive in the gamepad editor. It
+Use this path when every robo-boy deployment should gain a new reusable control primitive in the gamepad editor. It
 is core application development: extend the domain types, palette, editor settings, runtime dispatch, ROS helpers,
 storage compatibility, and tests. It is not an external panel.
 
 ### Built-in workspace panel or core feature
 
-Use this path only when the capability belongs in Robo-Boy core and needs application-shell or feature-module
+Use this path only when the capability belongs in robo-boy core and needs application-shell or feature-module
 integration. Register stable built-in metadata in `src/panels/builtInPanels.ts`, keep protocol/rendering behavior out
 of `MainControlView`, and preserve existing persisted IDs.
 
 ### External SDK panel
 
 Use an external panel for independently owned, deployment-selected functionality. Its source, dependencies, tests,
-manifest, release, and distribution live outside Robo-Boy. Robo-Boy discovers only deployment-installed metadata and
+manifest, release, and distribution live outside robo-boy. robo-boy discovers only deployment-installed metadata and
 lazy-loads the reviewed same-origin ESM bundle when a tile mounts.
 
 Do not convert a request for one path into another merely because it is easier to implement.
@@ -128,8 +128,8 @@ External panels must not depend on:
 - React components, hooks, contexts, application stores, or feature-module source
 - `MainControlView`, `ExternalPanelHost`, registry/loader/storage implementations, or browser-storage keys
 - built-in panel adapters or custom-gamepad implementation details
-- Robo-Boy's module graph or raw ROSLIB connection
-- globals that Robo-Boy happens to create during development
+- robo-boy's module graph or raw ROSLIB connection
+- globals that robo-boy happens to create during development
 
 Opaque-origin iframes do not inherit the parent page directly. The host copies the documented public CSS variables
 into each sandbox and exposes their snapshot through `context.theme`; panels still own their complete layout and
@@ -181,7 +181,7 @@ when effective activity is false. Clean up even if an activity transition or mou
 ### Dependencies and artifacts
 
 The SDK package is type-only. Use `import type`; it supplies no runtime implementation. Bundle every runtime dependency
-into browser-ready ESM with no unresolved bare imports. A normal Robo-Boy build never scans panel packages or sibling
+into browser-ready ESM with no unresolved bare imports. A normal robo-boy build never scans panel packages or sibling
 repositories.
 
 The manifest, module definition, package release, inventory entry, and artifact must agree on stable ID, version, API
@@ -229,7 +229,7 @@ API solely from an example's private helper.
 4. Recalculate SRI after every bundle change.
 5. Keep manifest and inventory metadata synchronized.
 6. Stage through the common desired-state installer and exercise add, reload, reconnect, activity, resize, removal, and
-   retry behavior in Robo-Boy.
+   retry behavior in robo-boy.
 
 ## Verification Matrix
 
