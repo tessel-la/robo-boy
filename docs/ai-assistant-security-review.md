@@ -9,7 +9,7 @@ OAuth callback, native IPC and official Claude Code subprocesses.
   `safeStorage`; failures fall back to native session memory, never implicit plaintext persistence.
   Each native operation is bounded to three seconds and failed availability is cached until restart.
   The OS may still show its own keychain permission/unlock dialog; asynchronous operation and a
-  timeout keep Robo-Boy responsive but cannot dismiss that OS UI. Per-provider session-only and
+  timeout keep robo-boy responsive but cannot dismiss that OS UI. Per-provider session-only and
   explicit plaintext modes bypass all keychain calls. The UI discloses actual storage and the
   plaintext risk. Existing plaintext records are upgraded where possible, otherwise preserved
   with disclosure; legacy encrypted records remain recoverable. Browser migration clears the
@@ -28,7 +28,7 @@ OAuth callback, native IPC and official Claude Code subprocesses.
   Malformed replies become an assistant-settings error instead of reaching the global app error
   boundary. A catalog that finishes after an account switch is discarded.
 - **Claude prompt cleanup.** Private prompt directories are removed after success/failure/cancellation.
-  The next runtime start also removes stale Robo-Boy chat directories left by a main-process crash.
+  The next runtime start also removes stale robo-boy chat directories left by a main-process crash.
   Credentials remain owned by the unmodified official CLI in its isolated configuration directory.
 
 ## Boundaries checked

@@ -1,7 +1,7 @@
 # External Panels
 
-Robo-Boy can host independently developed, deployment-bundled panels as workspace tiles. External panel source
-stays in its own repository; a deployer reviews and stages an immutable ESM release below Robo-Boy's same-origin
+robo-boy can host independently developed, deployment-bundled panels as workspace tiles. External panel source
+stays in its own repository; a deployer reviews and stages an immutable ESM release below robo-boy's same-origin
 `panels/` directory. Panel API v2 executes that release in an opaque-origin iframe and brokers every host service
 over a private message channel.
 
@@ -9,7 +9,7 @@ over a private message channel.
 
 | Boundary           | Responsibility                                                                                                                  |
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
-| Robo-Boy core      | Catalog, integrity checks, workspace layout, sandbox lifecycle, permission brokers, management API/UI, and per-panel error UI   |
+| robo-boy core      | Catalog, integrity checks, workspace layout, sandbox lifecycle, permission brokers, management API/UI, and per-panel error UI   |
 | Panel SDK          | Type-only manifest, activation context, storage, runtime, connection, viewport, theme, and lifecycle interfaces in `panel-sdk/` |
 | External panel     | Its own source, dependencies, release process, `roboboy.panel.json`, and browser-ready ESM bundle                               |
 | Panel Inventory    | Remote catalog metadata and immutable release locations; it does not host source or act as the installed registry               |
@@ -43,9 +43,9 @@ copies a bundle into the same-origin static `panels/` directory used by the web,
 
 This choice fits the current static Vite/Tauri architecture:
 
-- Panel code is lazy and remains outside Robo-Boy's main application chunks.
+- Panel code is lazy and remains outside robo-boy's main application chunks.
 - A panel does not need React. If it chooses React, Vue, Three.js, or another runtime, those dependencies belong
-  to that panel bundle and may duplicate libraries already used by Robo-Boy.
+  to that panel bundle and may duplicate libraries already used by robo-boy.
 - The sandbox receives verified source bytes as a blob module, so installed web, PWA, and Tauri assets remain
   same-origin and offline-capable without executing in the parent page.
 - Dependencies are owned and bundled by the panel author. The installed entry point must be a self-contained ESM
@@ -54,8 +54,8 @@ This choice fits the current static Vite/Tauri architecture:
   layout supports deterministic re-application; publisher signing and garbage collection remain future work.
 
 Package tarballs remain a reasonable development-contract transport—the panel SDK is an npm-compatible tarball
-attached to a versioned Robo-Boy GitHub release—but runtime panels are immutable manifest and ESM bundle assets.
-Robo-Boy does not scan `node_modules` or require panel packages to be application dependencies. Direct live
+attached to a versioned robo-boy GitHub release—but runtime panels are immutable manifest and ESM bundle assets.
+robo-boy does not scan `node_modules` or require panel packages to be application dependencies. Direct live
 imports from arbitrary HTTPS origins were not selected:
 they conflict with Tauri's CSP and offline packaging, require CORS, and increase supply-chain exposure. Module
 federation would add a runtime not otherwise needed by this Vite application. The iframe bridge deliberately
@@ -107,8 +107,8 @@ same-origin path at build time.
 ```
 
 Panel IDs are stable and should use a lowercase reverse-domain form. IDs may not collide with another installed
-panel or a built-in ID. Versions and compatibility fields use npm SemVer range syntax. Robo-Boy evaluates ranges
-with prerelease support because Robo-Boy itself currently publishes alpha versions.
+panel or a built-in ID. Versions and compatibility fields use npm SemVer range syntax. robo-boy evaluates ranges
+with prerelease support because robo-boy itself currently publishes alpha versions.
 
 Each installed entry point and declared asset must resolve to the registry's protocol and host and contain the
 manifest's exact version as a decoded path segment. A cross-origin, mutable `latest/`, `data:`, `blob:`, or
@@ -119,12 +119,12 @@ rendered by this host, and `offline` is advisory metadata for future installers.
 The registry accepts at most 100 entries and 256 KiB. The production PWA precache includes JSON manifests,
 webmanifests, JavaScript bundles, styles, and common static assets copied into the build, so deployment-bundled
 panels remain available after the service worker has cached that release. Updating a panel means staging a new
-versioned directory, updating its hash and registry entry, and rebuilding/repackaging Robo-Boy.
+versioned directory, updating its hash and registry entry, and rebuilding/repackaging robo-boy.
 
 Discovery fetches and validates only JSON. Bundle fetch and sandbox startup begin when a workspace tile mounts.
 Every tile gets an isolated realm, capability channel, and storage namespace.
 The optional `installation` object generated by the installer records the configuration schema, explicit selection,
-configured source names/types, and exact version/integrity/source for each resolved panel. Robo-Boy exposes that
+configured source names/types, and exact version/integrity/source for each resolved panel. robo-boy exposes that
 provenance in the workspace catalog; older schema-v1 registries without it remain valid.
 
 ## Public Panel API
@@ -166,7 +166,7 @@ an approved `network.hostEndpoints` entry appears under `context.network.endpoin
 and a monotonically increasing generation when the shared ROS
 instance changes. `viewport` publishes tile size, intersection, document visibility, and effective active state;
 panels should pause expensive work while inactive. `theme` provides the current light/dark color scheme and a
-reviewed set of Robo-Boy CSS tokens. The sandbox also installs those tokens on its document root and supplies base
+reviewed set of robo-boy CSS tokens. The sandbox also installs those tokens on its document root and supplies base
 styles for native controls. The host owns the tile and the panel owns only DOM below the supplied mount element.
 `unmount` is mandatory and must remove listeners, timers, observers, ROS clients, rendering resources, and created
 DOM.
@@ -202,7 +202,7 @@ terminates the panel realm even if its cleanup fails.
 Undeclared services are `null`. ROS/network capabilities require a matching `permissions` block. Static ROS
 discovery returns only topics matching an approved `subscribe` pattern; every subscribe, publish, and service
 request is checked again. A panel that needs user-configurable topics can instead declare `selectTopic: true` and
-call `context.ros.selectTopic()`. Robo-Boy obtains the complete graph, displays it in trusted host UI, and returns
+call `context.ros.selectTopic()`. robo-boy obtains the complete graph, displays it in trusted host UI, and returns
 only the selected topic and message type to the panel. That selection grants subscription access to that exact pair.
 The host persists approved pairs as trusted tile metadata so mobile suspension and page reloads can reconnect without
 asking again; replacing or removing the tile removes its grants. The panel cannot read this host metadata, and the
@@ -213,7 +213,7 @@ message; non-JSON and oversized payloads are rejected. Network requests accept o
 declared exact HTTPS origins, `self`, or the visibly broad `https:` grant. Host endpoint grants are narrower:
 each permits only the routes beneath the endpoint the runtime resolved, rather than the complete service origin.
 `webrtcWhep`, `webrtcDiscovery` and `webrtcHls` name the WebRTC stream gateway, which is a deployment of its own
-and needs nothing else of Robo-Boy running; where it lives is decided in `src/runtime/runtimeConfig.tsx` and
+and needs nothing else of robo-boy running; where it lives is decided in `src/runtime/runtimeConfig.tsx` and
 configurable through `VITE_WEBRTC_PORT`, `VITE_WEBRTC_DISCOVERY_PORT` and `VITE_WEBRTC_HLS_PORT`, so no caller
 writes its ports down. `webrtcHls` carries the same stream for a webview that cannot speak WebRTC at all -- see
 [WebRTC on the Linux desktop](application.md#webrtc-on-the-linux-desktop) -- and is empty where the gateway is
@@ -222,7 +222,7 @@ panels published before it had endpoints of its own. Redirect targets are checke
 headers are filtered, responses are size-capped, and concurrent requests time out. A response is carried as
 bytes, so `arrayBuffer()` returns exactly what the server sent and `text()` and `json()` are readings of it; a
 panel that plays media or reads any other binary format needs no way out of the sandbox to do it. The sandbox has no parent DOM,
-Robo-Boy storage, cookies, or raw host objects.
+robo-boy storage, cookies, or raw host objects.
 
 The iframe permits form event handling so panel configuration forms can submit to their own JavaScript listeners.
 Its CSP keeps `form-action 'none'`, so native form navigation and form-data submission outside the sandbox remain
@@ -236,7 +236,7 @@ and VPN addresses.
 
 ### Theme And UI Guidelines
 
-Opaque-origin panels cannot inherit parent-page CSS directly. Robo-Boy therefore copies only its public design
+Opaque-origin panels cannot inherit parent-page CSS directly. robo-boy therefore copies only its public design
 tokens into the sandbox: primary and semantic colors, page/card/background/text/border colors, button text, and the
 UI font family. The current values are available through `context.theme.getSnapshot()` and changes are published by
 `context.theme.subscribe()`. The same tokens are also written as CSS custom properties on `:root`, which is the
@@ -257,7 +257,7 @@ preferred styling interface:
 ```
 
 Use theme variables for every palette value and `--font-family-ui` for typography. Native buttons, inputs, selects,
-and textareas receive baseline Robo-Boy styling, but panels remain responsible for their layout, spacing, focus
+and textareas receive baseline robo-boy styling, but panels remain responsible for their layout, spacing, focus
 order, labels, disabled states, overflow behavior, and responsive UI. Avoid copying a built-in theme's resolved
 colors into panel source because custom and future themes update the variables at runtime.
 
@@ -296,12 +296,12 @@ export default definition;
 ```
 
 The complete standalone example is the sibling `robo-boy-hello-panel` repository. It is not included in a normal
-Robo-Boy checkout or build. The desired-state installer reads its manifest, verifies its local release artifact,
+robo-boy checkout or build. The desired-state installer reads its manifest, verifies its local release artifact,
 and places it in a generated deployment tree without importing it into application source.
 
 ## Time Series Is Now Native
 
-Time Series is built into Robo-Boy and needs no external artifact or installation. Existing
+Time Series is built into robo-boy and needs no external artifact or installation. Existing
 `la.tessel.roboboy.timeseries` workspace tiles migrate to the native `timeSeries` panel with
 settings and layout intact. See [Native Time Series](native-time-series.md) for behavior,
 interaction, math, architecture and migration details.
@@ -314,7 +314,7 @@ the manager; removing them preserves migrated native tiles and their settings.
 ## WebRTC / RTSP Camera Reference Panel
 
 The sibling `robo-boy-webrtc-panel` demonstrates a network-oriented panel without coupling video transport to
-Robo-Boy core. It negotiates a WHEP endpoint with the browser's native WebRTC API, displays connection and inbound
+robo-boy core. It negotiates a WHEP endpoint with the browser's native WebRTC API, displays connection and inbound
 video statistics, cleans up the remote WHEP session on disconnect, and keeps its matching RTSP URL available for
 native consumers. Browsers do not decode RTSP directly, so a gateway such as the one configured in the sibling
 Genesis simulation translates one H.264 stream into RTSP and WebRTC outputs.
@@ -344,8 +344,8 @@ my-roboboy-panel/
   README.md
 ```
 
-Keep the panel repository outside Robo-Boy. A local source lists repository directories explicitly, so adding a panel
-does not cause Robo-Boy to scan or execute unrelated sibling projects. A typical workspace is:
+Keep the panel repository outside robo-boy. A local source lists repository directories explicitly, so adding a panel
+does not cause robo-boy to scan or execute unrelated sibling projects. A typical workspace is:
 
 ```text
 workspace/
@@ -393,7 +393,7 @@ local-only configuration:
 ```
 
 `root` is resolved relative to the configuration file for host commands. `rootEnv` optionally overrides it in a
-container. Stage and run the selected panels without copying source into Robo-Boy:
+container. Stage and run the selected panels without copying source into robo-boy:
 
 ```bash
 cd ../robo-boy
@@ -431,7 +431,7 @@ docker compose \
   up -d
 ```
 
-After changing a local bundle, use the **Manage installations…** action in Robo-Boy to preview and apply the
+After changing a local bundle, use the **Manage installations…** action in robo-boy to preview and apply the
 same desired state again. For a command-line-only workflow, restart the manager after removing its persisted state
 volume or use the staging commands above.
 
@@ -445,9 +445,9 @@ docker compose \
 ```
 
 Do not commit the deployment-local Compose/configuration files, generated `.panel-stage/` tree, or panel bundle
-copies to Robo-Boy.
+copies to robo-boy.
 
-1. Depend on the type-only SDK tarball from the pinned `panel-sdk-v<version>` Robo-Boy GitHub release and use
+1. Depend on the type-only SDK tarball from the pinned `panel-sdk-v<version>` robo-boy GitHub release and use
    `import type`. For coordinated local development only, the sibling examples may temporarily use
    `file:../robo-boy/panel-sdk` before the release asset exists.
 2. Export one default definition and build a browser ESM artifact with no unresolved bare imports.
@@ -463,7 +463,7 @@ copies to Robo-Boy.
    `build:tauri` commands keep the tracked empty registry and package no external panels.
 
 The generated `.panel-stage/` directory is ignored by Git. The tracked `public/panels/installed.json` remains an
-empty default registry, and external bundle copies must not be committed to Robo-Boy. A production installer or
+empty default registry, and external bundle copies must not be committed to robo-boy. A production installer or
 deployment pipeline should perform the equivalent staging operation from immutable published release URLs rather
 than relying on sibling working copies.
 
@@ -517,7 +517,7 @@ it before the next request is made, so an approved host cannot redirect the mana
 
 ## ROS 2 Actions And Control Requests
 
-SDK package 2.3.0 adds these operations to Panel API 2.0.0, supported by Robo-Boy 0.20.0-alpha
+SDK package 2.3.0 adds these operations to Panel API 2.0.0, supported by robo-boy 0.20.0-alpha
 and newer. Upgrade the frontend and rebuild the ROS stack together. Pin the SDK tarball and set
 `compatibility.roboboy` to `>=0.20.0-alpha <1.0.0` or a stricter range for panels using these APIs.
 Existing 2.2.0 panels remain compatible.
@@ -638,7 +638,7 @@ Add the exact IDs to its top-level object. For example, this installs only Hello
 }
 ```
 
-Then set this non-secret path in Robo-Boy's `.env` so manual Compose and Tessella Dashboard launches use it:
+Then set this non-secret path in robo-boy's `.env` so manual Compose and Tessella Dashboard launches use it:
 
 ```dotenv
 ROBOBOY_PANEL_SOURCES_FILE=./config/panel-sources.json
@@ -697,7 +697,7 @@ allows the app to start. Later changes go through authenticated preview/apply in
 dialog memory, the manager stores only environment-variable names for inventory credentials, and a preview expires
 after ten minutes. Apply re-resolves every source and rejects the plan if any verified bytes or metadata changed.
 
-The installer validates compatibility metadata structurally. Robo-Boy applies its canonical SemVer compatibility
+The installer validates compatibility metadata structurally. robo-boy applies its canonical SemVer compatibility
 checks while reading the generated registry and refuses to expose incompatible releases in the workspace menu.
 
 The current base Compose stack runs Vite, so the overlay mounts the volume at `/app/public/panels`. A deployment
@@ -705,16 +705,16 @@ using the production Nginx image sets `ROBOBOY_PANEL_WEB_ROOT=/usr/share/nginx/h
 browser reads the same-origin `/panels/installed.json`; it never receives inventory credentials or imports a
 cross-origin module.
 
-An organization can therefore keep using an unmodified official Robo-Boy application image while privately
+An organization can therefore keep using an unmodified official robo-boy application image while privately
 owning its panel source, build pipeline, HTTPS inventory, release storage, access policy, and desired-state selection.
 It should build against a pinned panel SDK GitHub release, publish a browser-ready immutable ESM bundle, and use a
 stable reverse-domain ID under a domain it controls. Neither private panel source nor an npm-registry publication
 is required.
 
 The official Hello and WebRTC examples are independently released from their panel repositories;
-their source and bundles are not copied into Robo-Boy. The sibling directories remain convenient coordinated
+their source and bundles are not copied into robo-boy. The sibling directories remain convenient coordinated
 development checkouts only. A production pipeline must verify inventory metadata and artifact hashes before
-staging, then publish the complete Robo-Boy build atomically.
+staging, then publish the complete robo-boy build atomically.
 
 ## Limitations And Expected Evolution
 

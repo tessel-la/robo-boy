@@ -1,8 +1,8 @@
 # Enterprise login and company branding
 
-Use your company's OpenID Connect identity provider to decide who can access a Robo-Boy
+Use your company's OpenID Connect identity provider to decide who can access a robo-boy
 deployment. Keep employee accounts, MFA, password policy and app assignment in that provider.
-Robo-Boy does not store employee passwords or create a second user database.
+robo-boy does not store employee passwords or create a second user database.
 
 Login is **off by default**. A normal web or packaged build keeps its existing connection flow.
 Branding is independent: you can brand a build without requiring login.
@@ -102,7 +102,7 @@ docker compose -f docker-compose.yml -f infra/compose/enterprise.yml up -d --bui
 
 Caddy obtains TLS for `ROBOBOY_ENTERPRISE_ORIGIN`; DNS and certificate issuance must work for
 that host. The overlay builds the production frontend with login enabled, serves it with Nginx
-on loopback, and binds Robo-Boy's ROS and video endpoints to loopback. The recordings TCP
+on loopback, and binds robo-boy's ROS and video endpoints to loopback. The recordings TCP
 listener, if selected, also binds loopback. Only the authenticated HTTPS entry is intended for
 remote employee access. The default Caddy deployment and the enterprise deployment share the
 same backend route definitions.
@@ -171,9 +171,9 @@ configuration supports:
 - A default company theme using the existing custom-theme format, plus an optional wordmark logo
 - Account and sign-out controls in the existing connection menu, without a second workspace header
 
-A small **Powered by Robo-Boy** attribution appears in company editions on the connection screen,
+A small **Powered by robo-boy** attribution appears in company editions on the connection screen,
 in the workspace's connection menu, and in the login footer, including when login is disabled.
-A company edition has a custom company name or logo. The standard Robo-Boy edition omits this
+A company edition has a custom company name or logo. The standard robo-boy edition omits this
 attribution.
 
 Point `ROBOBOY_BRANDING_FILE` at the file when building. The broker uses the same file for its
@@ -239,7 +239,7 @@ screen, loader, gateway completion messages, or security notices. Editing JSON r
 the frontend and redistributing native packages. Keep the gateway on the same branding-capable
 release when it loads the same file.
 
-Existing version-1 branding files remain valid. Older Robo-Boy pins reject these new fields, so
+Existing version-1 branding files remain valid. Older robo-boy pins reject these new fields, so
 update the core release/submodule pin before adding them to a company file. In the company starter,
 edit `companies/<company>/branding.json` and use its normal build/package commands. No React patch
 or new company-specific component is needed. A separate company repository is optional; a direct
@@ -295,7 +295,7 @@ with its parent session. Treat those URLs as credentials: the enterprise entry d
 request URLs, and responses use `no-store` and `no-referrer`. Backend responses cannot overwrite
 the broker's session cookies. Credentials are stripped before forwarding to robot services.
 Feature-owned Authorization headers, such as a media gateway credential or the Panel Manager's
-admin token, retain their existing transport; they do not authenticate a Robo-Boy access session.
+admin token, retain their existing transport; they do not authenticate a robo-boy access session.
 
 `ROBOBOY_AUTH_SESSION_SECONDS` defaults to **3600** and accepts **60–86400**. Sessions expire
 after that duration, independent of the provider's ID-token lifetime. There is no silent refresh
@@ -366,7 +366,7 @@ connection revocation; this deployment does not support them.
 
 - Provider logout, employee deprovisioning and changed groups take effect at reauthentication or
   local session expiry. This version has no OIDC back-channel logout, SCIM or role editor.
-- Robo-Boy sign-out ends its access session; it does not sign you out of other company applications
+- robo-boy sign-out ends its access session; it does not sign you out of other company applications
   or erase the identity provider's browser SSO session.
 - If logout cannot reach the broker, only local disconnect is guaranteed until the server session
   expires or is revoked. The UI reports that failure and does not reopen the workspace automatically.
@@ -375,7 +375,7 @@ connection revocation; this deployment does not support them.
   separately configured assistant credentials retain their existing storage rules; use separate
   profiles where those must be isolated between employees. Signing out does not erase workspaces.
 - External streams, native ROS access and arbitrary embedded robot applications need their own
-  deployment access policy. This gateway protects Robo-Boy's proxied HTTP and WebSocket routes.
+  deployment access policy. This gateway protects robo-boy's proxied HTTP and WebSocket routes.
 - Integration tests use a local signed OIDC issuer. A production tenant still needs acceptance
   testing for its app assignment, MFA, claims and TLS settings. Native opener code is shared across
   platforms; Linux compile checks do not certify a macOS, Windows, iOS or Android installer.

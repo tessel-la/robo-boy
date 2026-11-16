@@ -1,4 +1,4 @@
-# Robo-Boy
+# robo-boy
 
 [![Tests](https://github.com/tessel-la/robo-boy/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/tessel-la/robo-boy/actions/workflows/test.yml)
 [![Docker Build](https://github.com/tessel-la/robo-boy/actions/workflows/docker-ci.yml/badge.svg?branch=main)](https://github.com/tessel-la/robo-boy/actions/workflows/docker-ci.yml)
@@ -7,10 +7,14 @@
 [![License](https://img.shields.io/github/license/tessel-la/robo-boy)](https://github.com/tessel-la/robo-boy/blob/main/LICENSE)
 
 <p align="center">
-  <img src="images/logo.png" alt="Robo-Boy Logo" width="200">
+  <img src="public/images/icon-1024x1024.png" alt="robo-boy logo" width="200">
 </p>
 
-Robo-Boy is a web, desktop, iPhone, and Android interface for controlling and visualizing ROS 2 robots. It includes camera streaming, configurable control pads, 3D visualization, native time-series plotting and signal analysis, behavior-tree editing, and custom themes. All interfaces run the same React codebase and connect to a separately installed ROS stack. The mobile packages are lightweight Tauri shells; the desktop can be built either as one of those or as an Electron shell, which is larger but brings its own Chromium and so has WebRTC wherever it runs.
+robo-boy is a web, desktop, iPhone, and Android interface for controlling and visualizing ROS 2 robots. It includes camera streaming, configurable control pads, 3D visualization, native time-series plotting and signal analysis, behavior-tree editing, and custom themes. All interfaces run the same React codebase and connect to a separately installed ROS stack. The mobile packages are lightweight Tauri shells; the desktop can be built either as one of those or as an Electron shell, which is larger but brings its own Chromium and so has WebRTC wherever it runs.
+
+https://github.com/user-attachments/assets/2fe86d21-cafe-4ab1-b0b7-7f137c952b63
+
+The teaser: one minute of the real app driving three simulated robots. Also on [tessel.la](https://tessel.la).
 
 ## Start With The App
 
@@ -46,7 +50,7 @@ guides for platform setup and development.
 
 ## Start With Docker
 
-Use this when Robo-Boy has to be opened in a browser, including from a phone or another computer. A browser
+Use this when robo-boy has to be opened in a browser, including from a phone or another computer. A browser
 needs HTTPS before it grants a page a camera, and the app and the robot services have to share one origin;
 Caddy and a locally trusted certificate supply both.
 
@@ -66,7 +70,7 @@ mkcert -key-file infra/caddy/certs/local-key.pem -cert-file infra/caddy/certs/lo
 docker compose up -d --build
 ```
 
-Replace `YOUR_HOST_IP` with the computer's local network IP if Robo-Boy will be opened from another device.
+Replace `YOUR_HOST_IP` with the computer's local network IP if robo-boy will be opened from another device.
 
 Open `https://localhost`, or `https://YOUR_HOST_IP` from a device on the same network.
 
@@ -82,5 +86,5 @@ See the [documentation index](docs/README.md) for application usage, desktop pac
 
 ## License
 
-Robo-Boy uses [Apache 2.0](LICENSE). See [third-party notices](THIRD_PARTY_NOTICES.md) for icon
+robo-boy uses [Apache 2.0](LICENSE). See [third-party notices](THIRD_PARTY_NOTICES.md) for icon
 attribution. Release builds include `licenses.txt` with notices for their bundled dependencies.

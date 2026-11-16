@@ -6,8 +6,8 @@
 > The rotation findings and verification below describe the original implementation reviewed here.
 
 
-Reviewed on 2026-10-21 against Robo-Boy `dev` at `7506921` and the local
-`robo-boy-company-starter` checkout. The existing split is sound: Robo-Boy already owns the login
+Reviewed on 2026-10-21 against robo-boy `dev` at `7506921` and the local
+`robo-boy-company-starter` checkout. The existing split is sound: robo-boy already owns the login
 feature, while the starter supplies company data and builds. Keep that split for maintained company
 editions. A separate repository is useful deployment ownership, not a prerequisite for branding.
 
@@ -32,8 +32,8 @@ logic are changed. The new fields are public presentation data, not an authoriza
 
 | Responsibility | Owner | Reason |
 | --- | --- | --- |
-| Login layout, supported copy fields, validation and accessibility | Robo-Boy | One implementation across web, Electron and Tauri |
-| OIDC, session handling, secure transport and robot access enforcement | Robo-Boy | Security fixes must reach every edition through upstream updates |
+| Login layout, supported copy fields, validation and accessibility | robo-boy | One implementation across web, Electron and Tauri |
+| OIDC, session handling, secure transport and robot access enforcement | robo-boy | Security fixes must reach every edition through upstream updates |
 | Company wording, authorized logos, palette and default theme | Deployment/company configuration | These change independently of product code |
 | Provider tenant, account policy and secret references | Deployment configuration; values in the identity provider/secret store | Branding files and frontend assets are public |
 | App identifiers, OS icons, signing and installer distribution | Company packaging/deployment | Branded installers have their own release identity and lifecycle |
@@ -45,9 +45,9 @@ assets outside the submodule and passes `ROBOBOY_BRANDING_FILE`, `ROBOBOY_PUBLIC
 upstream gateway and private-route definitions. The starter does not own a second login component.
 Those boundaries are worth preserving.
 
-## Separate repo or one Robo-Boy checkout?
+## Separate repo or one robo-boy checkout?
 
-For a maintained enterprise edition, keep a deployment repo with a pinned Robo-Boy release,
+For a maintained enterprise edition, keep a deployment repo with a pinned robo-boy release,
 branding assets, packaging configuration, CI and environment templates. It gives the company
 independent reviews and release cadence, keeps its assets out of the standard product, and avoids
 source forks. The cost is an explicit upstream update and acceptance test for every supported
@@ -55,12 +55,12 @@ deployment. A Git submodule is adequate here; replacing it with another dependen
 add migration work without fixing a demonstrated issue.
 
 For one installation with a logo and a few text changes, the starter is optional. Point a normal
-Robo-Boy build at an externally managed branding JSON file and stage its assets in the configured
+robo-boy build at an externally managed branding JSON file and stage its assets in the configured
 public directory. This consumes the same contract without maintaining wrapper scripts. Authentication
 still uses the optional upstream enterprise gateway.
 
 Embedding real company editions, provider policies and duplicated build/deployment scripts in
-Robo-Boy would couple product releases to customer-specific changes. It would also make private
+robo-boy would couple product releases to customer-specific changes. It would also make private
 assets and operational settings harder to own separately. Keep the generic capability in core;
 keep selected company data outside it. Do not introduce injected tenant HTML/CSS/JavaScript just
 to customize login copy.
@@ -76,11 +76,11 @@ These are maintenance observations, not evidence of an authentication vulnerabil
 - Its README includes a preview paragraph saying restarts sign everyone out. Durable sessions are
   opt-in through a private session file/volume in core; the inspected demo does not configure that
   store. Keep the distinction between demo memory sessions and production persistent sessions clear
-- Company packages deliberately disable the stock Robo-Boy updater. Continue distributing a rebuilt
+- Company packages deliberately disable the stock robo-boy updater. Continue distributing a rebuilt
   company package so an upstream installer cannot replace its compiled server URL and branding
 
 Update the pin first, then add the company copy, build the selected edition, and test its actual
-provider, TLS and desktop package. There is no need to move the starter into Robo-Boy or modify
+provider, TLS and desktop package. There is no need to move the starter into robo-boy or modify
 its authentication implementation to support rotating messages.
 
 ## Verified

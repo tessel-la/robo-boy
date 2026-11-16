@@ -5,7 +5,7 @@ export default function RoboBoyAttribution({ className = '' }: { className?: str
   if (!companyBranded) return null;
   return (
     <span className={`robo-boy-attribution ${className}`}>
-      Powered by <strong>Robo-Boy</strong>
+      Powered by <strong>robo-boy</strong>
     </span>
   );
 }

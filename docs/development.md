@@ -58,7 +58,7 @@ The stack starts:
 - `ros-stack`: ROS 2, rosapi, rosbridge, and `web_video_server` on the host network.
 - `caddy`: HTTP/HTTPS entry point and reverse proxy.
 - `ollama-relay`: transport-only adapter from Caddy's Unix socket to the configured external Ollama API.
-- `webrtc-relay`: part of the web deployment beside Caddy. A transport to a media gateway Robo-Boy does not run, needed only by browsers.
+- `webrtc-relay`: part of the web deployment beside Caddy. A transport to a media gateway robo-boy does not run, needed only by browsers.
 - `mesh-relay`: read-only transport from Caddy to the robot's mesh server, including servers bound only to host loopback.
 - Ollama is external to the Compose stack and is reached through the same-origin `/ollama` proxy.
 
@@ -142,12 +142,12 @@ a CORS rejection, include `tauri://*,http://tauri.localhost,https://tauri.localh
 
 In the browser app, Quick Connect uses the Caddy proxy. The Host or IP field accepts any hostname, DNS name, VPN name, IPv4 address, IPv6 address, or URL that resolves from the client machine. Expand **Connection ports** to change rosbridge, video, and mesh ports for direct host connections; these default to the matching `VITE_*_PORT` values. It connects directly to that host in `auto` mode when it differs from the frontend host. Use `VITE_WEB_BACKEND_MODE=proxy` to force all browser connections through Caddy.
 
-The camera gateway is external. Robo-Boy starts no media server and does not care which one you run: a
-simulator provides one, or you run your own. **The packaged desktop and mobile apps never go through Robo-Boy
+The camera gateway is external. robo-boy starts no media server and does not care which one you run: a
+simulator provides one, or you run your own. **The packaged desktop and mobile apps never go through robo-boy
 to reach it** — they address the gateway directly — so a client connected to nothing but the ROS stack still
 gets WebRTC, provided a gateway is reachable from it.
 
-Only browsers need Robo-Boy in the path, because an HTTPS page may not fetch the gateway's plaintext port. The
+Only browsers need robo-boy in the path, because an HTTPS page may not fetch the gateway's plaintext port. The
 same-origin `/webrtc` route serves them, and its upstream is a deployment choice:
 
 | Upstream                 | Requires                                                                                                                                                                  |
@@ -158,7 +158,7 @@ same-origin `/webrtc` route serves them, and its upstream is a deployment choice
 The relay belongs to the web deployment, not to the robot side. `docker compose up -d ros-stack` starts the ROS
 services alone and nothing there depends on it, while a packaged client addresses the gateway directly. Without
 a gateway running anywhere, `/webrtc` returns a proxy error and the panel reports no streams; nothing else in
-Robo-Boy is affected.
+robo-boy is affected.
 
 Exactly one read-only resource is exposed: `GET /webrtc/_discovery/paths`, mapped to the gateway's active-path
 listing, with any other method refused. The relay carries signaling and that resource on separate sockets, so
@@ -199,10 +199,10 @@ can select a private configuration with `ROBOBOY_PANEL_SOURCES_FILE`. See
 [External panels](external-panels.md#remote-inventories-and-private-panels) for configuration, subset selection,
 and credential handling.
 
-The Tessella Dashboard starts existing images with `docker compose up -d --no-build`. Its Robo-Boy catalog entry
+The Tessella Dashboard starts existing images with `docker compose up -d --no-build`. Its robo-boy catalog entry
 selects `docker-compose.yml` and `infra/compose/panels.remote.yml` through a per-application `composeFiles` setting,
-so stopping and starting Robo-Boy from the dashboard starts the release manager before the application. Keep
-`COMPOSE_FILE=docker-compose.yml` in Robo-Boy's shared `.env`: simulators consume that file for ROS/DDS settings,
+so stopping and starting robo-boy from the dashboard starts the release manager before the application. Keep
+`COMPOSE_FILE=docker-compose.yml` in robo-boy's shared `.env`: simulators consume that file for ROS/DDS settings,
 and putting the panel overlay there would incorrectly apply it relative to every simulator project.
 
 The Vite configuration pins React and ReactDOM to the project-root copies and pre-optimizes the external-panel
@@ -213,7 +213,7 @@ React is mounting the workspace.
 The E2E workflow installs external panels from immutable v2 panel commits declared in `.github/workflows/test.yml`
 through `config/panel-sources.e2e.json`. Update the pinned commit, its committed manifest and bundle together when
 an E2E scenario needs a newer panel. Do not point these tests at the mutable official catalog: published inventory
-changes must not make an otherwise unchanged Robo-Boy commit fail.
+changes must not make an otherwise unchanged robo-boy commit fail.
 
 If the frontend is opened over HTTPS, direct browser connections use `wss://` and `https://` backend URLs. For a plain ROS backend, use the HTTP frontend URL or set `VITE_WEB_BACKEND_MODE=proxy` with `BACKEND_HOST`.
 
@@ -368,7 +368,7 @@ It runs in two situations, and never on a feature pull request or a push to `dev
 1. **When `dev` is promoted into `main`**, as validation. Nothing is published; the installers are kept as
    workflow artifacts so a broken desktop build is found before a release depends on it.
 2. **When Release Please creates a release.** The installers are then built from the release tag and
-   attached to that GitHub Release, which is where users download Robo-Boy.
+   attached to that GitHub Release, which is where users download robo-boy.
 
 Building at release time rather than reusing the validation artifacts is deliberate: the release commit is
 what carries the bumped version, so anything built before it would be labelled with the previous one.

@@ -38,7 +38,7 @@ Three filter buttons sit beside the search. On a narrow tile they fold into one 
 any filter is on.
 
 - **Watched only** (eye) hides topics you do not watch. It only applies to topics; services, actions and nodes stay.
-- **Show hidden** (layers) adds hidden and infrastructure resources: names with a `_` segment, Robo-Boy's own topics,
+- **Show hidden** (layers) adds hidden and infrastructure resources: names with a `_` segment, robo-boy's own topics,
   `/rosout`, `/parameter_events`, the parameter services every node offers, and bridge nodes.
 - **Missing endpoints** (funnel) shows resources with no publisher, subscriber, server or client.
 
@@ -92,7 +92,7 @@ systems draw the first 60 resources and say so.
 
 - A **dashed** edge was discovered; a **solid** one belongs to a watched topic with measured traffic. Discovery alone
   does not prove delivery. A red edge marks a known QoS incompatibility.
-- Bridge and Robo-Boy nodes are left out of the drawing (not the counts) unless **Show hidden** is on.
+- Bridge and robo-boy nodes are left out of the drawing (not the counts) unless **Show hidden** is on.
 - Dragged positions are saved per layer with the workspace. The **+**, **−** and fit buttons zoom; the graph fits
   itself again when resources appear or disappear, or when it becomes visible after being hidden.
 
@@ -144,7 +144,7 @@ An MCAP source shows **Parameters were not recorded**, and does not silently rea
 The updated control gateway permits standard parameter reads for observers and verifies their actual service type
 through the private ROS host before forwarding. Native parameter writes still require control even when a deployment
 has broad observer-service patterns. The robot-side control policy's parameters can be inspected but cannot be
-changed from Robo-Boy. Update the ROS stack alongside the frontend to enable observer reads:
+changed from robo-boy. Update the ROS stack alongside the frontend to enable observer reads:
 
 ```bash
 docker compose up -d --build ros-stack

@@ -1,10 +1,10 @@
 # Backend compatibility
 
 Open **Robot control** in the workspace toolbar to see the app version, the connected ROS stack's
-Robo-Boy version, its ROS distribution, and its installed rosbridge version. A warning icon in the
+robo-boy version, its ROS distribution, and its installed rosbridge version. A warning icon in the
 toolbar marks differing or unverified versions. Each connection reports its own backend.
 
-Use the same Robo-Boy release for the app and the ROS stack. The app compares the complete release
+Use the same robo-boy release for the app and the ROS stack. The app compares the complete release
 version, including prerelease suffixes. Matching releases show **Versions match**.
 Different releases show **Version mismatch**, with guidance to align them. This is
 an advisory check: it does not acquire control or change the gateway's command authorization.
