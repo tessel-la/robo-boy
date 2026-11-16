@@ -19,9 +19,14 @@ describe('fetchLatestRelease', () => {
     expect(fetcher).toHaveBeenCalledWith('https://api.github.com/repos/tessel-la/robo-boy/releases?per_page=30', expect.objectContaining({ cache: 'no-store' }));
   });
 
+  it('names a release by its version when GitHub gives it no name', async () => {
+    await expect(fetchLatestRelease(github([{ tag_name: 'robo-boy-v0.14.0-alpha', assets: [] }]))).resolves.toMatchObject({ name: 'robo-boy 0.14.0-alpha' });
+  });
+
   it('explains what kept it from checking', async () => {
     await expect(fetchLatestRelease(vi.fn(async () => { throw new TypeError('offline'); }) as unknown as typeof fetch)).rejects.toThrow('GitHub could not be reached');
     await expect(fetchLatestRelease(github({}, 403))).rejects.toThrow('limiting update checks');
+    await expect(fetchLatestRelease(github({}, 429))).rejects.toThrow('robo-boy will try again later');
     await expect(fetchLatestRelease(github({}, 500))).rejects.toThrow('HTTP 500');
     await expect(fetchLatestRelease(github({ message: 'x' }))).rejects.toThrow('something unexpected');
     await expect(fetchLatestRelease(github([]))).resolves.toBeNull();

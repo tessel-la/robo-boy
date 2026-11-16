@@ -56,6 +56,11 @@ describe('AppUpdatePrompt', () => {
     set({ phase: 'installing' });
     expect(screen.getByRole('status')).toHaveTextContent('Your system may ask for your password');
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
+
+    set({ installer: { ...INSTALLER, name: 'Robo-Boy-windows-x64-setup.exe' } });
+    expect(screen.getByRole('status')).toHaveTextContent('The installer is taking over. robo-boy opens again when it is done.');
+    set({ installer: { ...INSTALLER, name: 'Robo-Boy-macos-universal.dmg' } });
+    expect(screen.getByRole('status')).toHaveTextContent('Replacing robo-boy. It opens again in a moment.');
   });
 
   it('explains a failure and offers the installer it already checked', () => {
