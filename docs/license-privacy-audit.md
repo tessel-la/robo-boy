@@ -8,7 +8,7 @@ and notices. An exclusive relicense also requires contributor ownership/permissi
 
 ## Fixed on this branch
 
-- **Icons:** Android now uses the existing Robo-Boy launcher/adaptive icons, synchronized during
+- **Icons:** Android now uses the existing robo-boy launcher/adaptive icons, synchronized during
   init and builds. Web maskable PNGs have their declared 192 × 192 and 512 × 512 dimensions and an
   opaque safe area. One working generator replaces the duplicate scripts: `npm run icons:generate`.
 - **Attribution:** existing icon collections remain in use. [Third-party notices](../THIRD_PARTY_NOTICES.md)

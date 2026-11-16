@@ -1,25 +1,25 @@
 # Adding A Custom Panel
 
-How to get a panel you wrote into a running Robo-Boy, in the web app and in the packaged desktop app,
+How to get a panel you wrote into a running robo-boy, in the web app and in the packaged desktop app,
 without publishing it anywhere. [External panels](external-panels.md) is the reference for the panel SDK,
 the manifest, capabilities, and the sandbox; this guide is the workflow around it.
 
-Throughout, `my-roboboy-panel` is a panel repository beside the Robo-Boy checkout and
+Throughout, `my-roboboy-panel` is a panel repository beside the robo-boy checkout and
 `com.example.my-panel` is its manifest ID.
 
 ## Four Kinds Of Panel
 
-Robo-Boy treats a panel differently depending on where it came from, which decides who may remove it and
+robo-boy treats a panel differently depending on where it came from, which decides who may remove it and
 what happens when the app is updated.
 
 | Kind                     | Comes from                                        | Removable in the manager | Survives an app update              |
 | ------------------------ | ------------------------------------------------- | ------------------------ | ----------------------------------- |
-| **Official**             | The published catalog Robo-Boy ships a source for | Yes                      | Yes, it stays installed             |
+| **Official**             | The published catalog robo-boy ships a source for | Yes                      | Yes, it stays installed             |
 | **Remotely installed**   | Any other remote catalog you configure            | Yes                      | Yes, it stays installed             |
 | **Bundled with a build** | Staged into the app at build time                 | No, only switched off    | Only while the build still ships it |
 | **Local development**    | A directory on your machine                       | Not applicable           | Not applicable, it is rebuilt       |
 
-Official panels are ordinary remote panels; the only difference is that Robo-Boy ships their source
+Official panels are ordinary remote panels; the only difference is that robo-boy ships their source
 pre-configured. Bundled panels are the answer to "make this panel part of my build", and local development
 panels are the answer to "let me iterate on it right now".
 
@@ -35,7 +35,7 @@ my-roboboy-panel/
 
 The manifest's `integrity` must match the built bundle: every install verifies the SHA-256 before the panel
 is written anywhere, and a mismatch fails the install rather than loading the code. Keep the repository
-outside Robo-Boy; sources list repositories explicitly, so nothing scans or executes unrelated directories.
+outside robo-boy; sources list repositories explicitly, so nothing scans or executes unrelated directories.
 Field-by-field manifest rules are in [External panels](external-panels.md).
 
 ## Web
@@ -99,7 +99,7 @@ a panel reaches it in one of two ways: bundled into the build, or installed at r
 
 ### Bundling a panel into the build
 
-Create `local-panel-sources.json` in the Robo-Boy checkout. It is ignored by Git, so a machine can bundle
+Create `local-panel-sources.json` in the robo-boy checkout. It is ignored by Git, so a machine can bundle
 panels that are not committed anywhere:
 
 ```json
@@ -156,7 +156,7 @@ never removes it. Activation is a per-user preference stored in the browser or a
 the desired state the manager applies, so it does not travel to another machine or deployment. Only removal
 distinguishes the kinds: official and remotely installed panels can be removed, bundled ones cannot.
 
-## When Robo-Boy Is Updated
+## When robo-boy Is Updated
 
 - Panels installed through the manager stay installed; a new app version reads the same storage.
 - Bundled panels are whatever the new build ships. A panel dropped from the build disappears on the next

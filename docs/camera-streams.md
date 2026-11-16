@@ -20,7 +20,7 @@ Future in-app consumers can subscribe to the same frame events and leases. `webr
 
 ## ROS metadata and compatibility
 
-Upstream `web_video_server` multipart `X-Timestamp` is steady-clock receipt time, **not the ROS acquisition stamp**. It must not be used to query TF. Robo-Boy's pinned upstream overlay adds a JPEG APP15 segment; ordinary JPEG/MJPEG clients ignore it. It carries the original image header and full input dimensions, before full-frame resizing. The frontend uses these dimensions with CameraInfo, so reduced stream resolution preserves the calibrated field of view.
+Upstream `web_video_server` multipart `X-Timestamp` is steady-clock receipt time, **not the ROS acquisition stamp**. It must not be used to query TF. robo-boy's pinned upstream overlay adds a JPEG APP15 segment; ordinary JPEG/MJPEG clients ignore it. It carries the original image header and full input dimensions, before full-frame resizing. The frontend uses these dimensions with CameraInfo, so reduced stream resolution preserves the calibrated field of view.
 
 All integers are big-endian. Immediately after JPEG SOI (`FF D8`), the producer writes:
 
@@ -35,7 +35,7 @@ All integers are big-endian. Immediately after JPEG SOI (`FF D8`), the producer 
 
 Negative seconds, nanoseconds outside `[0, 1e9)`, empty/control-character frame IDs, missing dimensions, and inverted images are not tagged. The frontend validates the segment before using it. Cropping, inversion and pixel rotation require an explicit pixel transform and are unsupported for streamer projection.
 
-Old/custom streamers without acquisition metadata play in Camera and support **Latest TF** projection. New camera layers explicitly start with Latest TF; existing saved layers without the new timing field retain their capture-time behavior. Latest TF resolves the selected CameraInfo optical frame (or an explicit frame override), uses the most recent transform, and displays a persistent **not time-synchronized** status. Video latency can produce motion misalignment. Calibration must describe the selected stream's pixels, ROI/binning and distortion; cropping/rotation or a different resolution needs matching calibration. Robo-Boy does not infer which arbitrary stream belongs to a ROS camera.
+Old/custom streamers without acquisition metadata play in Camera and support **Latest TF** projection. New camera layers explicitly start with Latest TF; existing saved layers without the new timing field retain their capture-time behavior. Latest TF resolves the selected CameraInfo optical frame (or an explicit frame override), uses the most recent transform, and displays a persistent **not time-synchronized** status. Video latency can produce motion misalignment. Calibration must describe the selected stream's pixels, ROI/binning and distortion; cropping/rotation or a different resolution needs matching calibration. robo-boy does not infer which arbitrary stream belongs to a ROS camera.
 
 For MJPEG, selecting **Capture time** requires valid embedded acquisition metadata. Missing metadata is reported visibly; there is no automatic timing/transport fallback. ROS image messages use their standard headers. WebRTC uses Latest TF only in this increment and needs no metadata topic or stream-ID extension. Adding arbitrary metadata to a WebRTC publisher does not automatically enable capture-time matching. The non-WebRTC metadata producer and parser remain unchanged.
 
@@ -67,12 +67,12 @@ HTTPS pages need HTTPS signaling or the same-origin proxy.
 
 Duck's loopback RTP input connects its encoder to MediaMTX on the robot host; it
 does not restrict viewers to localhost. Its management API deliberately permits
-only loopback callers. Remote discovery therefore uses Robo-Boy's existing relay;
+only loopback callers. Remote discovery therefore uses robo-boy's existing relay;
 a desktop directly accessing a remote gateway can use its manual WHEP URL when
 that deployment does not provide a discovery relay. Keep the management boundary
 intact rather than exposing the API to make discovery work.
 
-`infra/docker/Dockerfile.ros` builds upstream web_video_server 3.1.0 at commit `0b6944deef80db148b3e09d2901fbbf85b199c67`, checks its source archive SHA-256, and applies `infra/ros/web_video_server_metadata.patch`. A separate build stage keeps compilers out of the runtime. The entrypoint sources the installed package overlay at `/opt/roboboy-video/share/web_video_server/local_setup.bash`. Rebuilding/redeploying the ROS service is necessary to enable metadata; frontend-only upgrades against an unpatched streamer support Latest TF; Capture time reports unavailable acquisition metadata. Choose Latest TF or ROS image messages explicitly. An upstream streamer outside Robo-Boy's image needs the same overlay to provide metadata.
+`infra/docker/Dockerfile.ros` builds upstream web_video_server 3.1.0 at commit `0b6944deef80db148b3e09d2901fbbf85b199c67`, checks its source archive SHA-256, and applies `infra/ros/web_video_server_metadata.patch`. A separate build stage keeps compilers out of the runtime. The entrypoint sources the installed package overlay at `/opt/roboboy-video/share/web_video_server/local_setup.bash`. Rebuilding/redeploying the ROS service is necessary to enable metadata; frontend-only upgrades against an unpatched streamer support Latest TF; Capture time reports unavailable acquisition metadata. Choose Latest TF or ROS image messages explicitly. An upstream streamer outside robo-boy's image needs the same overlay to provide metadata.
 
 `npm run test:camera-metadata` compiles the producer helper and checks exact wire values and unchanged decoded JPEG pixels. Unit tests cover chunk boundaries/limits, metadata validation, sharing, profile/robot isolation, decoder backpressure, frame leases, refresh, disposal and strict source selection, including failures that must not open ROS image subscriptions. `e2e/shared-camera-stream.spec.ts` exercises an ongoing 30 fps HTTP stream through the built-in Camera and 3D, late calibration/TF, refresh/profile changes, actual drawing and final stream closure. Replay E2E asserts zero live video requests.
 

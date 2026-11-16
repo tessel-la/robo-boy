@@ -7,14 +7,14 @@ provides API-key/subscription selection; see [current setup and boundaries](ai-a
 
 ## Finding
 
-Users can potentially power Robo-Boy's assistant with an existing subscription, but the supported
+Users can potentially power robo-boy's assistant with an existing subscription, but the supported
 integration differs by provider. Subscription billing still requires a network protocol; the goal
 is to remove the separately billed API key requirement.
 
-| Option | Current official support | Fit for Robo-Boy |
+| Option | Current official support | Fit for robo-boy |
 | --- | --- | --- |
 | ChatGPT plan through Sign in with ChatGPT | Eligible Plus/Pro accounts can authorize plan usage in open-source/local apps. Commercial/remote offerings have separate access requirements. | Best first implementation: add a subscription provider to the existing assistant, starting with Electron. |
-| Claude subscription through Robo-Boy's own HTTP client | Third-party apps may not offer Claude.ai login or route model requests using users' subscription credentials. | Do not implement a token-based replacement for the Anthropic API provider. |
+| Claude subscription through robo-boy's own HTTP client | Third-party apps may not offer Claude.ai login or route model requests using users' subscription credentials. | Do not implement a token-based replacement for the Anthropic API provider. |
 | User signs into unmodified Claude Code | Permitted under Anthropic's stated product integration conditions; users authenticate through Anthropic and use their own credentials. | A distinct desktop runtime integration, requiring a separate feasibility spike. |
 
 Sources: [OpenAI quickstart](https://developers.openai.com/siwc/quickstart),
@@ -115,9 +115,9 @@ subscription-login entitlement for third-party apps.
 See [legal and compliance](https://code.claude.com/docs/en/legal-and-compliance).
 
 A credible separate spike would launch the official binary from the native shell, let the user
-complete Anthropic's own login, and adapt its completed output to Robo-Boy's existing parser.
+complete Anthropic's own login, and adapt its completed output to robo-boy's existing parser.
 Claude Code supports subscription sign-in and programmatic execution; these are different from
-making Robo-Boy's own HTTP calls with its OAuth tokens.
+making robo-boy's own HTTP calls with its OAuth tokens.
 See [authentication](https://code.claude.com/docs/en/authentication) and
 [programmatic execution](https://code.claude.com/docs/en/headless).
 
@@ -126,7 +126,7 @@ capabilities, with no ambient shell/filesystem/robot access, hooks, or inherited
 Also prove JSON output, full-history compatibility, cancellation, process cleanup, platform packaging,
 and missing-binary/version errors. Do not turn off permission checks to make it work. If those constraints
 cannot be enforced, keep Claude Code as an external user-controlled tool and investigate a narrow
-Robo-Boy MCP bridge instead; the current [assistant guide](ai-assistant.md#future-external-agent-mcp-integration)
+robo-boy MCP bridge instead; the current [assistant guide](ai-assistant.md#future-external-agent-mcp-integration)
 describes that unimplemented alternative.
 
 ## Deployment Scope and Effort

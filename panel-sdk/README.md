@@ -1,6 +1,6 @@
-# Robo-Boy Panel SDK
+# robo-boy Panel SDK
 
-`@tessel-la/roboboy-panel-sdk` is Robo-Boy's type-only public contract for external panels. It deliberately
+`@tessel-la/roboboy-panel-sdk` is robo-boy's type-only public contract for external panels. It deliberately
 contains no React, ROSLIB, or browser runtime code, so importing its types cannot add code to a panel bundle.
 
 Panel packages should install the contract as a development dependency, use `import type` for its interfaces, and
@@ -16,23 +16,23 @@ published to the npm registry. Release assets are treated as append-only, and a 
 tarball integrity so replacement bytes fail installation.
 
 The complete authoring and deployment guide lives in the
-[Robo-Boy repository](https://github.com/tessel-la/robo-boy/blob/panel-sdk-v2.3.0/docs/external-panels.md).
+[robo-boy repository](https://github.com/tessel-la/robo-boy/blob/panel-sdk-v2.3.0/docs/external-panels.md).
 
-API `2.0.0` is the source contract in the Robo-Boy repository. Package `2.1.0` adds the `webrtcWhep` and
+API `2.0.0` is the source contract in the robo-boy repository. Package `2.1.0` adds the `webrtcWhep` and
 `webrtcDiscovery` host endpoints, so a panel that wants the stream gateway can ask for it by name instead of
 inferring it from the video server. `videoStream` still reaches the gateway for panels written before those
 existed, so nothing published against `2.0.0` needs changing. Package `2.2.0` adds the `webxr` capability,
 which delegates `xr-spatial-tracking` and `fullscreen` to the panel frame so it can open an immersive
 `navigator.xr` session; a panel that does not declare it is unaffected. Panel instances execute in an opaque-origin
 sandbox and must implement both `mount` and `unmount`. ROS, network, storage, viewport, connection, and theme access
-are host-owned services; raw Robo-Boy objects are not exposed to panel code. Direct HTTP calls are blocked by the
+are host-owned services; raw robo-boy objects are not exposed to panel code. Direct HTTP calls are blocked by the
 sandbox CSP, so network access must use the reviewed `context.network` allowlist.
 
 Panels that let users choose arbitrary ROS inputs should declare `permissions.ros.selectTopic: true` and call
-`context.ros.selectTopic()`. The complete topic graph is displayed only in trusted Robo-Boy UI. The sandbox receives
+`context.ros.selectTopic()`. The complete topic graph is displayed only in trusted robo-boy UI. The sandbox receives
 the one selected topic and message type, and the broker grants that exact subscription for the current tile session.
 
-Robo-Boy installs its public theme tokens as CSS custom properties in the sandbox and updates them when the user
+robo-boy installs its public theme tokens as CSS custom properties in the sandbox and updates them when the user
 changes theme. Use variables such as `--background-color`, `--card-bg`, `--text-color`, `--border-color`,
 `--primary-color`, and `--font-family-ui`; `context.theme` is available when code also needs the current snapshot.
 
@@ -40,10 +40,10 @@ changes theme. Use variables such as `--background-color`, `--card-bg`, `--text-
 
 ROS operations use the host connection’s robot-wide control lease. Observers can subscribe and
 inspect, but topic publishes, robot service calls and action goals require the session to have
-control. Request it in Robo-Boy’s top bar or through the explicit in-panel API below.
+control. Request it in robo-boy’s top bar or through the explicit in-panel API below.
 Do not acquire automatically or retry/queue rejected commands.
 Use absolute canonical names. SDK `2.3.0` adds tracked ROS 2 actions and explicit in-panel
-control requests, available in Robo-Boy `0.20.0-alpha` and newer. Upgrade the frontend and
+control requests, available in robo-boy `0.20.0-alpha` and newer. Upgrade the frontend and
 rebuild the ROS stack together; newer type definitions alone do not add runtime support.
 Existing SDK `2.2.0` panels and their manifest permissions continue to work unchanged.
 See [the concurrency contract](https://github.com/tessel-la/robo-boy/blob/panel-sdk-v2.3.0/docs/robot-control.md#panel-and-integration-contract) for

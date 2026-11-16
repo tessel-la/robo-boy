@@ -27,7 +27,7 @@ docker compose up -d --build --force-recreate ros-stack
 
 ## DDS Middleware
 
-Robo-Boy uses Fast DDS by default and can switch to Cyclone DDS through the standard ROS 2 `RMW_IMPLEMENTATION` variable. Every container that should discover the same graph must use compatible `ROS_DOMAIN_ID`, discovery scope, and DDS middleware settings.
+robo-boy uses Fast DDS by default and can switch to Cyclone DDS through the standard ROS 2 `RMW_IMPLEMENTATION` variable. Every container that should discover the same graph must use compatible `ROS_DOMAIN_ID`, discovery scope, and DDS middleware settings.
 
 For ROS 2 Jazzy, configure discovery with:
 
@@ -72,7 +72,7 @@ Set `AEROSTACK2_INSTALL_DIR` in `.env` if the install workspace lives elsewhere.
 
 ## Manipulator Simulation
 
-Start or build the manipulator simulation first, then start Robo-Boy:
+Start or build the manipulator simulation first, then start robo-boy:
 
 ```bash
 cd /path/to/manipulator-sim
@@ -83,7 +83,7 @@ echo COMPOSE_FILE=docker-compose.yml:infra/compose/manipulator.yml >> .env
 docker compose up -d --build
 ```
 
-Use the same DDS values for the manipulator simulation and Robo-Boy. With the updated manipulator simulation Compose file, you can pass the shared settings from this repo:
+Use the same DDS values for the manipulator simulation and robo-boy. With the updated manipulator simulation Compose file, you can pass the shared settings from this repo:
 
 ```bash
 cd /path/to/manipulator-sim

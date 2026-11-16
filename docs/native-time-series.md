@@ -129,7 +129,7 @@ https://github.com/facontidavide/PlotJuggler :
 Implement these interaction patterns independently using browser pointer events,
 including touch selection and pinch, keyboard zoom/reset, and visible controls.
 Keep expressions deliberately small (arithmetic, x/y and common scalar functions),
-with no eval, scripting runtime or code copied from PlotJuggler. Reuse Robo-Boy's
+with no eval, scripting runtime or code copied from PlotJuggler. Reuse robo-boy's
 workspace panels instead of adding PlotJuggler's separate docking/layout system.
 XY plots, file replay and general Lua/Python plugins are outside this migration.
 

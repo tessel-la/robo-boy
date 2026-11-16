@@ -56,7 +56,7 @@ its size and ETag), is reported instead of being read inconsistently.
 The ROS host's recorder serves these files read-only: `GET /list?path=` and `GET /files/<path>.mcap` with Range,
 HEAD and CORS. Nothing outside the recording root and nothing but `.mcap` files is served. In Compose it listens on
 a Unix socket shared with Caddy (`ROBOBOY_RECORDINGS_SOCKET`), and the browser reaches it at `/recordings` on
-Robo-Boy's own port: no port is opened on the host and no firewall rule is needed.
+robo-boy's own port: no port is opened on the host and no firewall rule is needed.
 
 Apps that connect to the ROS host directly rather than through Caddy (the desktop and mobile apps, or a web page
 connected to another host) need the recorder to serve over TCP as well: set `ROBOBOY_RECORDINGS_PORT=9091` for
@@ -133,7 +133,7 @@ mkdir -p "$HOME/recordings"
 ROBOBOY_RECORDINGS_ROOT="$HOME/recordings" python3 infra/ros/recording_runner.py
 ```
 
-To browse and replay its recordings from Robo-Boy, also set `ROBOBOY_RECORDINGS_PORT=9091` (and
+To browse and replay its recordings from robo-boy, also set `ROBOBOY_RECORDINGS_PORT=9091` (and
 `ROBOBOY_RECORDINGS_ADDRESS` to bind one interface) and allow that port from the clients; without a Caddy on the same
 machine there is no socket to share.
 
