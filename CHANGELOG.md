@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.21.1-alpha](https://github.com/tessel-la/robo-boy/compare/robo-boy-v0.21.0-alpha...robo-boy-v0.21.1-alpha) (2026-11-16)
+
+
+### Bug Fixes
+
+* show the landing wordmark in lowercase and the teaser in the readme ([#260](https://github.com/tessel-la/robo-boy/issues/260)) ([39b6a47](https://github.com/tessel-la/robo-boy/commit/39b6a473263d6527af590169fef89e0d055f1996))
+* write robo-boy in lowercase in docs, the attribution and the update menu ([#261](https://github.com/tessel-la/robo-boy/issues/261)) ([4eddef4](https://github.com/tessel-la/robo-boy/commit/4eddef48734924c3223b41181222f56e0c9d0e7f))
+
 ## [0.21.0-alpha](https://github.com/tessel-la/robo-boy/compare/robo-boy-v0.20.0-alpha...robo-boy-v0.21.0-alpha) (2026-11-08)
 
 
