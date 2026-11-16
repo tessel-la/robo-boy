@@ -14,9 +14,9 @@ const releasedAgo = (published: string) => {
 
 /** What the person is waiting on while the installer runs, which differs by system. */
 const installingHint = (name?: string) =>
-  name?.endsWith('.exe') ? 'The installer is taking over. Robo-Boy opens again when it is done.'
-    : name?.endsWith('.dmg') ? 'Replacing Robo-Boy. It opens again in a moment.'
-      : 'Your system may ask for your password to install it. Robo-Boy opens again when it is done.';
+  name?.endsWith('.exe') ? 'The installer is taking over. robo-boy opens again when it is done.'
+    : name?.endsWith('.dmg') ? 'Replacing robo-boy. It opens again in a moment.'
+      : 'Your system may ask for your password to install it. robo-boy opens again when it is done.';
 
 function ChangedFiles({ files }: { files: string[] }) {
   const shown = files.slice(0, 3);
@@ -62,7 +62,7 @@ function UpdateCard({ update }: { update: UpdateSnapshot }) {
       <header className="app-update-head">
         <span className="app-update-badge" aria-hidden="true"><FiArrowUpCircle /></span>
         <div>
-          <strong>Robo-Boy {release.version} is available</strong>
+          <strong>robo-boy {release.version} is available</strong>
           <span>You have {update.current}{releasedAgo(release.publishedAt) ? ` · ${releasedAgo(release.publishedAt)}` : ''}</span>
         </div>
         {!busy && <button type="button" className="app-update-icon" aria-label="Remind me later" title="Later" onClick={() => appUpdater.later()}><FiX /></button>}
@@ -80,7 +80,7 @@ function UpdateCard({ update }: { update: UpdateSnapshot }) {
           <FiServer aria-hidden="true" />
           <div>
             <strong>This update also changes the ROS stack</strong>
-            <span>Update the ROS host separately afterwards; Robo-Boy reminds you with the command once it restarts.</span>
+            <span>Update the ROS host separately afterwards; robo-boy reminds you with the command once it restarts.</span>
             <ChangedFiles files={rosStack} />
           </div>
         </div>
@@ -125,7 +125,7 @@ function RosReminderCard({ update }: { update: UpdateSnapshot }) {
       <header className="app-update-head">
         <span className="app-update-badge" aria-hidden="true"><FiServer /></span>
         <div>
-          <strong>Robo-Boy is now {reminder.to}</strong>
+          <strong>robo-boy is now {reminder.to}</strong>
           <span>This version changed the ROS stack. Bring the ROS host up to date so they match.</span>
         </div>
       </header>
@@ -150,7 +150,7 @@ export default function AppUpdatePrompt() {
   const showUpdate = update.promptOpen && (Boolean(update.release) || update.phase === 'failed');
   if (!showUpdate && !update.rosReminder) return null;
   return (
-    <aside className="app-update" aria-label={showUpdate ? 'Robo-Boy update' : 'ROS stack update'} aria-live="polite">
+    <aside className="app-update" aria-label={showUpdate ? 'robo-boy update' : 'ROS stack update'} aria-live="polite">
       {showUpdate ? <UpdateCard update={update} /> : <RosReminderCard update={update} />}
     </aside>
   );
@@ -169,8 +169,8 @@ export function AppUpdateMenuItem() {
             : ['Check for updates', `${update.current} · check for updates`];
   return (
     <button type="button" className={`connection-switcher-tool app-update-tool ${update.release ? 'has-update' : ''}`} onClick={() => appUpdater.open()}
-      aria-label={`Robo-Boy ${update.current}, ${status}`} disabled={update.phase === 'checking'}>
-      <span>Robo-Boy</span>
+      aria-label={`robo-boy ${update.current}, ${status}`} disabled={update.phase === 'checking'}>
+      <span>robo-boy</span>
       <span>{shown}</span>
     </button>
   );

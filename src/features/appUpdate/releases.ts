@@ -56,7 +56,7 @@ function parseRelease(release: GithubRelease): AppRelease | null {
   return {
     version,
     tag,
-    name: text(release.name) || `Robo-Boy ${version}`,
+    name: text(release.name) || `robo-boy ${version}`,
     notes: text(release.body),
     publishedAt: text(release.published_at),
     pageUrl: text(release.html_url),
@@ -79,7 +79,7 @@ export async function fetchLatestRelease(fetcher: typeof fetch = fetch, signal?:
     if (signal?.aborted) throw error;
     throw new Error('GitHub could not be reached to check for updates.');
   }
-  if (response.status === 403 || response.status === 429) throw new Error('GitHub is limiting update checks from this network for now. Robo-Boy will try again later.');
+  if (response.status === 403 || response.status === 429) throw new Error('GitHub is limiting update checks from this network for now. robo-boy will try again later.');
   if (!response.ok) throw new Error(`GitHub answered the update check with HTTP ${response.status}.`);
   const releases = (await response.json()) as GithubRelease[];
   if (!Array.isArray(releases)) throw new Error('GitHub answered the update check with something unexpected.');

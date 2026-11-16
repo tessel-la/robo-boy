@@ -24,8 +24,8 @@ describe('AppUpdatePrompt', () => {
     expect(screen.queryByRole('complementary')).not.toBeInTheDocument();
     set({ supported: true, phase: 'available', release: RELEASE, installer: INSTALLER, rosStack: ['infra/ros/recording_runner.py', 'docker-compose.yml'], promptOpen: true });
 
-    const card = screen.getByRole('complementary', { name: 'Robo-Boy update' });
-    expect(card).toHaveTextContent('Robo-Boy 99.0.0 is available');
+    const card = screen.getByRole('complementary', { name: 'robo-boy update' });
+    expect(card).toHaveTextContent('robo-boy 99.0.0 is available');
     expect(card).toHaveTextContent(`You have ${APP_VERSION} · released 2 days ago`);
     fireEvent.click(screen.getByText("What's new"));
     expect(screen.getByRole('heading', { name: 'Features' })).toBeInTheDocument();
@@ -85,7 +85,7 @@ describe('AppUpdatePrompt', () => {
     render(<AppUpdatePrompt />);
     set({ rosReminder: { from: '0.13.0', to: APP_VERSION, files: ['docker-compose.yml'] } });
     const card = screen.getByRole('complementary', { name: 'ROS stack update' });
-    expect(card).toHaveTextContent(`Robo-Boy is now ${APP_VERSION}`);
+    expect(card).toHaveTextContent(`robo-boy is now ${APP_VERSION}`);
     expect(card).toHaveTextContent('git pull && docker compose up -d --build');
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Copy the update command' })); });
     expect(writeText).toHaveBeenCalledWith('git pull && docker compose up -d --build');
@@ -102,17 +102,17 @@ describe('AppUpdateMenuItem', () => {
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
     set({ supported: true, phase: 'idle' });
     rerender(<AppUpdateMenuItem />);
-    expect(screen.getByRole('button')).toHaveAccessibleName(`Robo-Boy ${APP_VERSION}, Check for updates`);
+    expect(screen.getByRole('button')).toHaveAccessibleName(`robo-boy ${APP_VERSION}, Check for updates`);
     const open = vi.spyOn(appUpdater, 'open').mockImplementation(() => undefined);
     fireEvent.click(screen.getByRole('button'));
     expect(open).toHaveBeenCalled();
     set({ phase: 'current' });
     expect(screen.getByRole('button')).toHaveTextContent(`${APP_VERSION} · up to date`);
-    expect(screen.getByRole('button')).toHaveAccessibleName(`Robo-Boy ${APP_VERSION}, Up to date`);
+    expect(screen.getByRole('button')).toHaveAccessibleName(`robo-boy ${APP_VERSION}, Up to date`);
     set({ phase: 'available', release: RELEASE });
     expect(screen.getByRole('button')).toHaveTextContent('99.0.0 available');
     set({ phase: 'downloading', progress: { received: 50, total: 200 } });
     expect(screen.getByRole('button')).toHaveTextContent('Downloading 25%');
-    expect(screen.getByRole('button')).toHaveAccessibleName(`Robo-Boy ${APP_VERSION}, Downloading 99.0.0, 25%`);
+    expect(screen.getByRole('button')).toHaveAccessibleName(`robo-boy ${APP_VERSION}, Downloading 99.0.0, 25%`);
   });
 });

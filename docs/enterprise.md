@@ -171,7 +171,7 @@ configuration supports:
 - A default company theme using the existing custom-theme format, plus an optional wordmark logo
 - Account and sign-out controls in the existing connection menu, without a second workspace header
 
-A small **Powered by Robo-Boy** attribution appears in company editions on the connection screen,
+A small **Powered by robo-boy** attribution appears in company editions on the connection screen,
 in the workspace's connection menu, and in the login footer, including when login is disabled.
 A company edition has a custom company name or logo. The standard robo-boy edition omits this
 attribution.

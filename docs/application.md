@@ -332,7 +332,7 @@ looks for a newer `robo-boy-v*` release (the Panel SDK's releases share the repo
 ignored). When there is one, a card in the bottom-left corner shows the version, its release notes,
 and whether it also changes the ROS stack. **Update and restart** downloads the installer this copy
 was installed from, with progress, installs it and opens the new version. **Later** keeps the offer
-in the connection menu, where **Robo-Boy** also checks on request; **Skip this version** stays quiet
+in the connection menu, where **robo-boy** also checks on request; **Skip this version** stays quiet
 until a newer one appears.
 
 | Installation                 | Installer                            | How it is installed                                               |
